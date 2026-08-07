@@ -59,3 +59,16 @@ Add these fields to the `sessions/{sessionId}` document created in Phase 3, alon
    - `standard`: Ask "how" or "why", not just "what".
    - `applied`: Ask about a concrete scenario or architectural trade-off.
    - `expert`: Ask to critique design choices or compare two different implementations.
+
+## Sub-Phase 4C — Question Type Variety (MCQ and Diagrams)
+1. **MCQ (Multiple Choice Questions)**:
+   - When `nextQuestionType` is `"mcq"`, the evaluation schema returns `mcqOptions` (4 distractors/answers) and `mcqCorrectIndex` (0–3).
+   - `mcqCorrectIndex` is stored in the session's `pendingMCQAnswer` server-side and **never sent to the client**.
+   - Client receives the question stem only, and displays 4 select buttons.
+   - When the user selects an option, the frontend sends the selected index (e.g. `"2"`).
+   - Server validates index: Correct $\rightarrow$ `finalAccuracyScore = 100`, Incorrect $\rightarrow$ `finalAccuracyScore = 20`. Skip semantic and concept coverage scoring.
+   - Run the same structured evaluation check for stopping decisions (`floorMet`, `topicsRemaining`, `modelWantsToStop`) even during MCQ turns to keep states aligned.
+2. **Diagram/Graph Interpretation**:
+   - When `nextQuestionType` is `"diagram_interpret"`, the schema returns `diagramDefinition` (Mermaid.js diagram syntax representing a flawed setup, e.g. RAG order error) and `diagramQuestionText` (describing the query task).
+   - Syntax validation run on `diagramDefinition`. Fallback to plain open question on failure.
+   - Responses scored via the standard 3-signal accuracy pipeline.
