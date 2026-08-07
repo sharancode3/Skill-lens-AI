@@ -34,12 +34,13 @@ This document is maintained to help AI models understand the current state of th
 - `src/dataManager.js`: Indexes data synchronously at startup and provides candidate enrichment.
 - `src/topicSelector.js`: Deterministic topic selection algorithm under module diversity constraints.
 - `src/embeddingManager.js`: In-memory vector index generation and cosine similarity lookup.
+- `src/sessionManager.js`: Session state machine logic and database operations wrapper.
 - `src/firebase.js`: Firebase Firestore connection and startup health check.
 - `src/server.js`: Node.js Express server defining interview endpoint routes.
 
 
 ## Ongoing Tasks
-- [ ] Complete Phase 3: Wire in the LLM for question phrasing, answer classification, and follow-up decision as a structured call.
+- [ ] Complete Phase 4: Wire in the LLM for question phrasing, answer classification, and follow-up decision as a single structured call.
 
 
 ## Completed Tasks
@@ -49,6 +50,8 @@ This document is maintained to help AI models understand the current state of th
 - [x] Phase 1: Reference Data Loading (curriculum and candidates), index maps, validation pass, and candidate enrichment helper.
 - [x] Phase 2: Implement the Topic Queue Selection Scoring algorithm.
 - [x] Phase 2.5: Implement the in-memory vector embedding layer for Connection Detection.
+- [x] Phase 3: Implement Session State Machine & Firestore Wiring.
+
 
 
 
