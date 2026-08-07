@@ -1,7 +1,7 @@
 import { db } from './firebase.js';
 import { buildTopicQueue } from './topicSelector.js';
 import { findRelatedDays } from './embeddingManager.js';
-import { evaluateTurnWithLLM } from './llmClient.js';
+import { evaluateTurnWithLLM, generateFeedbackReport } from './llmClient.js';
 
 
 // Explicit Session States
@@ -171,6 +171,12 @@ export async function handleTurn(sessionId, message) {
   console.log(`  LLM Action Selection: ${llmResponse.action}`);
   console.log(`  Updated Memory Summary: "${llmResponse.updatedMemory}"`);
 
+  // Attach the turn classification inline to the candidate's transcript entry
+  const lastEntry = session.transcript[session.transcript.length - 1];
+  if (lastEntry && lastEntry.role === 'candidate') {
+    lastEntry.classification = llmResponse.classification;
+  }
+
   // Log detected connections and checking if LLM chose to use them
   if (detectedConnections && detectedConnections.length > 0) {
     detectedConnections.forEach(conn => {
@@ -234,13 +240,8 @@ export async function handleTurn(sessionId, message) {
     if (wrapUpTriggered) {
       session.state = SessionState.DONE;
       
-      // Placeholder feedback matching schema
-      session.feedback = {
-        summary: `Candidate successfully completed the interview. Covered ${session.questionsAsked} questions over ${session.distinctDaysCovered.length} curriculum days.`,
-        strengths: ['Demonstrated understanding of core curriculum concepts'],
-        gaps: ['No critical gaps detected in mock turn handler'],
-        next: ['Revisit curriculum modules for deeper advanced integration projects']
-      };
+      // Generate real structured feedback via LLM (with mechanical fallback)
+      session.feedback = await generateFeedbackReport(session);
 
       await saveSessionDoc(sessionId, session);
 

@@ -41,7 +41,7 @@ This document is maintained to help AI models understand the current state of th
 
 
 ## Ongoing Tasks
-- [ ] Complete Phase 5: Implement the LLM Feedback Composer to evaluate transcripts and generate structured JSON reports.
+- [ ] Complete Phase 6: Develop Frontend UI (Landing page, Chat screen, and Feedback Report page) styled in flat design system, and wire to `/api/interview`.
 
 
 ## Completed Tasks
@@ -53,6 +53,8 @@ This document is maintained to help AI models understand the current state of th
 - [x] Phase 2.5: Implement the in-memory vector embedding layer for Connection Detection.
 - [x] Phase 3: Implement Session State Machine & Firestore Wiring.
 - [x] Phase 4: Implement LLM Core Intelligence Layer (classification, follow-ups, memory).
+- [x] Phase 5: Implement Feedback Composer with deterministic fallback report composition.
+
 
 
 

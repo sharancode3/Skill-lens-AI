@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Enforced response schema for Gemini API JSON mode
+// Enforced response schema for Gemini API turn evaluations
 const responseSchema = {
   type: 'OBJECT',
   properties: {
@@ -32,10 +32,37 @@ const responseSchema = {
   required: ['classification', 'reasoning', 'action', 'reply', 'updatedMemory']
 };
 
+// Enforced response schema for Gemini API final feedback report
+const feedbackSchema = {
+  type: 'OBJECT',
+  properties: {
+    summary: {
+      type: 'STRING',
+      description: 'A 2-4 sentence summary paragraph of candidate overall performance, referencing specific details from the candidate responses in the transcript.'
+    },
+    strengths: {
+      type: 'ARRAY',
+      items: { type: 'STRING' },
+      description: 'List of specific strengths demonstrated. Each must mention the day number and topic name, and only include topics evaluated as strong or partial-with-solid-reasoning.'
+    },
+    gaps: {
+      type: 'ARRAY',
+      items: { type: 'STRING' },
+      description: 'List of specific gaps. Cover shallow/off-topic topics, or skipped missions never asked (using the exact phrase "not yet demonstrated" for the latter).'
+    },
+    next: {
+      type: 'ARRAY',
+      items: { type: 'STRING' },
+      description: 'List of concrete, actionable next steps, each referencing a specific day number and title from the curriculum.'
+    }
+  },
+  required: ['summary', 'strengths', 'gaps', 'next']
+};
+
 /**
  * Call the Google Gemini API REST endpoint using JSON mode and schema enforcement.
  */
-async function callGeminiREST(systemPrompt, userPrompt, retryCount = 1) {
+async function callGeminiREST(systemPrompt, userPrompt, schema, retryCount = 1) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY is not defined.');
@@ -56,7 +83,7 @@ async function callGeminiREST(systemPrompt, userPrompt, retryCount = 1) {
     ],
     generationConfig: {
       responseMimeType: 'application/json',
-      responseSchema: responseSchema
+      responseSchema: schema
     }
   };
 
@@ -85,7 +112,7 @@ async function callGeminiREST(systemPrompt, userPrompt, retryCount = 1) {
     const parsed = JSON.parse(rawText.trim());
 
     // Validate schema fields manually
-    const keys = Object.keys(responseSchema.properties);
+    const keys = Object.keys(schema.properties);
     for (const key of keys) {
       if (!(key in parsed)) {
         throw new Error(`Missing expected property: "${key}" in LLM response.`);
@@ -98,7 +125,7 @@ async function callGeminiREST(systemPrompt, userPrompt, retryCount = 1) {
     if (retryCount > 0) {
       // Corrective instructions
       const correctiveInstructions = "\n\nCRITICAL: You failed to return valid JSON matching the schema. You MUST return ONLY valid JSON matching the schema. No markdown backticks, no markdown fencing, no leading/trailing commentary.";
-      return callGeminiREST(systemPrompt, userPrompt + correctiveInstructions, retryCount - 1);
+      return callGeminiREST(systemPrompt, userPrompt + correctiveInstructions, schema, retryCount - 1);
     }
     return null;
   }
@@ -239,7 +266,7 @@ detectedConnections parameter: if populated, it contains curriculum days matchin
   }
 
   console.log(`[LLMClient] Calling Gemini API for session "${session.sessionId}"...`);
-  const llmResult = await callGeminiREST(systemPrompt, userPrompt, 1);
+  const llmResult = await callGeminiREST(systemPrompt, userPrompt, responseSchema, 1);
 
   if (llmResult) {
     return llmResult;
@@ -248,4 +275,160 @@ detectedConnections parameter: if populated, it contains curriculum days matchin
   // Fallback if API fails twice
   console.warn('[LLMClient Warning] LLM call failed or returned invalid JSON twice. Triggering hardcoded safety fallback...');
   return mockLLMCall(candidate, currentTopic, lastQuestion, candidateMessage, session.followupCountForCurrentTopic, detectedConnections);
+}
+
+/**
+ * Programmatic mechanical fallback feedback report generator.
+ * Tally results from session metadata and transcript classifications.
+ */
+export function generateMechanicalFeedback(session) {
+  console.log('[LLMClient] Generating programmatic mechanical feedback report fallback...');
+
+  const candidate = session.candidateSnapshot;
+  const strengths = [];
+  const gaps = [];
+
+  // 1. Process transcript turns
+  session.transcript.forEach((entry, idx) => {
+    if (entry.role === 'candidate' && entry.classification) {
+      // Find matching preceding interviewer entry to resolve day
+      let dayNum = null;
+      for (let i = idx - 1; i >= 0; i--) {
+        if (session.transcript[i].role === 'interviewer' && session.transcript[i].day) {
+          dayNum = session.transcript[i].day;
+          break;
+        }
+      }
+
+      if (dayNum !== null) {
+        const dayData = session.topicQueue.find(t => t.day === dayNum);
+        if (dayData) {
+          if (entry.classification === 'strong' || entry.classification === 'partial') {
+            strengths.push(`Day ${dayData.day} (${dayData.title}): Demonstrated understanding of learning objectives during active discussion.`);
+          } else {
+            gaps.push(`Day ${dayData.day} (${dayData.title}): Response was classified as ${entry.classification} (vague or off-topic).`);
+          }
+        }
+      }
+    }
+  });
+
+  // 2. Process unreached topicQueue topics (status pending)
+  session.topicQueue.forEach(topic => {
+    if (topic.status === 'pending') {
+      gaps.push(`Day ${topic.day} ("${topic.title}"): not yet demonstrated.`);
+    }
+  });
+
+  // 3. Process candidate-skipped missions that were never asked
+  if (candidate.missions) {
+    candidate.missions.forEach(m => {
+      if (m.skipped) {
+        const asked = session.topicQueue.some(t => t.day === m.day && t.status === 'asked');
+        if (!asked) {
+          gaps.push(`Day ${m.day} ("${m.title}"): not yet demonstrated.`);
+        }
+      }
+    });
+  }
+
+  // Clean arrays
+  const finalStrengths = strengths.length > 0 ? strengths : ['Core concepts: Demonstrated foundational software engineering competencies.'];
+  const finalGaps = gaps.length > 0 ? gaps : ['No significant skill gaps were observed during the turn reviews.'];
+
+  // Compile recommendations
+  const next = [];
+  finalGaps.forEach(gap => {
+    const match = gap.match(/Day (\d+)/);
+    if (match) {
+      const dayNum = parseInt(match[1]);
+      const topic = session.topicQueue.find(t => t.day === dayNum) || candidate.missions?.find(m => m.day === dayNum);
+      const title = topic ? topic.title : 'Curriculum Day';
+      next.push(`Revisit Day ${dayNum} (${title}): implementation review and practice objectives.`);
+    }
+  });
+
+  if (next.length === 0) {
+    next.push('Review curriculum modules for deeper advanced system project designs.');
+  }
+
+  const strengthsSummary = strengths.map(s => {
+    const match = s.match(/Day \d+ \(([^)]+)\)/);
+    return match ? match[1] : '';
+  }).filter(t => t !== '').join(', ');
+
+  const summary = `Candidate ${candidate.name || 'Candidate'} completed the technical review. Demonstrated capabilities in: ${strengthsSummary || 'foundational software topics'}. Additional practice is suggested for gaps.`;
+
+  return {
+    summary,
+    strengths: finalStrengths,
+    gaps: finalGaps,
+    next
+  };
+}
+
+/**
+ * Intelligence layer entrypoint for feedback report composition.
+ * Calls structured Gemini REST endpoint or falls back mechanically.
+ */
+export async function generateFeedbackReport(session) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return generateMechanicalFeedback(session);
+  }
+
+  const candidate = session.candidateSnapshot;
+
+  const systemPrompt = `You are a professional, senior technical interviewer and Feedback Composer for Skill Labs Ai.
+You must compile a structured technical feedback report for the candidate based on their interview.
+
+CONSTRAINTS FOR GENERATION:
+- "grounded generation": You MUST ONLY assert what is evidenced in the transcript. Do not invent strengths or capabilities for topics that were never reached.
+- "summary": A short paragraph that MUST reference at least one concrete answer or exchange from this specific interview. Fail/Reject generic templates.
+- "strengths": Array of strings. Only include topics that were evaluated as "strong" or "partial-with-solid-reasoning" in the transcript. Mention the Day number and title.
+- "gaps": Array of strings. Cover topics evaluated as "shallow" or "off_topic", AND any candidate skipped missions that were never asked about at all in this interview. For unasked or skipped topics, you MUST use the exact phrasing: "not yet demonstrated" (e.g. "Day 29 (Observability): not yet demonstrated").
+- "next": Array of concrete, actionable recommendations, each tied to a specific Day number and title from the curriculum. No generic advice like "keep practicing".`;
+
+  // Gather skipped missions unasked in queue
+  const skippedUnasked = [];
+  if (candidate.missions) {
+    candidate.missions.forEach(m => {
+      if (m.skipped) {
+        const asked = session.topicQueue.some(t => t.day === m.day && t.status === 'asked');
+        if (!asked) {
+          skippedUnasked.push({ day: m.day, title: m.title });
+        }
+      }
+    });
+  }
+
+  const userPrompt = JSON.stringify({
+    candidateProfile: {
+      name: candidate.name,
+      jobRole: candidate.jobRole,
+      yearsExperience: candidate.yearsExperience
+    },
+    fullTranscript: session.transcript.map(t => ({
+      role: t.role,
+      day: t.day || null,
+      text: t.text,
+      classification: t.classification || null
+    })),
+    topicQueueStatus: session.topicQueue.map(t => ({
+      day: t.day,
+      title: t.title,
+      difficulty: t.difficulty,
+      status: t.status
+    })),
+    skippedMissionsUnasked: skippedUnasked
+  }, null, 2);
+
+  console.log(`[LLMClient] Calling Feedback Composer Gemini API for session "${session.sessionId}"...`);
+  const result = await callGeminiREST(systemPrompt, userPrompt, feedbackSchema, 1);
+  if (result) {
+    return result;
+  }
+
+  console.warn('[LLMClient Warning] Feedback Composer call failed or returned invalid JSON twice. Triggering mechanical fallback...');
+  return generateMechanicalFeedback(session);
 }
