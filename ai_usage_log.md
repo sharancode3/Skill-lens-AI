@@ -1,0 +1,7 @@
+# AI Usage Log
+
+This document tracks all AI-assisted actions taken during the hackathon to satisfy **Stage 1 (Eligibility Verification)** and **Stage 2 (Authenticity Review)**.
+
+| Date/Time | Action Description | AI Tool Used | Prompts/Context Used | Files Modified |
+| --- | --- | --- | --- | --- |
+| 2026-08-07 | Initial project setup, created memory doc, and usage log | Gemini 3.1 Pro | "setup the stuff because they r having so many rules and also maintail a project memory doc" | `project_memory.md`, `ai_usage_log.md`, `README.md`, `.gitignore` |
