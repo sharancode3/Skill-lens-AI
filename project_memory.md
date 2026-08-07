@@ -22,7 +22,9 @@ This document is maintained to help AI models understand the current state of th
 - `trd.md`: Technical Requirements & Architecture.
 - `architecture_decisions.md`: Details model configuration, vector database design choices, and API tradeoffs.
 - `ARCHITECTURE.md`: High-level summary of backend framework, LLM provider, and Firestore/memory data design split.
+- `handover.md`: Project context handover guide for incoming AI assistants.
 - `workflow.md`: End-to-end request lifecycle and phase plan.
+
 - `db_design.md`: Firestore database state/collection structure.
 - `ui_notes.md`: UI specifications mapped to the 3 application screens.
 - `design_system.md`: The Flat Design token guidelines.

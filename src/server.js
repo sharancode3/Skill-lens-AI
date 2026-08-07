@@ -12,7 +12,7 @@ const sessionTurns = new Map();
 
 // Root check
 app.get('/', (req, res) => {
-  res.json({ message: 'Skill-lens-AI API is running' });
+  res.json({ message: 'Skill Labs Ai API is running' });
 });
 
 // POST /api/interview
