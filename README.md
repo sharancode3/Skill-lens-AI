@@ -19,4 +19,38 @@ Skill-lens-AI runs a realistic, adaptive, multi-turn technical interview grounde
 
 ## Setup and Running Instructions
 
-*Instructions will be updated as soon as the project codebase is scaffolded in Phase 1.*
+### Local Development
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+2. Run the development server:
+   ```bash
+   npm run dev
+   ```
+
+### API Testing Curl Commands
+You can verify the `/api/interview` contract using these curl commands (replace `http://localhost:3000` with the deployed API URL when testing the production deploy):
+
+**1. Session Start (Initial Welcome Message)**
+```bash
+curl -X POST http://localhost:3000/api/interview \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId": "session-12345", "candidate": {"id": "CAND-001", "name": "Sarah Johnson", "jobRole": "Senior Data Engineer", "yearsExperience": 9}}'
+```
+
+**2. Conversation Turn (Answer & Follow-up)**
+```bash
+curl -X POST http://localhost:3000/api/interview \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId": "session-12345", "message": "I built custom vector retrieval pipelines for search."}'
+```
+
+**3. Terminal Turn (End of Interview & Structured Feedback)**
+Run the conversation turn two more times. On the third turn, it terminates and returns the feedback shape:
+```bash
+curl -X POST http://localhost:3000/api/interview \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId": "session-12345", "message": "Yes, I also monitored latency and logs."}'
+```
+
