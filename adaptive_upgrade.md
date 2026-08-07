@@ -31,3 +31,12 @@ To make the agent sound like a realistic technical interviewer and prevent stand
 - **Realistic Skepticism**: Allow short, direct acknowledgments (`"Right."`, `"Okay, and—"`) and neutral pushback (`"That's part of it, but what actually triggers X?"`).
 - **No Generic Praise**: Praise must be earned and reference specific correctness signals or omitted completely.
 - **Few-shot examples**: The prompt must contain explicit examples of both correct interviewer tone and bad assistant tone.
+
+# PART B — Phase Amendments & New Sub-Phases
+## Amendment to Phase 3 — Session Schema Additions
+Add these fields to the `sessions/{sessionId}` document created in Phase 3, alongside the existing fields:
+- `recentScores`: Array of floats (keeps only the last 2 `finalAccuracyScore` values).
+- `difficultyTier`: "standard" (starting tier).
+- `nextQuestionType`: "open" (one of `open` | `mcq` | `diagram_interpret`).
+- `pendingMCQAnswer`: Null or Integer (holds the correct option index server-side only when `nextQuestionType` is `mcq` for the current pending question — never sent to the client).
+- `accuracyLog`: Array of objects (append `{day, questionType, finalAccuracyScore, llmConfidence, semanticScore, conceptScore}` every turn).
