@@ -13,3 +13,13 @@ $$\text{finalAccuracyScore} = \text{round}(0.5 \times \text{llmConfidence} + 0.3
 2. **Semantic similarity to the day's objectives (0–100)**: Compute the cosine similarity between the candidate's embedded answer and the embedding vector for the current day's objectives. Linear-remap the raw cosine value (typically 0.3 to 0.9) to a 0–100 scale.
 3. **Concept coverage (0–100)**: Precompute a short list of 3–5 key concept terms/phrases for each curriculum day once at startup. Loose match checking:
    $$\text{conceptCoverageScore} = \frac{\text{Number of terms loosely matched in candidate answer}}{\text{Total precomputed terms for the day}} \times 100$$
+
+## 2. Adaptive Difficulty Tiers & Recency Window
+Instead of static topics, the session state maintains:
+- `recentScores`: Array of the last 2 `finalAccuracyScore` values in the session.
+- `difficultyTier`: One of `foundational` | `standard` | `applied` | `expert`.
+
+### Transition Rules:
+1. **Escalation**: If both of the last 2 scores are $\geq 85$, increase `difficultyTier` by one step (cap at `expert`). This unlocks **Diagram/Graph Interpretation** type questions.
+2. **De-escalation**: If either of the last 2 scores is $< 40$, decrease `difficultyTier` by one step (floor at `foundational`). This triggers **Multiple Choice Questions (MCQ)** to keep the candidate engaged and gather signal.
+3. **Otherwise**: The tier remains unchanged, and the system continues with normal open-ended questions.
