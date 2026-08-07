@@ -6,4 +6,6 @@ This document tracks all AI-assisted actions taken during the hackathon to satis
 | --- | --- | --- | --- | --- |
 | 2026-08-07 | Initial project setup, created memory doc, and usage log | Gemini 3.1 Pro | "setup the stuff because they r having so many rules and also maintail a project memory doc" | `project_memory.md`, `ai_usage_log.md`, `README.md`, `.gitignore` |
 | 2026-08-07 | Saved Design System Guidelines and PRD | Gemini 3.5 Flash | "save it bro shdi say all the time u hv to refer this docs and do work in future save them remeber wt i say now" | `design_system.md`, `prd.md`, `ai_usage_log.md` |
+| 2026-08-07 | Saved TRD (Technical Requirements & Architecture) | Gemini 3.5 Flash | Pasted TRD content for AI Interview Agent | `trd.md`, `ai_usage_log.md` |
+
 
