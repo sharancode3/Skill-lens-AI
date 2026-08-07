@@ -33,12 +33,13 @@ This document is maintained to help AI models understand the current state of th
 - `candidates.json`: The candidates list and learning paths.
 - `src/dataManager.js`: Indexes data synchronously at startup and provides candidate enrichment.
 - `src/topicSelector.js`: Deterministic topic selection algorithm under module diversity constraints.
+- `src/embeddingManager.js`: In-memory vector index generation and cosine similarity lookup.
 - `src/firebase.js`: Firebase Firestore connection and startup health check.
 - `src/server.js`: Node.js Express server defining interview endpoint routes.
 
 
 ## Ongoing Tasks
-- [ ] Complete Phase 2.5: Set up in-memory vector embeddings for cross-curriculum Connection Detection.
+- [ ] Complete Phase 3: Wire in the LLM for question phrasing, answer classification, and follow-up decision as a structured call.
 
 
 ## Completed Tasks
@@ -47,6 +48,8 @@ This document is maintained to help AI models understand the current state of th
 - [x] Phase 0: Express skeleton + contract with Firebase Admin healthcheck.
 - [x] Phase 1: Reference Data Loading (curriculum and candidates), index maps, validation pass, and candidate enrichment helper.
 - [x] Phase 2: Implement the Topic Queue Selection Scoring algorithm.
+- [x] Phase 2.5: Implement the in-memory vector embedding layer for Connection Detection.
+
 
 
 

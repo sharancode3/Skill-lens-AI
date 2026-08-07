@@ -2,11 +2,13 @@ import express from 'express';
 import dotenv from 'dotenv';
 import { initFirebase, runStartupHealthCheck } from './firebase.js';
 import { initializeData, getEnrichedCandidate } from './dataManager.js';
+import { generateEmbeddings } from './embeddingManager.js';
 
 dotenv.config();
 
 // Load curriculum and candidates data synchronously on process startup
 initializeData();
+
 
 
 const app = express();
@@ -80,6 +82,10 @@ const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
+
+  // Generate day embeddings synchronously or via API fallback
+  await generateEmbeddings();
+
 
   // Verification step for Phase 1
   console.log('[Verification] Testing getEnrichedCandidate synchronously for CAND-001, CAND-002, and CAND-003:');
