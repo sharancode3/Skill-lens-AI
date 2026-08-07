@@ -35,6 +35,7 @@ This document tracks all AI-assisted actions taken during the hackathon to satis
 | 2026-08-08 | Received Adaptive Intelligence Upgrade Pack: Part A.3 | Antigravity | "A.3 — Sounding like an interviewer, not an AI assistant" | `adaptive_upgrade.md`, `ai_usage_log.md` |
 | 2026-08-08 | Received Adaptive Intelligence Upgrade Pack: Phase 3 Schema Amendment | Antigravity | "AMENDMENT to Phase 3 — Session Schema Additions" | `adaptive_upgrade.md`, `ai_usage_log.md` |
 | 2026-08-08 | Received Adaptive Intelligence Upgrade Pack: Sub-Phase 4A | Antigravity | "NEW SUB-PHASE 4A — Accuracy Scoring Computation" | `adaptive_upgrade.md`, `ai_usage_log.md` |
+| 2026-08-08 | Received Adaptive Intelligence Upgrade Pack: Sub-Phase 4B | Antigravity | "NEW SUB-PHASE 4B — Adaptive Difficulty Engine" | `adaptive_upgrade.md`, `ai_usage_log.md` |
 
 
 

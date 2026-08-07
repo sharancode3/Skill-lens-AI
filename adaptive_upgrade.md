@@ -47,3 +47,15 @@ Add these fields to the `sessions/{sessionId}` document created in Phase 3, alon
    - `semanticScore`: Run cosine similarity check against current topic objectives. Remap the raw score lineary to a 0–100 scale.
    - `conceptCoverageScore`: Cache 3–5 concept terms/phrases for each curriculum day once at startup. Score based on case-insensitive substring overlaps in candidate's answers.
 3. **Blended Scoring**: Compute `finalAccuracyScore = round(0.5 * llmConfidence + 0.3 * semanticScore + 0.2 * conceptCoverageScore)`. Push to `recentScores` (trim to last 2) and append the breakdown to `accuracyLog`.
+
+## Sub-Phase 4B — Adaptive Difficulty Engine
+1. **Difficulty State Updates**: Call `updateDifficulty(session)` after updating `recentScores`:
+   - Both of last 2 scores $\geq 85 \rightarrow$ tier up (`foundational` $\rightarrow$ `standard` $\rightarrow$ `applied` $\rightarrow$ `expert`), cap at `expert`, set `nextQuestionType = "diagram_interpret"`.
+   - Either of last 2 scores $< 40 \rightarrow$ tier down, floor at `foundational`, set `nextQuestionType = "mcq"`.
+   - Otherwise, tier stays same, `nextQuestionType = "open"`.
+   - Requires at least 2 scores to run updates; defaults to `standard` tier and `"open"` type.
+2. **Prompt Modifiers**: Inject `difficultyTier` into prompt instructions:
+   - `foundational`: Stick close to the literal objective text.
+   - `standard`: Ask "how" or "why", not just "what".
+   - `applied`: Ask about a concrete scenario or architectural trade-off.
+   - `expert`: Ask to critique design choices or compare two different implementations.
