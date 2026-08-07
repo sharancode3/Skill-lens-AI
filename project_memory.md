@@ -3,13 +3,15 @@
 This document is maintained to help AI models understand the current state of the project without needing to analyze the entire codebase every time.
 
 ## Project Overview
-- **Name:** [Project Name]
-- **Goal:** [Hackathon Goal/Idea]
-- **Tech Stack:** [e.g., HTML, CSS, JavaScript, React, Node.js]
+- **Name:** Skill-lens-AI
+- **Goal:** Build an adaptive, multi-turn AI technical interview agent that assesses candidates based on their learning path and generates feedback.
+- **Tech Stack:** Node.js/Express (Backend), React/Vite/Tailwind (Frontend), Firebase Firestore (Session DB)
 
 ## Current State
-- Initialized empty repository.
-- Created base documentation and setup files.
+- Configured Git repository with remote tracking pointing to `https://github.com/sharancode3/Skill-lens-AI.git`.
+- Saved design guidelines, database design, PRD, TRD, UI application notes, and workflow phases.
+- Pre-scaffolding documentation phase completed.
+
 
 ## Architecture / File Structure
 - `project_memory.md`: Current file, maintains context.
