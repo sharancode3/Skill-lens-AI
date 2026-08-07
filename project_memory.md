@@ -41,10 +41,11 @@ This document is maintained to help AI models understand the current state of th
 - `public/index.html`: Main HTML entrypoint defining views for landing, chat, and feedback screens.
 - `public/style.css`: Vanilla CSS stylesheet containing design system colors, custom shapes, and focus rings.
 - `public/app.js`: Frontend application script executing candidates indexing, chat turns, and dynamic feedback rendering.
+- `src/testHardening.js`: Standalone runner validating whitespace retries, input truncation, double-submit caching, and outages.
 
 
 ## Ongoing Tasks
-- [ ] Final optimization pass, deployment setup, and project wrap-up documentation.
+- [ ] Project wrap-up, final checkouts, and master code sync.
 
 
 ## Completed Tasks
@@ -58,6 +59,8 @@ This document is maintained to help AI models understand the current state of th
 - [x] Phase 4: Implement LLM Core Intelligence Layer (classification, follow-ups, memory).
 - [x] Phase 5: Implement Feedback Composer with deterministic fallback report composition.
 - [x] Phases 6–8: Implement Frontend Web Interface (Landing, Chat, and Feedback screens) with flat design system and API integration.
+- [x] Phase 9: Hardening & Edge Cases (idempotency caching, whitespace re-prompts, forced advance, context truncation, outage simulation).
+
 
 
 

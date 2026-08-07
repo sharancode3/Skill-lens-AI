@@ -132,6 +132,10 @@ async function handleSendMessage() {
   const text = chatInput.value.trim();
   if (!text) return;
 
+  // Disable controls to prevent duplicate clicks (Belt)
+  chatInput.disabled = true;
+  btnSend.disabled = true;
+
   // Append user bubble
   appendCandidateMessage(text);
   chatInput.value = '';
@@ -169,9 +173,14 @@ async function handleSendMessage() {
       updateProgress(data.questionsAsked, data.distinctDaysCovered);
     }
   } catch (error) {
-    thinkingEl.remove();
+    if (thinkingEl) thinkingEl.remove();
     console.error('Error sending message:', error);
     appendInterviewerMessage('Connection error. Failed to retrieve server response.');
+  } finally {
+    // Re-enable controls
+    chatInput.disabled = false;
+    btnSend.disabled = false;
+    chatInput.focus();
   }
 }
 

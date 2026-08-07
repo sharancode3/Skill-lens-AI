@@ -18,7 +18,7 @@ const localSessions = new Map();
 /**
  * Reads a session document from Firestore, with automatic fallback to local memory cache.
  */
-async function getSessionDoc(sessionId) {
+export async function getSessionDoc(sessionId) {
   if (db) {
     try {
       const doc = await db.collection('sessions').doc(sessionId).get();
@@ -92,6 +92,10 @@ export async function createSession(sessionId, candidate) {
     distinctDaysCovered: [],
     turnCount: 0,
     followupCountForCurrentTopic: 0,
+    emptyRetryCount: 0,
+    lastMessageHash: null,
+    lastMessageTime: null,
+    lastResponse: null,
     transcript: [],
     interviewMemory: '',
     feedback: null,
@@ -147,10 +151,66 @@ export async function handleTurn(sessionId, message) {
     };
   }
 
+  // 1. Backend Idempotency Check (Rapid duplicate submit prevention)
+  const cleanMsg = (message || '').trim().toLowerCase();
+  const now = Date.now();
+  if (cleanMsg !== '' && session.lastMessageHash === cleanMsg && session.lastMessageTime && (now - new Date(session.lastMessageTime).getTime()) < 5000) {
+    console.log(`[SessionManager Idempotency] Duplicate submit detected for session "${sessionId}" within 5s window. Returning cached response.`);
+    return session.lastResponse;
+  }
+
+  // 2. Empty/whitespace message handling
+  let forceAdvanceDueToBlankRetries = false;
+  const isMsgEmpty = !message || message.trim() === '';
+  
+  if (isMsgEmpty) {
+    if (session.emptyRetryCount === undefined) session.emptyRetryCount = 0;
+
+    if (session.emptyRetryCount < 2) {
+      session.emptyRetryCount++;
+      const reprompt = `I didn't receive your answer. Can you please describe your experience on this topic?`;
+
+      // Log blank turn in transcript
+      session.turnCount++;
+      session.transcript.push({
+        role: 'candidate',
+        text: '[Empty Response]',
+        turn: session.turnCount
+      });
+
+      await saveSessionDoc(sessionId, session);
+
+      const responsePayload = {
+        reply: reprompt,
+        done: false,
+        questionsAsked: session.questionsAsked,
+        distinctDaysCovered: session.distinctDaysCovered.length,
+        detectedConnections: [],
+        action: 'followup'
+      };
+
+      // Cache this response for idempotency checks
+      session.lastMessageHash = cleanMsg;
+      session.lastMessageTime = new Date().toISOString();
+      session.lastResponse = responsePayload;
+      await saveSessionDoc(sessionId, session);
+
+      return responsePayload;
+    } else {
+      // 2 empty retries hit: force advance!
+      console.log(`[SessionManager Override] Forcing topic advance because candidate hit 2 blank retries.`);
+      session.emptyRetryCount = 0;
+      forceAdvanceDueToBlankRetries = true;
+    }
+  } else {
+    // Reset empty retry count on non-empty message
+    session.emptyRetryCount = 0;
+  }
+
   // Increment turn Count
   session.turnCount++;
 
-  // Append candidate response
+  // Append candidate response (always store full untruncated message in Firestore transcript)
   session.transcript.push({
     role: 'candidate',
     text: message,
@@ -160,12 +220,26 @@ export async function handleTurn(sessionId, message) {
   const currentTopicIndex = session.cursor;
   const currentTopic = session.topicQueue[currentTopicIndex];
 
-  // 1. Semantic connection detection layer (Phase 2.5)
-  const currentTopicDay = currentTopic ? currentTopic.day : -1;
-  const detectedConnections = await findRelatedDays(message, [currentTopicDay], 2);
+  // 3. Evaluate Turn with LLM (or bypass on blank forced advancement)
+  let llmResponse;
+  let detectedConnections = [];
 
-  // 2. Structured LLM Call evaluation (Phase 4)
-  const llmResponse = await evaluateTurnWithLLM(session, message, detectedConnections);
+  if (forceAdvanceDueToBlankRetries) {
+    llmResponse = {
+      classification: 'shallow',
+      reasoning: 'Forced advance after 2 empty retries.',
+      action: 'advance',
+      reply: `Let's move on.`,
+      updatedMemory: session.interviewMemory || 'Candidate skipped topic due to consecutive blank answers.'
+    };
+  } else {
+    // 1. Semantic connection detection layer (Phase 2.5)
+    const currentTopicDay = currentTopic ? currentTopic.day : -1;
+    detectedConnections = await findRelatedDays(message, [currentTopicDay], 2);
+
+    // 2. Structured LLM Call evaluation (Phase 4)
+    llmResponse = await evaluateTurnWithLLM(session, message, detectedConnections);
+  }
   
   console.log(`\n--- [LLM Evaluation Log] Session "${sessionId}" Turn ${session.turnCount} ---`);
   console.log(`  Classification: ${llmResponse.classification}`);
@@ -192,7 +266,7 @@ export async function handleTurn(sessionId, message) {
   // Update interview memory
   session.interviewMemory = llmResponse.updatedMemory;
 
-  // 3. Server-side rule enforcement
+  // 4. Server-side rule enforcement
   let action = llmResponse.action;
   let forceAdvanceDueToFollowupLimit = false;
 
@@ -202,7 +276,7 @@ export async function handleTurn(sessionId, message) {
     forceAdvanceDueToFollowupLimit = true;
   }
 
-  // 4. Handle follow-up action
+  // 5. Handle follow-up action
   if (action === 'followup') {
     session.followupCountForCurrentTopic++;
     
@@ -215,7 +289,7 @@ export async function handleTurn(sessionId, message) {
 
     await saveSessionDoc(sessionId, session);
 
-    return {
+    const responsePayload = {
       reply: llmResponse.reply,
       done: false,
       questionsAsked: session.questionsAsked,
@@ -223,9 +297,17 @@ export async function handleTurn(sessionId, message) {
       detectedConnections,
       action
     };
+
+    // Cache this response for idempotency checks
+    session.lastMessageHash = cleanMsg;
+    session.lastMessageTime = new Date().toISOString();
+    session.lastResponse = responsePayload;
+    await saveSessionDoc(sessionId, session);
+
+    return responsePayload;
   }
 
-  // 5. Handle advance action (topic transition or wrap up)
+  // 6. Handle advance action (topic transition or wrap up)
   if (action === 'advance' || action === 'wrapup') {
     // Complete current topic
     if (currentTopic) {
@@ -251,19 +333,27 @@ export async function handleTurn(sessionId, message) {
 
       await saveSessionDoc(sessionId, session);
 
-      return {
+      const responsePayload = {
         reply: 'Interview completed.',
         done: true,
         feedback: session.feedback
       };
+
+      // Cache this response for idempotency checks
+      session.lastMessageHash = cleanMsg;
+      session.lastMessageTime = new Date().toISOString();
+      session.lastResponse = responsePayload;
+      await saveSessionDoc(sessionId, session);
+
+      return responsePayload;
     }
 
     // Advance topic cursor
     session.cursor++;
     const nextTopic = session.topicQueue[session.cursor];
     
-    // Choose reply: if overrode follow-up limit, use transition template; else use LLM reply
-    const replyText = forceAdvanceDueToFollowupLimit 
+    // Choose reply: if overrode follow-up limit or forced by blank retries, use transition template; else use LLM reply
+    const replyText = (forceAdvanceDueToFollowupLimit || forceAdvanceDueToBlankRetries)
       ? `Got it. Let's move on to the next topic. Can you tell me about your experience on Day ${nextTopic.day}: "${nextTopic.title}"?`
       : llmResponse.reply;
 
@@ -276,7 +366,7 @@ export async function handleTurn(sessionId, message) {
 
     await saveSessionDoc(sessionId, session);
 
-    return {
+    const responsePayload = {
       reply: replyText,
       done: false,
       questionsAsked: session.questionsAsked,
@@ -284,6 +374,14 @@ export async function handleTurn(sessionId, message) {
       detectedConnections,
       action
     };
+
+    // Cache this response for idempotency checks
+    session.lastMessageHash = cleanMsg;
+    session.lastMessageTime = new Date().toISOString();
+    session.lastResponse = responsePayload;
+    await saveSessionDoc(sessionId, session);
+
+    return responsePayload;
   }
 
   // Fallback case

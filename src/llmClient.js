@@ -220,6 +220,18 @@ export async function evaluateTurnWithLLM(session, candidateMessage, detectedCon
     }
   }
 
+  // Input Truncation: Truncate candidate message to a maximum of 300 words for LLM context
+  const words = candidateMessage.split(/\s+/);
+  const truncatedMessage = words.length > 300 
+    ? words.slice(0, 300).join(' ') + ' ... [Truncated for Context]' 
+    : candidateMessage;
+
+  // Outage Simulation: bypass API calls if SIMULATE_LLM_OUTAGE is true
+  if (process.env.SIMULATE_LLM_OUTAGE === 'true') {
+    console.log('[LLMClient Outage Simulation] Simulating LLM outage in evaluateTurnWithLLM.');
+    return mockLLMCall(candidate, currentTopic, lastQuestion, truncatedMessage, session.followupCountForCurrentTopic, detectedConnections);
+  }
+
   const systemPrompt = `You are a professional, senior technical interviewer conducting a coding and architectural review for Skill Labs Ai.
 You must evaluate the candidate's last response for the current topic.
 
@@ -253,7 +265,7 @@ detectedConnections parameter: if populated, it contains curriculum days matchin
       objectives: currentTopic.objectives,
       difficulty: currentTopic.difficulty
     },
-    candidateLastMessage: candidateMessage,
+    candidateLastMessage: truncatedMessage,
     previousInterviewerQuestion: lastQuestion,
     runningInterviewMemory: session.interviewMemory || 'No history yet.',
     followupCountForCurrentTopic: session.followupCountForCurrentTopic,
@@ -262,7 +274,7 @@ detectedConnections parameter: if populated, it contains curriculum days matchin
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return mockLLMCall(candidate, currentTopic, lastQuestion, candidateMessage, session.followupCountForCurrentTopic, detectedConnections);
+    return mockLLMCall(candidate, currentTopic, lastQuestion, truncatedMessage, session.followupCountForCurrentTopic, detectedConnections);
   }
 
   console.log(`[LLMClient] Calling Gemini API for session "${session.sessionId}"...`);
@@ -372,6 +384,11 @@ export function generateMechanicalFeedback(session) {
  * Calls structured Gemini REST endpoint or falls back mechanically.
  */
 export async function generateFeedbackReport(session) {
+  if (process.env.SIMULATE_LLM_OUTAGE === 'true') {
+    console.log('[LLMClient Outage Simulation] Simulating LLM outage in generateFeedbackReport.');
+    return generateMechanicalFeedback(session);
+  }
+
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return generateMechanicalFeedback(session);

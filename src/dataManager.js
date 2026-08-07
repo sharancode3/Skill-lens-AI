@@ -128,3 +128,8 @@ export function getEnrichedCandidate(candidateId) {
     };
   });
 }
+
+export function getCandidateById(candidateId) {
+  return candidatesById.get(candidateId) || null;
+}
+
