@@ -13,6 +13,8 @@ This document tracks all AI-assisted actions taken during the hackathon to satis
 | 2026-08-07 | Updated Project Memory Document | Gemini 3.5 Flash | "make sure to update ai usage log and meory doc accordingly wn i give prompt" | `project_memory.md`, `ai_usage_log.md` |
 | 2026-08-07 | Set remote tracking and updated name in docs | Gemini 3.5 Flash | "https://github.com/sharancode3/Skill-lens-AI.git repo link" | `README.md`, `project_memory.md`, `ai_usage_log.md` |
 | 2026-08-07 | Saved Architecture Decisions | Gemini 3.5 Flash | Pasted Architecture Decisions content for AI Interview Agent | `architecture_decisions.md`, `ai_usage_log.md` |
+| 2026-08-07 | Phase 0 Setup: Created ARCHITECTURE.md | Gemini 3.5 Flash | "PHASE 0 (expanded) — Skeleton, Contract, and the Decisions That Must Be Locked First" | `ARCHITECTURE.md`, `ai_usage_log.md` |
+
 
 
 

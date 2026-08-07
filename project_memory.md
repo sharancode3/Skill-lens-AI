@@ -20,6 +20,7 @@ This document is maintained to help AI models understand the current state of th
 - `prd.md`: Product Requirements Document for the AI Interview Agent.
 - `trd.md`: Technical Requirements & Architecture.
 - `architecture_decisions.md`: Details model configuration, vector database design choices, and API tradeoffs.
+- `ARCHITECTURE.md`: High-level summary of backend framework, LLM provider, and Firestore/memory data design split.
 - `workflow.md`: End-to-end request lifecycle and phase plan.
 
 - `db_design.md`: Firestore database state/collection structure.
@@ -27,8 +28,9 @@ This document is maintained to help AI models understand the current state of th
 - `design_system.md`: The Flat Design token guidelines.
 
 ## Ongoing Tasks
-- [ ] Receive problem statement and repository URL from the user.
+- [ ] Complete Phase 0 Skeleton & API Contract setup (Express route + Firebase healthcheck).
 - [ ] Complete Phase 1: Stand up Express/FastAPI skeleton + Firestore connection.
+
 
 ## Completed Tasks
 - [x] Initial repository setup.
