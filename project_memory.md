@@ -38,10 +38,13 @@ This document is maintained to help AI models understand the current state of th
 - `src/llmClient.js`: Google Gemini API client with schema enforcement and offline mock simulation.
 - `src/firebase.js`: Firebase Firestore connection and startup health check.
 - `src/server.js`: Node.js Express server defining interview endpoint routes.
+- `public/index.html`: Main HTML entrypoint defining views for landing, chat, and feedback screens.
+- `public/style.css`: Vanilla CSS stylesheet containing design system colors, custom shapes, and focus rings.
+- `public/app.js`: Frontend application script executing candidates indexing, chat turns, and dynamic feedback rendering.
 
 
 ## Ongoing Tasks
-- [ ] Complete Phase 6: Develop Frontend UI (Landing page, Chat screen, and Feedback Report page) styled in flat design system, and wire to `/api/interview`.
+- [ ] Final optimization pass, deployment setup, and project wrap-up documentation.
 
 
 ## Completed Tasks
@@ -54,6 +57,8 @@ This document is maintained to help AI models understand the current state of th
 - [x] Phase 3: Implement Session State Machine & Firestore Wiring.
 - [x] Phase 4: Implement LLM Core Intelligence Layer (classification, follow-ups, memory).
 - [x] Phase 5: Implement Feedback Composer with deterministic fallback report composition.
+- [x] Phases 6–8: Implement Frontend Web Interface (Landing, Chat, and Feedback screens) with flat design system and API integration.
+
 
 
 

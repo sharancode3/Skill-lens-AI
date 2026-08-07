@@ -115,7 +115,9 @@ export async function createSession(sessionId, candidate) {
 
   return {
     reply: firstQuestion,
-    done: false
+    done: false,
+    questionsAsked: 0,
+    distinctDaysCovered: 0
   };
 }
 
@@ -215,7 +217,11 @@ export async function handleTurn(sessionId, message) {
 
     return {
       reply: llmResponse.reply,
-      done: false
+      done: false,
+      questionsAsked: session.questionsAsked,
+      distinctDaysCovered: session.distinctDaysCovered.length,
+      detectedConnections,
+      action
     };
   }
 
@@ -272,7 +278,11 @@ export async function handleTurn(sessionId, message) {
 
     return {
       reply: replyText,
-      done: false
+      done: false,
+      questionsAsked: session.questionsAsked,
+      distinctDaysCovered: session.distinctDaysCovered.length,
+      detectedConnections,
+      action
     };
   }
 

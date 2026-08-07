@@ -1,7 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import { initFirebase, runStartupHealthCheck } from './firebase.js';
-import { initializeData, getEnrichedCandidate } from './dataManager.js';
+import { initializeData, getEnrichedCandidate, candidatesById } from './dataManager.js';
 import { generateEmbeddings } from './embeddingManager.js';
 import { createSession, handleTurn } from './sessionManager.js';
 
@@ -16,9 +16,17 @@ initializeData();
 const app = express();
 app.use(express.json());
 
-// Root check
-app.get('/', (req, res) => {
-  res.json({ message: 'Skill Labs Ai API is running' });
+// Serve frontend files
+app.use(express.static('public'));
+
+// GET /api/candidates
+app.get('/api/candidates', (req, res) => {
+  try {
+    const list = Array.from(candidatesById.values());
+    res.json(list);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to retrieve candidates list.' });
+  }
 });
 
 

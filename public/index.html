@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Skill Labs Ai — Technical Review Portal</title>
+  <!-- Outfit Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-white text-gray-900 antialiased font-sans">
+
+  <!-- ==================== SCREEN 1: START SCREEN ==================== -->
+  <main id="screen-start" class="view min-h-screen flex flex-col">
+    <!-- Full-bleed Primary Blue Hero Block -->
+    <section class="hero-block relative overflow-hidden flex flex-col justify-center items-center text-center p-8 md:p-16 bg-blue-600 text-white min-h-[40vh]">
+      <!-- Low-opacity background decorative geometric shapes -->
+      <div class="deco-shape rotated-square absolute"></div>
+      <div class="deco-shape circle absolute"></div>
+
+      <div class="max-w-3xl z-10">
+        <span class="badge bg-blue-500 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full border border-blue-400">Phase 6 Active</span>
+        <h1 class="text-4xl md:text-6xl font-extrabold tracking-tight mt-4 leading-none">Ready for your interview?</h1>
+        <p class="text-lg md:text-xl text-blue-100 mt-4 max-w-xl mx-auto font-light">
+          Experience an adaptive, multi-turn AI technical evaluation customized to your actual course completions.
+        </p>
+      </div>
+    </section>
+
+    <!-- Content / Candidate Selector Card -->
+    <section class="flex-grow flex items-center justify-center p-6 bg-gray-50">
+      <div class="w-full max-w-2xl bg-white rounded-lg border-4 border-gray-900 p-8 flex flex-col gap-6">
+        <div>
+          <label for="candidate-select" class="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Select Candidate Profile</label>
+          <div class="relative">
+            <select id="candidate-select" class="w-full h-14 px-4 bg-gray-100 rounded-md text-gray-900 font-semibold border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none appearance-none cursor-pointer">
+              <option value="" disabled selected>Loading candidates...</option>
+            </select>
+            <div class="absolute inset-y-0 right-4 flex items-center pointer-events-none text-gray-500">
+              <i data-lucide="chevron-down"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- Selected Candidate Preview Details (Color Block Card) -->
+        <div id="candidate-card" class="bg-gray-100 rounded-lg p-6 flex flex-col gap-4 hidden">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-2 border-gray-200 pb-4">
+            <div>
+              <h2 id="cand-name" class="text-2xl font-bold tracking-tight text-gray-900">Name</h2>
+              <p id="cand-role" class="text-sm font-semibold uppercase tracking-wider text-blue-600 mt-1">Backend Engineer</p>
+            </div>
+            <div class="flex items-center gap-2 bg-blue-50 text-blue-700 font-bold px-3 py-1 rounded-full text-xs">
+              <i data-lucide="award" class="w-4 h-4"></i>
+              <span id="cand-exp">0 Years</span>
+            </div>
+          </div>
+
+          <!-- Multi-color stats row -->
+          <div class="grid grid-cols-2 gap-4">
+            <div class="bg-green-50 p-4 rounded-md flex flex-col justify-center">
+              <span class="text-3xl font-extrabold text-emerald-600" id="stat-completed">0</span>
+              <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-800 mt-1">Missions Passed</span>
+            </div>
+            <div class="bg-amber-50 p-4 rounded-md flex flex-col justify-center">
+              <span class="text-3xl font-extrabold text-amber-600" id="stat-rate">0%</span>
+              <span class="text-[10px] font-bold uppercase tracking-wider text-amber-800 mt-1">First-Try Rate</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Start CTA -->
+        <button id="btn-start" class="w-full h-14 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md transition-all duration-200 transform hover:scale-105 active:scale-95 outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center justify-center gap-2">
+          <span>Start Technical Interview</span>
+          <i data-lucide="arrow-right" class="w-5 h-5"></i>
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <!-- ==================== SCREEN 2: CHAT INTERVIEW SCREEN ==================== -->
+  <main id="screen-chat" class="view min-h-screen flex flex-col bg-gray-50 hidden">
+    <!-- Header Bar -->
+    <header class="h-18 bg-white border-b-2 border-gray-200 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4 z-10">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-extrabold text-lg">SL</div>
+        <div>
+          <h2 id="chat-cand-name" class="text-lg font-bold tracking-tight text-gray-900">Sarah Johnson</h2>
+          <p id="chat-cand-role" class="text-xs font-semibold tracking-wider text-gray-500 uppercase">Backend Engineer</p>
+        </div>
+      </div>
+
+      <!-- Solid Color Block Progress Indicators -->
+      <div class="flex gap-3">
+        <div class="progress-pill bg-blue-600 text-white px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-bold">
+          <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+          <span>Questions:</span>
+          <span id="chat-progress-questions">0/8</span>
+        </div>
+        <div class="progress-pill bg-emerald-600 text-white px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-bold">
+          <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+          <span>Topics:</span>
+          <span id="chat-progress-topics">0/4</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Message Thread Window -->
+    <section id="chat-messages" class="flex-grow overflow-y-auto p-6 md:p-8 flex flex-col gap-6 max-w-4xl w-full mx-auto">
+      <!-- Chat bubbles injected dynamically -->
+    </section>
+
+    <!-- Sticky Bottom Input Section -->
+    <footer class="bg-white border-t-2 border-gray-200 p-4 md:p-6 sticky bottom-0">
+      <div class="max-w-4xl mx-auto flex gap-4 items-center">
+        <div class="flex-grow relative">
+          <input type="text" id="chat-input" placeholder="Type your technical response here..." class="w-full h-14 px-6 bg-gray-100 rounded-md text-gray-900 border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all duration-200" />
+        </div>
+        <button id="btn-send" class="w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center transition-all duration-200 transform hover:scale-105 active:scale-95 outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+          <i data-lucide="send" class="w-5 h-5"></i>
+        </button>
+      </div>
+    </footer>
+  </main>
+
+  <!-- ==================== SCREEN 3: FEEDBACK SCREEN ==================== -->
+  <main id="screen-feedback" class="view min-h-screen bg-gray-50 flex flex-col hidden">
+    <!-- Summary Header Block -->
+    <section class="bg-blue-600 text-white p-8 md:p-16 relative overflow-hidden">
+      <!-- Decos -->
+      <div class="deco-shape rotated-square absolute"></div>
+      
+      <div class="max-w-4xl mx-auto z-10 relative flex flex-col gap-4">
+        <span class="badge bg-blue-500 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full border border-blue-400 self-start">Evaluation Report</span>
+        <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight leading-none">Technical Feedback Composer</h1>
+        
+        <!-- Summary Box -->
+        <div class="bg-blue-700 rounded-lg p-6 mt-4 border border-blue-500">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-blue-200 mb-2">Performance Summary</h2>
+          <p id="feedback-summary" class="text-lg text-white font-normal leading-relaxed">
+            Summary content loaded dynamically...
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Details Sections -->
+    <section class="flex-grow p-6 md:p-12 max-w-5xl w-full mx-auto flex flex-col gap-12">
+      <!-- strengths (Emerald Tinted cards) -->
+      <div class="flex flex-col gap-4">
+        <div class="flex items-center gap-2 border-b-2 border-emerald-200 pb-2">
+          <i data-lucide="check-circle" class="w-6 h-6 text-emerald-600"></i>
+          <h2 class="text-xl font-bold tracking-tight text-gray-900">Key Strengths</h2>
+        </div>
+        <div id="feedback-strengths" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- strengths cards injected dynamically -->
+        </div>
+      </div>
+
+      <!-- gaps (Amber Tinted cards) -->
+      <div class="flex flex-col gap-4">
+        <div class="flex items-center gap-2 border-b-2 border-amber-200 pb-2">
+          <i data-lucide="alert-triangle" class="w-6 h-6 text-amber-600"></i>
+          <h2 class="text-xl font-bold tracking-tight text-gray-900">Identified Gaps</h2>
+        </div>
+        <div id="feedback-gaps" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- gaps cards injected dynamically -->
+        </div>
+      </div>
+
+      <!-- next steps (Dark Section) -->
+      <div class="bg-gray-900 text-white rounded-lg p-8 flex flex-col gap-6">
+        <div class="flex items-center gap-2 border-b border-gray-800 pb-3">
+          <i data-lucide="trending-up" class="w-6 h-6 text-blue-400"></i>
+          <h2 class="text-xl font-bold tracking-tight">Recommended Next Steps</h2>
+        </div>
+        <div id="feedback-next" class="flex flex-col gap-4">
+          <!-- next items injected dynamically -->
+        </div>
+      </div>
+
+      <!-- CTA Footer Button -->
+      <div class="flex justify-center mt-6">
+        <button id="btn-restart" class="h-16 px-8 bg-transparent text-blue-600 border-4 border-blue-600 hover:bg-blue-600 hover:text-white font-bold rounded-md transition-all duration-200 transform hover:scale-105 active:scale-95 outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600">
+          Restart Review Portal
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <!-- JavaScript App Logic -->
+  <script src="app.js"></script>
+</body>
+</html>
