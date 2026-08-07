@@ -23,3 +23,11 @@ Instead of static topics, the session state maintains:
 1. **Escalation**: If both of the last 2 scores are $\geq 85$, increase `difficultyTier` by one step (cap at `expert`). This unlocks **Diagram/Graph Interpretation** type questions.
 2. **De-escalation**: If either of the last 2 scores is $< 40$, decrease `difficultyTier` by one step (floor at `foundational`). This triggers **Multiple Choice Questions (MCQ)** to keep the candidate engaged and gather signal.
 3. **Otherwise**: The tier remains unchanged, and the system continues with normal open-ended questions.
+
+## 3. Interviewer Tone Calibration & Prompts
+To make the agent sound like a realistic technical interviewer and prevent standard friendly-assistant AI drift:
+- **Banned Phrase List**: Banned phrases include `"great question"`, `"that's a fascinating point"`, `"as an AI"`, `"I'd be happy to"`, `"let's dive into"`, and repeating candidate answers back before responding.
+- **Strict Brevity**: Responses must be 1–3 sentences (except when formulating diagrams/MCQs).
+- **Realistic Skepticism**: Allow short, direct acknowledgments (`"Right."`, `"Okay, and—"`) and neutral pushback (`"That's part of it, but what actually triggers X?"`).
+- **No Generic Praise**: Praise must be earned and reference specific correctness signals or omitted completely.
+- **Few-shot examples**: The prompt must contain explicit examples of both correct interviewer tone and bad assistant tone.
