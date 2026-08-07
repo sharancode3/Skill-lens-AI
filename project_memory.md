@@ -3,9 +3,10 @@
 This document is maintained to help AI models understand the current state of the project without needing to analyze the entire codebase every time.
 
 ## Project Overview
-- **Name:** Skill-lens-AI
+- **Name:** Skill Labs Ai
 - **Goal:** Build an adaptive, multi-turn AI technical interview agent that assesses candidates based on their learning path and generates feedback.
 - **Tech Stack:** Node.js/Express (Backend), React/Vite/Tailwind (Frontend), Firebase Firestore (Session DB)
+
 
 ## Current State
 - Configured Git repository with remote tracking pointing to `https://github.com/sharancode3/Skill-lens-AI.git`.

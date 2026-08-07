@@ -1,7 +1,8 @@
-# Skill-lens-AI
+# Skill Labs Ai
 **AI Interview Agent — Hackathon Submission**
 
-Skill-lens-AI runs a realistic, adaptive, multi-turn technical interview grounded in each candidate's actual learning path (missions passed, skipped, retried) and produces structured, actionable feedback.
+Skill Labs Ai runs a realistic, adaptive, multi-turn technical interview grounded in each candidate's actual learning path (missions passed, skipped, retried) and produces structured, actionable feedback.
+
 
 ## Hackathon Verification Links
 - **Repository URL**: [https://github.com/sharancode3/Skill-lens-AI](https://github.com/sharancode3/Skill-lens-AI)

@@ -1,6 +1,6 @@
-# AI Interview Agent — Architecture Decisions
+# AI Interview Agent — Architecture Decisions (Skill Labs Ai)
 
-This document details the critical architecture decisions made for the AI Interview Agent hackathon project, covering model training, vector databases, local vs cloud LLMs, and state persistence.
+This document details the critical architecture decisions made for the Skill Labs Ai hackathon project, covering model training, vector databases, local vs cloud LLMs, and state persistence.
 
 ---
 
@@ -8,26 +8,23 @@ This document details the critical architecture decisions made for the AI Interv
 There is no model training in this project. What we are actually doing is **in-context learning via structured prompting** — the model's weights never change. "Training" here means three layered techniques, all happening at request-time:
 
 1. **System-prompt role definition**: A fixed block of instructions telling the model who it is ("You are a senior technical interviewer...") and the exact rules of engagement (classification categories, follow-up limits, tone calibration). This is re-sent on every single call.
-2. **Context injection (retrieval without a retriever)**: On every turn, we assemble a fresh prompt containing only the relevant slice of `curriculum.json` and `candidates.json` (the current topic's objectives, the candidate's specific signal for that topic — attempts, skipped, first-try). This is functionally "retrieval-augmented generation" in spirit, but the retrieval step is a plain dictionary/array lookup by day number, not a semantic search. This distinction is critical — we avoid using a vector DB because structured JSON lookups are deterministic and faster.
+2. **Context injection (retrieval without a retriever)**: On every turn, we assemble a fresh prompt containing only the relevant slice of `curriculum.json` and `candidates.json` (the current topic's objectives, the candidate's specific signal for that topic — attempts, skipped, first-try). This is functionally "retrieval-augmented generation" in spirit, but the retrieval step is a plain dictionary/array lookup by day number, not a semantic search. This distinction is critical — we avoid using a vector DB for curriculum lookup because structured JSON lookups are deterministic and faster.
 3. **Structured output constraints (function-calling / JSON schema mode)**: Instead of relying on free text, we force the model to return a fixed JSON shape (`classification`, `action`, `reply`, `updatedMemory`). This makes the agent reliable turn after turn.
 
 Fine-tuning teaches a model a fixed style baked into weights; it cannot teach a model this specific candidate's history, because that changes per session. Baking one candidate's data into weights and then using the same weights for the next candidate is actively wrong. Context injection is the correct architecture for a personalization problem.
 
 ---
 
-## 2. Vector databases: the concept, and why this project (mostly) doesn't need one
-A vector database stores embeddings — numeric representations of text such that semantically similar text ends up numerically close together — and lets you query "find me the K most similar chunks to this query" via cosine similarity. It exists to solve one problem: searching large, unstructured text corpora where you don't know in advance which document is relevant.
+## 2. Vector databases: how we use one as a differentiator
+A vector database stores embeddings — numeric representations of text such that semantically similar text ends up numerically close together — and lets you query "find me the K most similar chunks to this query" via cosine similarity.
 
-Our data doesn't have that problem:
-- `curriculum.json` has exactly 31 days, each with a known day number. If we need Day 12's objectives, we look it up directly via day number (e.g., `{"day": 12}`). This is an exact key lookup, $O(1)$, zero ambiguity, zero embedding cost, zero latency, and zero chance of retrieving the wrong day.
-- `candidates.json` is the same story — we look up by `candidateId`.
+We use a vector database layer, but **only for a problem that is actually semantic**, not for the exact-lookup problem Phase 1 solves (which remains an $O(1)$ key lookup by day number):
 
-Therefore, we do not build a vector DB for retrieving curriculum or candidate data. Structured JSON lookups are strictly better here — faster, deterministic, and easier to debug under time pressure.
-
-### Optional Semantic Answer Matching (Nice-to-Have):
-To show technical range if time allows, we could embed the candidate's answer and the day's stated learning objectives, then use cosine similarity as a secondary signal fed into the LLM classification prompt. Even if we do this, we do not need a hosted vector DB service. 31 curriculum days is small enough to hold all embeddings in memory as plain arrays and compute cosine similarity in JavaScript/Python — no hosted Pinecone/Weaviate needed.
+- **Cross-Curriculum Connection Detection**: The candidate's pre-selected queue only covers 5–7 days. However, a candidate's free-text response to one topic can reveal understanding or gaps spanning other days never explicitly queued. A plain day-number lookup cannot detect that. By embedding all 31 days' objectives at startup and storing them as vectors, we can perform a similarity search using the candidate's response to detect matches across the entire curriculum. This allows the interviewer to adapt to topics they did not anticipate.
+- **In-Memory Vector Search**: We do not need a hosted vector DB service (like Pinecone or pgvector). 31 days × a few objectives is small enough to embed once at startup, hold as in-memory vector arrays, and compute cosine similarity directly in JavaScript. This delivers the architectural benefit of a vector search layer without latency and infrastructure overhead.
 
 ---
+
 
 ## 3. Local vs Cloud LLM
 We evaluate the options as follows:

@@ -1,5 +1,5 @@
 {
-  "name": "skill-lens-ai",
+  "name": "skill-labs-ai",
   "version": "1.0.0",
   "description": "AI Interview Agent backend",
   "main": "src/server.js",

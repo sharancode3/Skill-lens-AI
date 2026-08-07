@@ -17,6 +17,8 @@ This document tracks all AI-assisted actions taken during the hackathon to satis
 | 2026-08-07 | Phase 0 Backend Scaffolding: Created express app and Firebase wiring | Gemini 3.5 Flash | Setup express routes, Firebase admin healthcheck, and test curl cases | `package.json`, `.gitignore`, `src/firebase.js`, `src/server.js`, `README.md`, `ai_usage_log.md` |
 | 2026-08-07 | Copied Reference Data | Gemini 3.5 Flash | Copied technical-spec.md, curriculum.json, and candidates.json from Downloads | `technical-spec.md`, `curriculum.json`, `candidates.json`, `ai_usage_log.md` |
 | 2026-08-07 | Pushed code to GitHub remote | Gemini 3.5 Flash | "push the code to github my fried will continue" | `ai_usage_log.md` |
+| 2026-08-07 | Updated project name to Skill Labs Ai & updated vector database decision | Gemini 3.5 Flash | Name change requirement and A.1-A.4 architecture prompt updates | `architecture_decisions.md`, `ARCHITECTURE.md`, `project_memory.md`, `README.md`, `package.json`, `ai_usage_log.md` |
+
 
 
 
