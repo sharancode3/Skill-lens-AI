@@ -36,7 +36,7 @@ async function runFeedbackTest() {
   step = 1;
 
   while (!shallowRes.done) {
-    const shallowAnswer = `No.`;
+    const shallowAnswer = `No. (Turn ${step})`;
     shallowRes = await handleTurn(sessionShallowId, shallowAnswer);
     step++;
   }

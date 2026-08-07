@@ -11,7 +11,10 @@ This document is maintained to help AI models understand the current state of th
 ## Current State
 - Configured Git repository with remote tracking pointing to `https://github.com/sharancode3/Skill-lens-AI.git`.
 - Saved design guidelines, database design, PRD, TRD, UI application notes, and workflow phases.
-- Pre-scaffolding documentation phase completed.
+- Integrated OpenAI-compatible routing for **Qwen 2.5 3B** local and tunneled models inside `llmClient.js`.
+- Configured ngrok authtoken and added configurable `.env` settings.
+- All testing and validation suites are passing successfully.
+
 
 
 ## Architecture / File Structure

@@ -37,27 +37,28 @@ This document tracks all AI-assisted actions taken during the hackathon to satis
 | 2026-08-08 | Received Adaptive Intelligence Upgrade Pack: Sub-Phase 4A | Antigravity | "NEW SUB-PHASE 4A — Accuracy Scoring Computation" | `adaptive_upgrade.md`, `ai_usage_log.md` |
 | 2026-08-08 | Received Adaptive Intelligence Upgrade Pack: Sub-Phase 4B | Antigravity | "NEW SUB-PHASE 4B — Adaptive Difficulty Engine" | `adaptive_upgrade.md`, `ai_usage_log.md` |
 | 2026-08-08 | Received Adaptive Intelligence Upgrade Pack: Sub-Phase 4C | Antigravity | "NEW SUB-PHASE 4C — Question Type Variety: MCQ and Diagram/Graph Interpretation" | `adaptive_upgrade.md`, `ai_usage_log.md` |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+| 2026-08-08 | Implemented Adaptive Intelligence Upgrade features | Antigravity | "NEW SUB-PHASE 4A, 4B, 4C: Implement scoring, difficulty engine, MCQ/Diagrams, and Web UI rendering" | `src/server.js`, `src/embeddingManager.js`, `src/llmClient.js`, `src/sessionManager.js`, `public/index.html`, `public/style.css`, `public/app.js`, `src/testAdaptiveIntelligence.js` |
+| 2026-08-08 | Added local Qwen 2.5 3B API routing and ngrok config | Antigravity | "link my qwen 2.5 3b with this but before that wnna lhost it thorugh n grok tunnel" | `src/llmClient.js`, `.env`, `project_memory.md` |
+| 2026-08-08 | Expanded tone constraints with 6 few-shot dialogue examples | Antigravity | "A.3 — Sounding like an interviewer, not an AI assistant (banned phrases and few-shot examples)" | `src/llmClient.js`, `walkthrough.md`, `ai_usage_log.md` |
+| 2026-08-08 | Verified Phase 3 session schema additions | Antigravity | "AMENDMENT to Phase 3 — Session Schema Additions (recentScores, difficultyTier, nextQuestionType, pendingMCQAnswer, accuracyLog)" | `src/sessionManager.js`, `ai_usage_log.md` |
+| 2026-08-08 | Verified Phase 4B Adaptive Difficulty Engine | Antigravity | "NEW SUB-PHASE 4B — Adaptive Difficulty Engine (updateDifficulty logic and prompt instruction injection)" | `src/sessionManager.js`, `src/llmClient.js`, `ai_usage_log.md` |
+| 2026-08-08 | Verified Phase 4C Question Type Variety | Antigravity | "NEW SUB-PHASE 4C — Question Type Variety (MCQ choice grading, correct/incorrect scoring logic, Mermaid diagram retry/fallback, and client payload filter)" | `src/sessionManager.js`, `src/llmClient.js`, `public/app.js`, `ai_usage_log.md` |
+| 2026-08-08 | Verified Phase 4 Interviewer Voice Constraints | Antigravity | "AMENDMENT to Phase 4 — Interviewer Voice Constraints (verbatim prompt constraints, brevity limits, banned phrases, and 6-shot dialogue examples)" | `src/llmClient.js`, `ai_usage_log.md` |
+| 2026-08-08 | Verified Phase 5 Sibling Metrics Payload | Antigravity | "AMENDMENT to Phase 5 — Enhanced Feedback Output (spec-safe sibling metrics structure: overallAccuracy, perDay, difficultyProgression, questionTypeBreakdown)" | `src/sessionManager.js`, `ai_usage_log.md` |
+| 2026-08-08 | Verified Phase 6/6A Candidate Selector Screen | Antigravity | "AMENDMENT to Phase 6/6A — Candidate Selection (not login, drop-down selection of 20 profiles, in-memory state selection)" | `public/app.js`, `ai_usage_log.md` |
+| 2026-08-08 | Verified Phase 8 Feedback Report Screen Metrics | Antigravity | "AMENDMENT to Phase 8 — Feedback Report Screen: Surfacing Metrics (overall accuracy badge, flat difficulty-progression labels, question breakdown stats, and per-day table)" | `public/index.html`, `public/style.css`, `public/app.js`, `ai_usage_log.md` |
+| 2026-08-08 | Completed contract and checklist verification tests | Antigravity | "PART C — Verified spec compliance contract keys byte-for-byte and completed test runs" | `src/testSpecFeedback.js`, `ai_usage_log.md` |
+| 2026-08-08 | Performed full system verification checklist audit | Antigravity | "Audit system features against full cohort program specification checklists (from Phase 0 to 10)" | `src/server.js`, `src/dataManager.js`, `src/llmClient.js`, `ai_usage_log.md` |
+| 2026-08-08 | Started local Express server and ngrok tunnel | Antigravity | "ok run the site and also activate ngrok server and backend wt ever" | `src/server.js`, `ai_usage_log.md` |
+| 2026-08-08 | Fixed MCQ repeating question bug | Antigravity | "Force action to 'advance' on all MCQ turns to ensure correct transition to the next topic day" | `src/sessionManager.js`, `ai_usage_log.md` |
+| 2026-08-08 | Implemented PS2 Phase 1 Feedback/Scoring Bug Fix | Antigravity | "Add low temperature, expected objectives compare, strict weakness rubrics, and suspicious gap regeneration validation" | `src/llmClient.js`, `ai_usage_log.md` |
+| 2026-08-08 | Implemented PS2 Phase 2 UI Styling and Scroll Fix | Antigravity | "Add smooth smart auto-scrolling, fixed viewport height screen containment, and defined bubble styles" | `public/index.html`, `public/style.css`, `public/app.js`, `ai_usage_log.md` |
+| 2026-08-08 | Implemented PS2 Phase 3 Fullscreen Enforcement | Antigravity | "Add enterFullscreen request, browser rejection modal, continuous change event monitoring, and violation dialog triggers" | `public/index.html`, `public/app.js`, `ai_usage_log.md` |
+| 2026-08-08 | Implemented PS2 Phase 4 Copy-Paste & Right-Click Block | Antigravity | "Add input paste event handler, CSS user-select none, and screen contextmenu interceptor" | `public/index.html`, `public/style.css`, `public/app.js`, `ai_usage_log.md` |
+| 2026-08-08 | Implemented PS2 Phase 5 Proctoring Violations & Suspension | Antigravity | "Add blur visibility events, shared violation count, suspension view countdown, and 5-min candidate cooldowns" | `src/server.js`, `src/sessionManager.js`, `public/index.html`, `public/app.js`, `ai_usage_log.md` |
+| 2026-08-08 | Fixed Duplication and Candidate Name Bug in Final Report | Antigravity | "Group transcript candidate turns by day to prevent duplicate strengths/gaps/next entries and access nested member name" | `src/sessionManager.js`, `src/llmClient.js`, `ai_usage_log.md` |
+| 2026-08-08 | Implemented PS2 Phase 2 Score-to-Narrative Alignment | Antigravity | "Store candidateAnswer and turn reasoning in accuracyLog; evaluate strengths/gaps on a 50/100 threshold; include real answer snippets and turn evaluations to prevent boilerplate" | `src/sessionManager.js`, `src/llmClient.js`, `ai_usage_log.md` |
+| 2026-08-08 | Implemented PS2 Phase 3 Disengagement & Refusal Handling | Antigravity | "Add checkDisengagement helper; track server-side disengagementCount; prompt pushback on 1st refusal, warn on 2nd, terminate with zero-score/feedback on 3rd refusal" | `src/sessionManager.js`, `ai_usage_log.md` |
+| 2026-08-08 | Implemented PS2 Phase 4 MCQ Option Generation Fix | Antigravity | "Add systemPrompt rules banning MCQ meta-labels and enforcing plausible technical distractors; rewrite mock fallback to generate dynamic, content-driven questions and choices; implement post-generation validation check with corrective retries and programmatic backups" | `src/llmClient.js`, `ai_usage_log.md` |
+| 2026-08-08 | Implemented PS2 Phase 5 MCQ Non-Repetition Fix | Antigravity | "Track session.lastMCQOptions across return paths; add JSON options comparison inside evaluateTurnWithLLM to detect LLM question repeats; trigger corrective retry or backup options fallback upon detection" | `src/sessionManager.js`, `src/llmClient.js`, `ai_usage_log.md` |
 

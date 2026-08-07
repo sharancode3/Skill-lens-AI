@@ -1,9 +1,9 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import { initFirebase, runStartupHealthCheck } from './firebase.js';
-import { initializeData, getEnrichedCandidate, candidatesById } from './dataManager.js';
+import { initializeData, getEnrichedCandidate, candidatesById, precomputeConceptTerms } from './dataManager.js';
 import { generateEmbeddings } from './embeddingManager.js';
-import { createSession, handleTurn } from './sessionManager.js';
+import { createSession, handleTurn, reportViolation, cooldowns } from './sessionManager.js';
 
 dotenv.config();
 
@@ -32,7 +32,7 @@ app.get('/api/candidates', (req, res) => {
 
 // POST /api/interview
 app.post('/api/interview', async (req, res) => {
-  const { sessionId, candidate, message } = req.body;
+  const { sessionId, candidate, message, violationType } = req.body;
 
   if (!sessionId) {
     return res.status(400).json({ error: 'sessionId is required' });
@@ -40,14 +40,41 @@ app.post('/api/interview', async (req, res) => {
 
   try {
     // Branch on request shape:
-    // 1. Session start: presence of candidate (no message)
+    // 1. Proctoring violation log: presence of violationType
+    if (violationType) {
+      const result = await reportViolation(sessionId, violationType);
+      if (result.error) {
+        return res.status(result.status || 400).json({ error: result.error });
+      }
+      return res.json(result);
+    }
+
+    // 2. Session start: presence of candidate (no message, no violationType)
     if (candidate && !message) {
+      const candId = candidate.id || (candidate.member ? candidate.member.id : null);
+      if (candId && cooldowns.has(candId)) {
+        const suspendedAt = cooldowns.get(candId);
+        const elapsedMs = Date.now() - suspendedAt.getTime();
+        const cooldownMs = 5 * 60 * 1000; // 5 minutes
+        if (elapsedMs < cooldownMs) {
+          const remainingSeconds = Math.ceil((cooldownMs - elapsedMs) / 1000);
+          const mins = Math.floor(remainingSeconds / 60);
+          const secs = remainingSeconds % 60;
+          return res.status(403).json({
+            error: 'COOLDOWN_ACTIVE',
+            message: `You are in a cooldown period due to repeated proctoring violations. Please retry in ${mins}m ${secs}s.`
+          });
+        } else {
+          // Cooldown expired, clear it
+          cooldowns.delete(candId);
+        }
+      }
       const result = await createSession(sessionId, candidate);
       return res.json(result);
     }
 
-    // 2. Conversation turn: presence of message (no candidate)
-    if (message) {
+    // 3. Conversation turn: presence of message (no candidate, no violationType)
+    if (message !== undefined) {
       const result = await handleTurn(sessionId, message);
       if (result.error) {
         return res.status(result.status || 400).json({ error: result.error });
@@ -57,7 +84,7 @@ app.post('/api/interview', async (req, res) => {
 
     // Fallback for invalid shape
     return res.status(400).json({
-      error: 'Invalid request payload. Must specify either candidate (for start) or message (for turn).'
+      error: 'Invalid request payload. Must specify candidate (for start), message (for turn), or violationType (for proctoring).'
     });
   } catch (error) {
     console.error('[API Error] Exception during interview turn:', error);
@@ -73,6 +100,9 @@ app.listen(PORT, async () => {
 
   // Generate day embeddings synchronously or via API fallback
   await generateEmbeddings();
+  
+  // Precompute key concept terms for all days
+  await precomputeConceptTerms();
 
 
   // Verification step for Phase 1

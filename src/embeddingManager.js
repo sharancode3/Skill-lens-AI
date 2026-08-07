@@ -264,3 +264,80 @@ export async function findRelatedDays(text, excludeDays = [], topK = 2) {
 
   return matches.slice(0, topK);
 }
+
+/**
+ * Computes semantic similarity between the candidate answer and target day's objectives.
+ * Returns a remapped score on a 0-100 scale.
+ */
+export async function computeSemanticScore(candidateAnswer, dayNum) {
+  if (!candidateAnswer || candidateAnswer.trim() === '') return 0;
+
+  // Clean and embed query text
+  let queryVector = [];
+  if (embeddingMode === 'mock') {
+    const tokens = tokenize(candidateAnswer);
+    const vector = new Array(globalVocabulary.length).fill(0);
+    tokens.forEach(token => {
+      const idx = globalVocabulary.indexOf(token);
+      if (idx !== -1) {
+        vector[idx]++;
+      }
+    });
+    queryVector = normalizeVector(vector);
+  } else {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      embeddingMode = 'mock';
+      return computeSemanticScore(candidateAnswer, dayNum);
+    }
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'models/text-embedding-004',
+          content: { parts: [{ text: candidateAnswer }] }
+        })
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      queryVector = normalizeVector(data.embedding.values);
+    } catch (err) {
+      // Fallback
+      const tokens = tokenize(candidateAnswer);
+      const vector = new Array(globalVocabulary.length).fill(0);
+      tokens.forEach(token => {
+        const idx = globalVocabulary.indexOf(token);
+        if (idx !== -1) {
+          vector[idx]++;
+        }
+      });
+      queryVector = normalizeVector(vector);
+    }
+  }
+
+  // Find day embedding
+  const dayObj = dayEmbeddings.find(d => d.day === dayNum);
+  if (!dayObj) return 0;
+
+  const rawSim = cosineSimilarity(queryVector, dayObj.embedding);
+
+  // Remap bounds:
+  // For real embeddings, mapping [0.3, 0.8] -> [0, 100]
+  // For mock embeddings, mapping [0.0, 0.4] -> [0, 100]
+  let score = 0;
+  const minVal = embeddingMode === 'real' ? 0.3 : 0.0;
+  const maxVal = embeddingMode === 'real' ? 0.8 : 0.4;
+
+  if (rawSim <= minVal) {
+    score = 0;
+  } else if (rawSim >= maxVal) {
+    score = 100;
+  } else {
+    score = Math.round(((rawSim - minVal) / (maxVal - minVal)) * 100);
+  }
+
+  console.log(`[Semantic Score] Day ${dayNum} Cosine Similarity: ${rawSim.toFixed(4)} -> Remapped Score: ${score} (${embeddingMode} mode)`);
+  return score;
+}

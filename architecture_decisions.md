@@ -46,3 +46,21 @@ We evaluate the options as follows:
 - **Dynamic session state** (live interview) → Firestore, one document per sessionId at `sessions/{sessionId}`. This survives server process restarts and allows session recovery.
 
 This split keeps our data access fast, doesn't require relational joins, and maps 1:1 onto Firestore's document model.
+
+---
+
+## 5. Computerized Adaptive Testing (CAT) & Scaling Design
+In psychometrics, high-stakes adaptive testing (e.g. GRE, GMAT) is governed by **Item Response Theory (IRT)**. Under IRT, each question (item) has pre-calibrated parameters (difficulty, discrimination, guessing factor) calculated mathematically by testing the items on thousands of historical participants before the real test is ever run.
+
+For a 48-hour hackathon, attempting to build a true IRT engine would be a major architectural mistake:
+1. **No Calibration Data**: We do not have thousands of historical candidate attempts to calibrate questions. Without calibration parameters, IRT formulas collapse.
+2. **Synthetic Constraints**: In a hackathon presentation, judges need to see difficulty adapt in real-time within a small 8-10 turn window.
+
+### Sized-to-Hackathon CAT Implementation
+Instead of IRT, we built a **Rolling Performance Window & Discrete Difficulty Tiers** model:
+- **Performance Window**: Tracks the candidate's last 2 final blended accuracy scores (llm confidence + semantic similarity + concept coverage). A 2-turn window ensures rapid responsiveness to performance spikes or dips, which is ideal for short demo presentations.
+- **Difficulty Tiers**: Translates scores into four tiers (`foundational` $\rightarrow$ `standard` $\rightarrow$ `applied` $\rightarrow$ `expert`).
+  - **Escalation Trigger**: Consecutive scores $\geq 85$ escalate the tier and unlock advanced diagram-critique/Mermaid question formats.
+  - **De-escalation Trigger**: Any score $< 40$ drops the tier and presents MCQs to keep struggling candidates engaged without stalling.
+- **Tone Calibration**: Direct, terse system-prompt instructions enforce realistic interviewer tone and keep turn lengths under 3 sentences to mimic a real coding session.
+

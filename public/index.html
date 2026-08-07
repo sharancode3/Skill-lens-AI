@@ -12,6 +12,11 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <!-- CSS Stylesheet -->
   <link rel="stylesheet" href="style.css">
+  <!-- Mermaid JS for flowcharts -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+  </script>
 </head>
 <body class="bg-white text-gray-900 antialiased font-sans">
 
@@ -83,7 +88,7 @@
   </main>
 
   <!-- ==================== SCREEN 2: CHAT INTERVIEW SCREEN ==================== -->
-  <main id="screen-chat" class="view min-h-screen flex flex-col bg-gray-50 hidden">
+  <main id="screen-chat" class="view h-screen flex flex-col bg-gray-50 hidden">
     <!-- Header Bar -->
     <header class="h-18 bg-white border-b-2 border-gray-200 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4 z-10">
       <div class="flex items-center gap-3">
@@ -106,6 +111,11 @@
           <span>Topics:</span>
           <span id="chat-progress-topics">0/4</span>
         </div>
+        <div class="progress-pill bg-purple-600 text-white px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-bold">
+          <i data-lucide="shield" class="w-3.5 h-3.5"></i>
+          <span>Difficulty:</span>
+          <span id="chat-progress-difficulty" class="capitalize">Standard</span>
+        </div>
       </div>
     </header>
 
@@ -118,6 +128,7 @@
     <footer class="bg-white border-t-2 border-gray-200 p-4 md:p-6 sticky bottom-0">
       <div class="max-w-4xl mx-auto flex gap-4 items-center">
         <div class="flex-grow relative">
+          <div id="paste-error" class="absolute -top-6 left-2 text-xs text-red-500 font-bold hidden">Pasting is disabled during the interview</div>
           <input type="text" id="chat-input" placeholder="Type your technical response here..." class="w-full h-14 px-6 bg-gray-100 rounded-md text-gray-900 border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all duration-200" />
         </div>
         <button id="btn-send" class="w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center transition-all duration-200 transform hover:scale-105 active:scale-95 outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
@@ -183,6 +194,48 @@
         </div>
       </div>
 
+      <!-- metrics (New 5th Section - Surfaced dynamically) -->
+      <div id="feedback-metrics-section" class="flex flex-col gap-6 hidden">
+        <div class="flex items-center gap-2 border-b-2 border-blue-200 pb-2">
+          <i data-lucide="bar-chart-2" class="w-6 h-6 text-blue-600"></i>
+          <h2 class="text-xl font-bold tracking-tight text-gray-900">Performance Analytics</h2>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <!-- Overall Accuracy Block -->
+          <div class="bg-blue-600 text-white rounded-lg p-6 flex flex-col justify-between items-center text-center border-4 border-blue-700">
+            <h3 class="text-sm font-bold uppercase tracking-wider text-blue-200">Overall Accuracy</h3>
+            <p id="metrics-overall" class="text-6xl font-black my-4">0%</p>
+            <span class="text-xs text-blue-100">Blended performance score across turns</span>
+          </div>
+
+          <!-- Difficulty Progression Indicator -->
+          <div class="bg-white border-4 border-gray-900 rounded-lg p-6 flex flex-col justify-between">
+            <h3 class="text-sm font-bold uppercase tracking-wider text-gray-500 border-b border-gray-100 pb-2">Difficulty Progression</h3>
+            <div id="metrics-progression" class="flex flex-col gap-2 my-4">
+              <!-- Progression markers injected here -->
+            </div>
+            <span class="text-xs text-gray-400">Adaptive scaling difficulty tier reached</span>
+          </div>
+
+          <!-- Question Types Breakdown -->
+          <div class="bg-white border-4 border-gray-900 rounded-lg p-6 flex flex-col justify-between">
+            <h3 class="text-sm font-bold uppercase tracking-wider text-gray-500 border-b border-gray-100 pb-2">Question Breakdown</h3>
+            <div id="metrics-breakdown" class="flex flex-col gap-2 my-4">
+              <!-- Breakdown scores injected here -->
+            </div>
+            <span class="text-xs text-gray-400">Distribution of question variety served</span>
+          </div>
+        </div>
+
+        <!-- Per Day Detailed Row Cards -->
+        <div class="flex flex-col gap-3">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-gray-500">Curriculum Topic Scores</h3>
+          <div id="metrics-perday-list" class="flex flex-col gap-2">
+            <!-- Day rows injected here -->
+          </div>
+        </div>
+      </div>
+
       <!-- CTA Footer Button -->
       <div class="flex justify-center mt-6">
         <button id="btn-restart" class="h-16 px-8 bg-transparent text-blue-600 border-4 border-blue-600 hover:bg-blue-600 hover:text-white font-bold rounded-md transition-all duration-200 transform hover:scale-105 active:scale-95 outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600">
@@ -191,6 +244,70 @@
       </div>
     </section>
   </main>
+
+  <!-- ==================== SCREEN 4: SUSPENSION SCREEN ==================== -->
+  <main id="screen-suspended" class="view min-h-screen bg-red-950 flex flex-col items-center justify-center p-6 text-center hidden">
+    <div class="bg-white max-w-lg w-full p-10 rounded-lg border-8 border-red-700 flex flex-col items-center gap-6">
+      <div class="w-20 h-20 bg-red-100 text-red-600 rounded-full flex items-center justify-center border-4 border-red-300 animate-bounce">
+        <i data-lucide="shield-off" class="w-10 h-10"></i>
+      </div>
+      <div>
+        <h1 class="text-3xl font-black text-gray-900">Interview Suspended</h1>
+        <p class="text-sm text-gray-600 mt-4 leading-relaxed">
+          Your interview session has been permanently suspended due to repeated proctoring violations (exiting fullscreen or switching tabs/windows).
+        </p>
+        <p class="text-sm font-bold text-red-600 mt-2">
+          Your final score has been zeroed, and your attempt is flagged.
+        </p>
+      </div>
+      <div class="bg-gray-100 p-4 rounded-md w-full">
+        <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Cooldown Remaining</span>
+        <span id="cooldown-timer" class="text-2xl font-black text-gray-900 mt-1 block">05:00</span>
+      </div>
+      <button id="btn-suspended-exit" class="w-full h-14 bg-gray-900 hover:bg-gray-800 text-white font-bold rounded-md transition-all duration-200 transform hover:scale-105 active:scale-95 outline-none">
+        Return to Home
+      </button>
+    </div>
+  </main>
+
+  <!-- ==================== PROCTORING OVERLAYS ==================== -->
+  <!-- Fullscreen Enforcer Modal Overlay -->
+  <div id="fullscreen-overlay" class="fixed inset-0 bg-gray-900 bg-opacity-95 z-50 flex flex-col items-center justify-center p-6 text-center hidden">
+    <div class="bg-white max-w-md w-full p-8 rounded-lg border-4 border-gray-900 flex flex-col items-center gap-6">
+      <div class="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center border-2 border-red-300">
+        <i data-lucide="monitor" class="w-8 h-8"></i>
+      </div>
+      <div>
+        <h2 class="text-2xl font-black text-gray-900">Fullscreen Required</h2>
+        <p class="text-sm text-gray-600 mt-2">
+          This technical screen is a proctored environment. You must enter Fullscreen mode to begin and conduct the interview.
+        </p>
+      </div>
+      <button id="btn-fullscreen-grant" class="w-full h-14 bg-red-600 hover:bg-red-700 text-white font-bold rounded-md transition-all duration-200 transform hover:scale-105 active:scale-95 outline-none">
+        Grant & Enter Fullscreen
+      </button>
+      <span class="text-[10px] text-gray-400">Exiting fullscreen mode mid-screen counts as a violation.</span>
+    </div>
+  </div>
+
+  <!-- Re-enter Fullscreen Warning Banner Overlay -->
+  <div id="fullscreen-warning-overlay" class="fixed inset-0 bg-red-900 bg-opacity-90 z-50 flex flex-col items-center justify-center p-6 text-center hidden">
+    <div class="bg-white max-w-md w-full p-8 rounded-lg border-4 border-red-600 flex flex-col items-center gap-6">
+      <div class="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center border-2 border-red-300 animate-pulse">
+        <i data-lucide="shield-alert" class="w-8 h-8"></i>
+      </div>
+      <div>
+        <h2 class="text-2xl font-black text-red-600">Proctoring Violation</h2>
+        <p id="fullscreen-violation-msg" class="text-sm text-gray-600 mt-2">
+          Exiting fullscreen is not allowed during the interview.
+        </p>
+      </div>
+      <button id="btn-fullscreen-resume" class="w-full h-14 bg-red-600 hover:bg-red-700 text-white font-bold rounded-md transition-all duration-200 transform hover:scale-105 active:scale-95 outline-none">
+        Re-enter Fullscreen
+      </button>
+      <span class="text-xs font-semibold text-red-500" id="fullscreen-violation-count">Violation count: 1 of 3</span>
+    </div>
+  </div>
 
   <!-- JavaScript App Logic -->
   <script src="app.js"></script>
