@@ -9,6 +9,8 @@ This document tracks all AI-assisted actions taken during the hackathon to satis
 | 2026-08-07 | Saved TRD (Technical Requirements & Architecture) | Gemini 3.5 Flash | Pasted TRD content for AI Interview Agent | `trd.md`, `ai_usage_log.md` |
 | 2026-08-07 | Saved Overall Workflow | Gemini 3.5 Flash | Pasted Workflow content for AI Interview Agent | `workflow.md`, `ai_usage_log.md` |
 | 2026-08-07 | Saved DB Design — Firebase Firestore | Gemini 3.5 Flash | Pasted DB Design content for AI Interview Agent | `db_design.md`, `ai_usage_log.md` |
+| 2026-08-07 | Saved UI Application Notes | Gemini 3.5 Flash | Pasted UI Application Notes for AI Interview Agent | `ui_notes.md`, `ai_usage_log.md` |
+
 
 
 
