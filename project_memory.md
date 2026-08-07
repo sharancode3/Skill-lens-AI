@@ -22,10 +22,13 @@ This document is maintained to help AI models understand the current state of th
 - `architecture_decisions.md`: Details model configuration, vector database design choices, and API tradeoffs.
 - `ARCHITECTURE.md`: High-level summary of backend framework, LLM provider, and Firestore/memory data design split.
 - `workflow.md`: End-to-end request lifecycle and phase plan.
-
 - `db_design.md`: Firestore database state/collection structure.
 - `ui_notes.md`: UI specifications mapped to the 3 application screens.
 - `design_system.md`: The Flat Design token guidelines.
+- `technical-spec.md`: The exact JSON schemas and endpoint expectations for grading.
+- `curriculum.json`: The 31-day curriculum modules reference data.
+- `candidates.json`: The candidates list and learning paths.
+
 
 ## Ongoing Tasks
 - [ ] Complete Phase 0 Skeleton & API Contract setup (Express route + Firebase healthcheck).
