@@ -1,8 +1,13 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import { initFirebase, runStartupHealthCheck } from './firebase.js';
+import { initializeData, getEnrichedCandidate } from './dataManager.js';
 
 dotenv.config();
+
+// Load curriculum and candidates data synchronously on process startup
+initializeData();
+
 
 const app = express();
 app.use(express.json());
@@ -75,6 +80,20 @@ const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
+
+  // Verification step for Phase 1
+  console.log('[Verification] Testing getEnrichedCandidate synchronously for CAND-001, CAND-002, and CAND-003:');
+  const ids = ['CAND-001', 'CAND-002', 'CAND-003'];
+  for (const id of ids) {
+    const enriched = getEnrichedCandidate(id);
+    if (enriched) {
+      console.log(`\n--- Enriched Candidate: ${id} ---`);
+      console.log(JSON.stringify(enriched.slice(0, 2), null, 2)); // log first 2 missions
+      console.log(`Total enriched missions for ${id}: ${enriched.length}`);
+    } else {
+      console.error(`Candidate ${id} not found.`);
+    }
+  }
   
   // Initialize Firebase and execute the health check
   console.log('Starting Firebase Admin SDK...');
@@ -82,3 +101,4 @@ app.listen(PORT, async () => {
   console.log('Running Firebase startup healthcheck...');
   await runStartupHealthCheck();
 });
+

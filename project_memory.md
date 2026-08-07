@@ -31,18 +31,24 @@ This document is maintained to help AI models understand the current state of th
 - `technical-spec.md`: The exact JSON schemas and endpoint expectations for grading.
 - `curriculum.json`: The 31-day curriculum modules reference data.
 - `candidates.json`: The candidates list and learning paths.
+- `src/dataManager.js`: Indexes data synchronously at startup and provides candidate enrichment.
+- `src/firebase.js`: Firebase Firestore connection and startup health check.
+- `src/server.js`: Node.js Express server defining interview endpoint routes.
 
 
 ## Ongoing Tasks
-- [ ] Complete Phase 0 Skeleton & API Contract setup (Express route + Firebase healthcheck).
-- [ ] Complete Phase 1: Stand up Express/FastAPI skeleton + Firestore connection.
+- [ ] Complete Phase 2: Implement the Topic Queue Selection Scoring algorithm.
+- [ ] Complete Phase 2.5: Set up in-memory vector embeddings for cross-curriculum Connection Detection.
 
 
 ## Completed Tasks
 - [x] Initial repository setup.
 - [x] Saved all design, requirements, database, and workflow documents.
+- [x] Phase 0: Express skeleton + contract with Firebase Admin healthcheck.
+- [x] Phase 1: Reference Data Loading (curriculum and candidates), index maps, validation pass, and candidate enrichment helper.
 
 
 ## Hackathon Specific Rules Addressed
 - **AI Usage Log:** Maintained in `ai_usage_log.md`.
 - **Commit History:** Small, incremental commits will be made to demonstrate ongoing development.
+
