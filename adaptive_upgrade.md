@@ -40,3 +40,10 @@ Add these fields to the `sessions/{sessionId}` document created in Phase 3, alon
 - `nextQuestionType`: "open" (one of `open` | `mcq` | `diagram_interpret`).
 - `pendingMCQAnswer`: Null or Integer (holds the correct option index server-side only when `nextQuestionType` is `mcq` for the current pending question — never sent to the client).
 - `accuracyLog`: Array of objects (append `{day, questionType, finalAccuracyScore, llmConfidence, semanticScore, conceptScore}` every turn).
+
+## Sub-Phase 4A — Accuracy Scoring Computation
+1. **Extend Phase 4 Structured LLM Output**: Add a new required field `llmConfidence` (integer 0–100) representing the model's calibrated correctness estimate.
+2. **Server-side Signal Computation**:
+   - `semanticScore`: Run cosine similarity check against current topic objectives. Remap the raw score lineary to a 0–100 scale.
+   - `conceptCoverageScore`: Cache 3–5 concept terms/phrases for each curriculum day once at startup. Score based on case-insensitive substring overlaps in candidate's answers.
+3. **Blended Scoring**: Compute `finalAccuracyScore = round(0.5 * llmConfidence + 0.3 * semanticScore + 0.2 * conceptCoverageScore)`. Push to `recentScores` (trim to last 2) and append the breakdown to `accuracyLog`.
