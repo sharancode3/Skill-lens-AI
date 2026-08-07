@@ -35,12 +35,13 @@ This document is maintained to help AI models understand the current state of th
 - `src/topicSelector.js`: Deterministic topic selection algorithm under module diversity constraints.
 - `src/embeddingManager.js`: In-memory vector index generation and cosine similarity lookup.
 - `src/sessionManager.js`: Session state machine logic and database operations wrapper.
+- `src/llmClient.js`: Google Gemini API client with schema enforcement and offline mock simulation.
 - `src/firebase.js`: Firebase Firestore connection and startup health check.
 - `src/server.js`: Node.js Express server defining interview endpoint routes.
 
 
 ## Ongoing Tasks
-- [ ] Complete Phase 4: Wire in the LLM for question phrasing, answer classification, and follow-up decision as a single structured call.
+- [ ] Complete Phase 5: Implement the LLM Feedback Composer to evaluate transcripts and generate structured JSON reports.
 
 
 ## Completed Tasks
@@ -51,6 +52,8 @@ This document is maintained to help AI models understand the current state of th
 - [x] Phase 2: Implement the Topic Queue Selection Scoring algorithm.
 - [x] Phase 2.5: Implement the in-memory vector embedding layer for Connection Detection.
 - [x] Phase 3: Implement Session State Machine & Firestore Wiring.
+- [x] Phase 4: Implement LLM Core Intelligence Layer (classification, follow-ups, memory).
+
 
 
 

@@ -1,5 +1,8 @@
 import { db } from './firebase.js';
 import { buildTopicQueue } from './topicSelector.js';
+import { findRelatedDays } from './embeddingManager.js';
+import { evaluateTurnWithLLM } from './llmClient.js';
+
 
 // Explicit Session States
 export const SessionState = {
@@ -152,58 +155,129 @@ export async function handleTurn(sessionId, message) {
     turn: session.turnCount
   });
 
-  // Mark the just-asked topic as asked, record day, increment questionsAsked
   const currentTopicIndex = session.cursor;
   const currentTopic = session.topicQueue[currentTopicIndex];
-  if (currentTopic) {
-    currentTopic.status = 'asked';
-    if (!session.distinctDaysCovered.includes(currentTopic.day)) {
-      session.distinctDaysCovered.push(currentTopic.day);
-    }
-    session.questionsAsked++;
+
+  // 1. Semantic connection detection layer (Phase 2.5)
+  const currentTopicDay = currentTopic ? currentTopic.day : -1;
+  const detectedConnections = await findRelatedDays(message, [currentTopicDay], 2);
+
+  // 2. Structured LLM Call evaluation (Phase 4)
+  const llmResponse = await evaluateTurnWithLLM(session, message, detectedConnections);
+  
+  console.log(`\n--- [LLM Evaluation Log] Session "${sessionId}" Turn ${session.turnCount} ---`);
+  console.log(`  Classification: ${llmResponse.classification}`);
+  console.log(`  Private Reasoning: ${llmResponse.reasoning}`);
+  console.log(`  LLM Action Selection: ${llmResponse.action}`);
+  console.log(`  Updated Memory Summary: "${llmResponse.updatedMemory}"`);
+
+  // Log detected connections and checking if LLM chose to use them
+  if (detectedConnections && detectedConnections.length > 0) {
+    detectedConnections.forEach(conn => {
+      const replyLower = llmResponse.reply.toLowerCase();
+      // Check if reply references the day number or keyword in title
+      const usedByLLM = replyLower.includes(`day ${conn.day}`) || replyLower.includes(conn.title.toLowerCase().split(' ')[0]);
+      console.log(`[Connection Detector Log] Detected connection with Day ${conn.day} ("${conn.title}") [Score: ${conn.similarity}]. Used by LLM: ${usedByLLM}`);
+    });
   }
 
-  // Evaluate stopping criteria
-  const isOutOfTopics = session.cursor + 1 >= session.topicQueue.length;
-  const wrapUpTriggered = shouldWrapUp(session) || isOutOfTopics;
+  // Update interview memory
+  session.interviewMemory = llmResponse.updatedMemory;
 
-  if (wrapUpTriggered) {
-    // Transition state
-    session.state = SessionState.DONE;
+  // 3. Server-side rule enforcement
+  let action = llmResponse.action;
+  let forceAdvanceDueToFollowupLimit = false;
+
+  if (action === 'followup' && session.followupCountForCurrentTopic >= 1) {
+    console.log(`[SessionManager Override] Overwriting action "followup" to "advance" because followupCount is already ${session.followupCountForCurrentTopic}.`);
+    action = 'advance';
+    forceAdvanceDueToFollowupLimit = true;
+  }
+
+  // 4. Handle follow-up action
+  if (action === 'followup') {
+    session.followupCountForCurrentTopic++;
     
-    // Placeholder feedback matching schema
-    session.feedback = {
-      summary: `Candidate successfully completed the interview. Covered ${session.questionsAsked} questions over ${session.distinctDaysCovered.length} curriculum days.`,
-      strengths: ['Demonstrated understanding of core curriculum concepts'],
-      gaps: ['No critical gaps detected in mock turn handler'],
-      next: ['Revisit curriculum modules for deeper advanced integration projects']
-    };
+    session.transcript.push({
+      role: 'interviewer',
+      day: currentTopic.day,
+      text: llmResponse.reply,
+      turn: session.turnCount + 1
+    });
 
     await saveSessionDoc(sessionId, session);
 
     return {
-      reply: 'Interview completed.',
-      done: true,
-      feedback: session.feedback
+      reply: llmResponse.reply,
+      done: false
     };
   }
 
-  // Otherwise, advance cursor and ask next question
-  session.cursor++;
-  const nextTopic = session.topicQueue[session.cursor];
-  const nextQuestion = `Got it. Let's move to the next topic. Can you tell me about your experience on Day ${nextTopic.day}: "${nextTopic.title}"?`;
+  // 5. Handle advance action (topic transition or wrap up)
+  if (action === 'advance' || action === 'wrapup') {
+    // Complete current topic
+    if (currentTopic) {
+      currentTopic.status = 'asked';
+      if (!session.distinctDaysCovered.includes(currentTopic.day)) {
+        session.distinctDaysCovered.push(currentTopic.day);
+      }
+      session.questionsAsked++;
+    }
 
-  session.transcript.push({
-    role: 'interviewer',
-    day: nextTopic.day,
-    text: nextQuestion,
-    turn: session.turnCount + 1
-  });
+    // Reset topic followups count
+    session.followupCountForCurrentTopic = 0;
 
-  await saveSessionDoc(sessionId, session);
+    // Evaluate stopping criteria
+    const isOutOfTopics = session.cursor + 1 >= session.topicQueue.length;
+    const wrapUpTriggered = shouldWrapUp(session) || isOutOfTopics;
 
+    if (wrapUpTriggered) {
+      session.state = SessionState.DONE;
+      
+      // Placeholder feedback matching schema
+      session.feedback = {
+        summary: `Candidate successfully completed the interview. Covered ${session.questionsAsked} questions over ${session.distinctDaysCovered.length} curriculum days.`,
+        strengths: ['Demonstrated understanding of core curriculum concepts'],
+        gaps: ['No critical gaps detected in mock turn handler'],
+        next: ['Revisit curriculum modules for deeper advanced integration projects']
+      };
+
+      await saveSessionDoc(sessionId, session);
+
+      return {
+        reply: 'Interview completed.',
+        done: true,
+        feedback: session.feedback
+      };
+    }
+
+    // Advance topic cursor
+    session.cursor++;
+    const nextTopic = session.topicQueue[session.cursor];
+    
+    // Choose reply: if overrode follow-up limit, use transition template; else use LLM reply
+    const replyText = forceAdvanceDueToFollowupLimit 
+      ? `Got it. Let's move on to the next topic. Can you tell me about your experience on Day ${nextTopic.day}: "${nextTopic.title}"?`
+      : llmResponse.reply;
+
+    session.transcript.push({
+      role: 'interviewer',
+      day: nextTopic.day,
+      text: replyText,
+      turn: session.turnCount + 1
+    });
+
+    await saveSessionDoc(sessionId, session);
+
+    return {
+      reply: replyText,
+      done: false
+    };
+  }
+
+  // Fallback case
   return {
-    reply: nextQuestion,
-    done: false
+    error: 'Invalid state machine action encountered.'
   };
 }
+
