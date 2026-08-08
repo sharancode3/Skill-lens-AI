@@ -128,17 +128,25 @@ export async function saveSessionDoc(sessionId, data) {
  * @returns {boolean} True if the interview stopping conditions are met.
  */
 export function shouldWrapUp(session, modelWantsToStop) {
-  const floorMet = session.questionsAsked >= 8 && session.distinctDaysCovered.length >= 4;
-  if (!floorMet) {
-    return false;
-  }
   const hitsHardCap = session.turnCount >= 14;
   if (hitsHardCap) {
     return true;
   }
+
+  const floorMet = session.questionsAsked >= 8 && session.distinctDaysCovered.length >= 4;
+  if (!floorMet) {
+    return false;
+  }
+
+  // Require at least 2 questions asked to be Applied or Expert difficulty tier
+  const log = session.accuracyLog || [];
+  const appliedExpertCount = log.filter(entry => entry.difficultyTier === 'applied' || entry.difficultyTier === 'expert').length;
+  if (appliedExpertCount < 2) {
+    return false;
+  }
   
   // If Capstone is triggered but has not been evaluated in accuracyLog, force modelWantsToStop to false
-  const hasAnsweredCapstone = (session.accuracyLog || []).some(log => log.questionType === 'capstone');
+  const hasAnsweredCapstone = log.some(log => log.questionType === 'capstone');
   if (session.capstoneTriggered && !hasAnsweredCapstone) {
     return false;
   }
@@ -769,7 +777,8 @@ export async function handleTurn(sessionId, message) {
   if (!session.capstoneTriggered) {
     const floorMetAtEnd = (session.questionsAsked >= 8 && session.distinctDaysCovered.length >= 4);
     const logLength = session.accuracyLog.length;
-    if (floorMetAtEnd && logLength >= 4) {
+    const appliedExpertCount = session.accuracyLog.filter(entry => entry.difficultyTier === 'applied' || entry.difficultyTier === 'expert').length;
+    if (floorMetAtEnd && logLength >= 4 && appliedExpertCount >= 2) {
       const last4 = session.accuracyLog.slice(-4);
       const avg = last4.reduce((sum, entry) => sum + entry.finalAccuracyScore, 0) / 4;
       const hasHallucinations = last4.some(entry => entry.hallucinationFlag);
