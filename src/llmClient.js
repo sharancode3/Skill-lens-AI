@@ -379,21 +379,33 @@ export function mockLLMCall(candidate, topic, lastQuestion, message, followupCou
     }
   }
 
-  // Determine classification
+  // Determine classification (Phase 6 Architecture)
   const isGeneric = cleanMsg.length < 15 || cleanMsg === 'yes' || cleanMsg === 'no' || cleanMsg.includes('makes sense') || cleanMsg.includes('i agree');
+  const isDisengaged = cleanMsg === 'idk' || cleanMsg === 'i dont know' || cleanMsg === 'dont know' || cleanMsg === 'how can i know' || cleanMsg === 'skip' || cleanMsg === 'pass' || cleanMsg === 'none' || cleanMsg === 'na' || cleanMsg === 'n/a' || cleanMsg === 'whatever' || cleanMsg.startsWith('idk ');
+  const isDisrespectful = cleanMsg.includes('do has u like') || cleanMsg.includes('do as u like') || cleanMsg.includes('do as you like') || cleanMsg.includes('shut up') || cleanMsg.includes('who cares') || cleanMsg.includes('whatever u want') || cleanMsg.includes('fool') || cleanMsg.includes('stupid');
+  const isOffTopic = cleanMsg.includes('apples') || cleanMsg.includes('banana') || cleanMsg.includes('weather') || cleanMsg.includes('football') || cleanMsg.includes('movie');
+
   const overlapsKeywords = topic.objectives.some(obj => {
     const words = obj.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/);
     return words.some(w => w.length > 4 && cleanMsg.includes(w));
   });
 
-  if (cleanMsg.includes('strong-score')) {
+  if (isDisrespectful) {
+    classification = 'disrespectful';
+    action = 'followup';
+    reasoning = 'Candidate response is dismissive, rude, or inappropriate toward the interviewer.';
+  } else if (isDisengaged) {
+    classification = 'disengaged';
+    action = 'followup';
+    reasoning = 'Candidate explicitly refused to attempt or dodged the technical question.';
+  } else if (isOffTopic) {
+    classification = 'off_topic';
+    action = 'followup';
+    reasoning = 'Candidate response is completely unrelated to the technical topic.';
+  } else if (cleanMsg.includes('strong-score')) {
     classification = 'strong';
     action = 'advance';
     reasoning = 'Forced strong score mock rule.';
-  } else if (cleanMsg.includes('apples') || cleanMsg.includes('banana') || cleanMsg.includes('weather')) {
-    classification = 'off_topic';
-    action = 'advance';
-    reasoning = 'Candidate response is completely unrelated to the technical topic.';
   } else if (isGeneric) {
     classification = 'shallow';
     action = followupCount >= 1 ? 'advance' : 'followup';
@@ -416,7 +428,21 @@ export function mockLLMCall(candidate, topic, lastQuestion, message, followupCou
   }
 
   // Format replies dynamically without any hardcoded templates
-  if (action === 'followup') {
+  const currentConduct = session ? (session.conductViolations || 0) : 0;
+  let turnConductWeight = 0;
+  if (classification === 'disrespectful') turnConductWeight = 2;
+  else if (classification === 'disengaged' || classification === 'off_topic') turnConductWeight = 1;
+  
+  const totalConduct = currentConduct + turnConductWeight;
+  const remaining = Math.max(0, 3 - totalConduct);
+
+  if (classification === 'disrespectful') {
+    reply = `That response is dismissive and does not meet professional technical review standards. This counts as 2 conduct warnings (${remaining} warning remaining before immediate session suspension). Please refocus and answer the question properly.`;
+  } else if (classification === 'disengaged') {
+    reply = `I notice you dodged that question. We require genuine technical depth to evaluate your skills — you have ${remaining} conduct warning${remaining === 1 ? '' : 's'} remaining before session suspension. In plain terms, what is your understanding of ${topic.title}?`;
+  } else if (classification === 'off_topic') {
+    reply = `That answer is unrelated to our technical review of ${topic.title}. You have ${remaining} conduct warning${remaining === 1 ? '' : 's'} remaining before session suspension. Please focus on the engineering concepts.`;
+  } else if (action === 'followup') {
     const rawWords = message.trim().split(/\s+/).map(w => w.replace(/[^\w]/g, '')).filter(w => w.length > 3);
     const stopWords = new Set(['about', 'their', 'there', 'which', 'would', 'could', 'should', 'other', 'first', 'these', 'those', 'using', 'doing', 'making', 'built', 'worked', 'think', 'maybe', 'guess', 'something', 'stuff', 'thing', 'things']);
     
@@ -467,7 +493,6 @@ export function mockLLMCall(candidate, topic, lastQuestion, message, followupCou
   }
 
   // Generate reactionClause dynamically
-  const isDisengaged = cleanMsg.length < 5 && (cleanMsg === 'idk' || cleanMsg === 'skip' || cleanMsg === 'pass' || cleanMsg === 'none' || cleanMsg === 'na' || cleanMsg === 'n/a' || cleanMsg === 'no' || cleanMsg === '');
   const recent = session ? session.recentReactions || [] : [];
   let reactionClause = '';
   

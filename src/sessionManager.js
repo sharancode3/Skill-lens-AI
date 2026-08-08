@@ -462,115 +462,6 @@ export async function handleTurn(sessionId, message) {
   const answeredQuestionType = session.nextQuestionType || 'open';
   const isMCQTurn = answeredQuestionType === 'mcq';
   const isDiagramTurn = answeredQuestionType === 'diagram_interpret';
-  const isDisengaged = checkDisengagement(message, isMCQTurn);
-
-  if (isDisengaged && !forceAdvanceDueToBlankRetries) {
-    if (session.disengagementCount === undefined) {
-      session.disengagementCount = 0;
-    }
-    session.disengagementCount++;
-
-    console.log(`[Disengagement Logger] Logged disengagement count ${session.disengagementCount} for session "${sessionId}"`);
-
-    if (session.disengagementCount === 1) {
-      const reply = `I noticed you didn't attempt to answer the question about Day ${currentTopic.day}: "${currentTopic.title}". Please take a moment to provide a genuine response so we can properly evaluate your understanding of these objectives.`;
-      
-      session.turnCount++;
-      session.transcript.push({
-        role: 'interviewer',
-        day: currentTopic.day,
-        text: reply,
-        turn: session.turnCount
-      });
-
-      session.questionSentAt = new Date().toISOString();
-      await saveSessionDoc(sessionId, session);
-
-      const responsePayload = {
-        reply,
-        done: false,
-        questionsAsked: session.questionsAsked,
-        distinctDaysCovered: session.distinctDaysCovered.length,
-        detectedConnections: [],
-        action: 'followup'
-      };
-
-      session.lastMessageHash = cleanMsg;
-      session.lastMessageTime = new Date().toISOString();
-      session.lastResponse = responsePayload;
-      session.questionSentAt = new Date().toISOString();
-      await saveSessionDoc(sessionId, session);
-
-      return responsePayload;
-    } else if (session.disengagementCount === 2) {
-      const reply = `Warning: This is your second disengaged response. Failing to engage with the technical curriculum objectives will directly impact your review status. Please provide a technical answer.`;
-      
-      session.turnCount++;
-      session.transcript.push({
-        role: 'interviewer',
-        day: currentTopic.day,
-        text: reply,
-        turn: session.turnCount
-      });
-
-      session.questionSentAt = new Date().toISOString();
-      await saveSessionDoc(sessionId, session);
-
-      const responsePayload = {
-        reply,
-        done: false,
-        questionsAsked: session.questionsAsked,
-        distinctDaysCovered: session.distinctDaysCovered.length,
-        detectedConnections: [],
-        action: 'followup'
-      };
-
-      session.lastMessageHash = cleanMsg;
-      session.lastMessageTime = new Date().toISOString();
-      session.lastResponse = responsePayload;
-      session.questionSentAt = new Date().toISOString();
-      await saveSessionDoc(sessionId, session);
-
-      return responsePayload;
-    } else {
-      session.state = SessionState.DONE;
-      session.interviewEndedAt = new Date().toISOString();
-      session.feedback = {
-        summary: "The technical review was terminated early due to repeated disengagement and a refusal to attempt the technical questions.",
-        strengths: [],
-        gaps: [],
-        next: []
-      };
-      session.judgeVerdict = {
-        decision: "would_reject",
-        reasoning: "Candidate refused to engage or answer technical questions, terminating the session early.",
-        evidenceTrail: []
-      };
-      session.accuracyLog = []; // zero out/empty scores
-      
-      await saveSessionDoc(sessionId, session);
-
-      const responsePayload = {
-        reply: "This session has been terminated due to repeated non-engagement.",
-        done: true,
-        feedback: session.feedback,
-        metrics: {
-          overallAccuracy: 0,
-          perDay: [],
-          difficultyProgression: [],
-          questionTypeBreakdown: { open: 0, mcq: 0, diagram_interpret: 0 }
-        },
-        judgeVerdict: session.judgeVerdict
-      };
-
-      session.lastMessageHash = cleanMsg;
-      session.lastMessageTime = new Date().toISOString();
-      session.lastResponse = responsePayload;
-      await saveSessionDoc(sessionId, session);
-
-      return responsePayload;
-    }
-  }
 
   // 3. Evaluate Turn with LLM (or bypass on blank forced advancement)
   const floorMetInput = (session.questionsAsked >= 8 && session.distinctDaysCovered.length >= 4);
@@ -654,6 +545,56 @@ export async function handleTurn(sessionId, message) {
         finalAccuracyScore = 10;
       }
     }
+  }
+
+  // Phase 6 Conduct Violation Accumulation
+  if (!session.conductViolations) session.conductViolations = 0;
+  
+  if (llmResponse) {
+    if (llmResponse.classification === 'disrespectful') {
+      session.conductViolations += 2;
+    } else if (llmResponse.classification === 'disengaged' || llmResponse.classification === 'off_topic') {
+      session.conductViolations += 1;
+    }
+  }
+
+  // Check Phase 6 Conduct Suspension Threshold (3 total weight)
+  if (session.conductViolations >= 3) {
+    console.log(`[Conduct Proctor] SESSION SUSPENDED! Total conductViolations: ${session.conductViolations} >= 3.`);
+    session.state = SessionState.DONE;
+    const summaryMsg = "Candidate was suspended due to repeated conduct violations (disengagement, off-topic, or disrespectful responses during the technical review).";
+    
+    session.feedback = {
+      summary: summaryMsg,
+      strengths: [],
+      gaps: [],
+      next: []
+    };
+    session.judgeVerdict = {
+      decision: "would_reject",
+      reasoning: summaryMsg,
+      evidenceTrail: []
+    };
+    session.accuracyLog = []; // zero out scores
+
+    // Register 5-minute cooldown
+    const candSnapshot = session.candidateSnapshot;
+    const candId = candSnapshot.id || (candSnapshot.member ? candSnapshot.member.id : null);
+    if (candId) {
+      cooldowns.set(candId, new Date());
+      console.log(`[Cooldown Registered] Candidate ID "${candId}" suspended for conduct violations at ${new Date().toISOString()}`);
+    }
+
+    await saveSessionDoc(sessionId, session);
+
+    return {
+      reply: "Your interview session has been suspended due to repeated conduct violations.",
+      done: true,
+      suspended: true,
+      conductViolations: session.conductViolations,
+      feedback: session.feedback,
+      judgeVerdict: session.judgeVerdict
+    };
   }
 
   // Discard modelWantsToStop from LLM response if floor was not met at turn start
