@@ -686,7 +686,9 @@ export async function handleTurn(sessionId, message) {
     hedgeMarkers,
     whyProbe,
     communicationConfidence: llmResponse ? (llmResponse.communicationConfidence || "medium") : "medium",
-    rootUnderstandingReached: llmResponse ? !!llmResponse.rootUnderstandingReached : false
+    rootUnderstandingReached: llmResponse ? !!llmResponse.rootUnderstandingReached : false,
+    reactionClause: llmResponse ? (llmResponse.reactionClause || "") : "",
+    interruptFlag: llmResponse && llmResponse.reactionClause && llmResponse.reactionClause.includes('Sorry to interrupt')
   });
 
   // Capstone Trigger Check (Phase I4)

@@ -442,7 +442,25 @@ function mockLLMCall(candidate, topic, lastQuestion, message, followupCount, con
 
   let finalReaction = isHallucination ? `⚠️ ${hallucinationCorrection}` : reactionClause;
   const sessionHedgesCount = (session && session.hedgeEventCount) || 0;
-  if (!isHallucination && sessionHedgesCount >= 3 && (finalClassification === 'strong' || finalClassification === 'partial') && hasHedges) {
+
+  // Simulated Interrupt evaluation
+  const wantsInterrupt = cleanMsg.includes('interrupt-me');
+  const logLengthForInterrupt = session && session.accuracyLog ? session.accuracyLog.length : 0;
+  let lastWasInterrupt = false;
+  let prevWasInterrupt = false;
+  if (logLengthForInterrupt > 0) {
+    const lastLog = session.accuracyLog[logLengthForInterrupt - 1];
+    lastWasInterrupt = (lastLog.reactionClause || '').includes('Sorry to interrupt') || !!lastLog.interruptFlag;
+  }
+  if (logLengthForInterrupt > 1) {
+    const prevLog = session.accuracyLog[logLengthForInterrupt - 2];
+    prevWasInterrupt = (prevLog.reactionClause || '').includes('Sorry to interrupt') || !!prevLog.interruptFlag;
+  }
+  const mockRecentInterrupts = lastWasInterrupt;
+
+  if (!isHallucination && wantsInterrupt && !mockRecentInterrupts) {
+    finalReaction = "Sorry to interrupt — you mentioned Kafka. Why did you choose that over RabbitMQ?";
+  } else if (!isHallucination && sessionHedgesCount >= 3 && (finalClassification === 'strong' || finalClassification === 'partial') && hasHedges) {
     finalReaction = `You said 'probably' there, but that was actually right — are you more sure than you're letting on? Hm, okay —`;
   }
 
@@ -644,6 +662,20 @@ export async function evaluateTurnWithLLM(session, candidateMessage, detectedCon
   const difficultyTier = session.difficultyTier || 'standard';
   const nextQuestionType = session.pendingQuestionType || 'open';
 
+  // Compute recentInterrupts for model constraints
+  const logLengthForInterrupt = (session.accuracyLog || []).length;
+  let lastWasInterrupt = false;
+  let prevWasInterrupt = false;
+  if (logLengthForInterrupt > 0) {
+    const lastLog = session.accuracyLog[logLengthForInterrupt - 1];
+    lastWasInterrupt = (lastLog.reactionClause || '').includes('Sorry to interrupt') || !!lastLog.interruptFlag;
+  }
+  if (logLengthForInterrupt > 1) {
+    const prevLog = session.accuracyLog[logLengthForInterrupt - 2];
+    prevWasInterrupt = (prevLog.reactionClause || '').includes('Sorry to interrupt') || !!prevLog.interruptFlag;
+  }
+  const recentInterrupts = lastWasInterrupt || prevWasInterrupt;
+
   // Find last interviewer question
   let lastQuestion = '';
   for (let i = session.transcript.length - 1; i >= 0; i--) {
@@ -683,6 +715,11 @@ CONSTRAINTS FOR REACTION CLAUSE (reactionClause):
   * Low-effort responses (like "idk", "skip", "none") get an honest conversational reset (e.g., "No worries — let's try a different angle.", "That's fine — let's switch gears.")
 - ANTI-REPETITION: If you see any entries in the "recentReactions" array in the input, you MUST NOT reuse those exact reaction phrases. Generate a different reaction beat.
 - STRICT SEGREGATION: The reaction clause must reside ONLY in "reactionClause", and the follow-up or next question must reside ONLY in "reply". Do not repeat the reaction clause inside "reply".
+
+CONSTRAINTS FOR SIMULATED INTERRUPTS:
+- Occasionally (roughly 1 in 5-6 turns where candidate response contains a specific pivotal term or claim in the middle of their answer), you may frame the reaction clause as a mid-sentence interruption: "Sorry to interrupt — you mentioned {specific phrase they used}. {pointed question about that specific phrase}".
+- You MUST only use this if "recentInterrupts" in the input is false (never do this on consecutive turns to avoid a jarring repetition).
+- Ensure the interruption references a specific mid-answer technical term or claim, not just their overall or final conclusion.
 
 CONSTRAINTS FOR MENTIONING THE DAY:
 - Only mention the curriculum Day number (e.g., "Day 12") once when first transitioning or introducing a new topic.
@@ -817,7 +854,8 @@ modelWantsToStop instruction: You MUST decide if we should wrap up the interview
     recentReactions: session.recentReactions || [],
     detectedHedgeMarkers: detectedHedgeMarkers || [],
     hedgeEventCount: session.hedgeEventCount || 0,
-    strongestTopic: session.strongestTopic ? { day: session.strongestTopic.day, title: session.strongestTopic.title } : null
+    strongestTopic: session.strongestTopic ? { day: session.strongestTopic.day, title: session.strongestTopic.title } : null,
+    recentInterrupts: !!recentInterrupts
   }, null, 2);
 
   const provider = process.env.LLM_PROVIDER || 'gemini';

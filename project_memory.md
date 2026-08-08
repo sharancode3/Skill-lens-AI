@@ -71,6 +71,7 @@ This document is maintained to help AI models understand the current state of th
 - [x] Phase I2: Communication Confidence Detection (confidence tracking separate from correctness, user prompt hedge event metrics, and probing reaction notes).
 - [x] Phase I3: \"Why?\" Recursive Loop (recursive why-probing, rootUnderstandingReached detection, and loop depth cap overrides).
 - [x] Phase I4: System Design Transition (capstone trigger check on 4-turn average score >= 80, strongest topic extraction, and preferential why-loop redirects).
+- [x] Phase I5: Simulated AI Interrupt (simulated mid-sentence interviewer interruption, anchoring reactions on mid-answer phrasing, and preventing consecutive interruptions).
 
 
 
