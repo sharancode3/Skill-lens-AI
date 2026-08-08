@@ -2269,10 +2269,18 @@ const flagReasonPreset = document.getElementById('flag-reason-preset');
 const flagReasonText = document.getElementById('flag-reason-text');
 
 if (btnEndSession) {
-  btnEndSession.addEventListener('click', async () => {
-    if (!isInterviewActive) return;
+  btnEndSession.addEventListener('click', async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (e && e.stopPropagation) e.stopPropagation();
+
+    const activeSessionId = currentSessionId || localStorage.getItem('currentSessionId');
+    if (!activeSessionId) {
+      console.warn('[EndSession] No active session ID found.');
+      alert('No active interview session found.');
+      return;
+    }
     
-    const confirmExit = confirm("Are you sure you want to end the interview? This cannot be undone.");
+    const confirmExit = confirm("Are you sure you want to end the interview? This will conclude your evaluation and generate your final report.");
     if (!confirmExit) return;
     
     const thinkingEl = appendThinkingIndicator();
@@ -2283,12 +2291,12 @@ if (btnEndSession) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sessionId: currentSessionId,
+          sessionId: activeSessionId,
           endSessionEarly: true
         })
       });
       
-      thinkingEl.remove();
+      if (thinkingEl) thinkingEl.remove();
       if (!res.ok) throw new Error('Failed to end session early');
       const data = await res.json();
       

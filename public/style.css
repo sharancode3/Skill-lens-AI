@@ -714,7 +714,7 @@ html, body {
   flex-shrink: 0 !important;
   background-color: #FFFFFF !important;
   border-top: 2px solid #E2E8F0 !important;
-  padding: 1rem 1.5rem !important;
+  padding: 1rem 1.5rem 1rem 260px !important;
   box-shadow: none !important;
   width: 100% !important;
 }
