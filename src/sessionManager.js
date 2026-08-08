@@ -412,7 +412,8 @@ export function updateCompactState(session, topic, score, narrative = '', dims =
     }
     // Extract misconception: first sentence of narrative feedback as a short gap note
     if (narrative && !state.misconceptions.some(m => m.day === topic.day)) {
-      const firstSentence = narrative.split(/[.!?]/)[0].trim();
+      const narrativeStr = typeof narrative === 'string' ? narrative : (narrative.narrative || JSON.stringify(narrative) || '');
+      const firstSentence = narrativeStr.split(/[.!?]/)[0].trim();
       if (firstSentence.length > 10) {
         state.misconceptions.push({ day: topic.day, note: firstSentence });
       }
