@@ -78,6 +78,7 @@ This document is maintained to help AI models understand the current state of th
 - [x] Phase I9: Full Regression Test Checklist (successful Turn 1-10 end-to-end simulated regression testing covering all features).
 - [x] PS2 Settings Panel Improvements (Font/Element Size Scaling, Theme Mode, Calculator, Keyboard) & Header Redesign.
 - [x] Bug Fix: Resolved derived input mode stuck-state desync (MCQ <-> Open text) and implemented unconditional scroll container observer.
+- [x] Phase C0: Proctoring & Camera Lifecycle Rules (tied to rules setup, active interview, and summary/suspended release views).
 
 
 

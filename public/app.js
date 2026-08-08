@@ -201,6 +201,12 @@ async function startInterviewSession() {
     screenStart.classList.add('hidden');
     screenChat.classList.remove('hidden');
 
+    // Transition camera to ACTIVE
+    const videoActive = document.getElementById('video-active');
+    if (window.CameraManager && videoActive) {
+      window.CameraManager.startActive(videoActive);
+    }
+
     // Set interview active to trigger monitoring
     isInterviewActive = true;
     violationCount = 0;
@@ -239,12 +245,23 @@ btnStart.addEventListener('click', () => {
   screenRules.classList.remove('hidden');
   window.scrollTo(0, 0);
   if (window.lucide) lucide.createIcons();
+
+  // Transition camera to PREVIEW
+  const videoPreview = document.getElementById('video-preview');
+  if (window.CameraManager && videoPreview) {
+    window.CameraManager.startPreview(videoPreview);
+  }
 });
 
 if (btnBackToSelect) {
   btnBackToSelect.addEventListener('click', () => {
     screenRules.classList.add('hidden');
     screenStart.classList.remove('hidden');
+
+    // Turn camera OFF when moving back
+    if (window.CameraManager) {
+      window.CameraManager.stop();
+    }
   });
 }
 
@@ -348,6 +365,11 @@ function showSuspensionScreen() {
   // Show suspension screen
   const screenSuspended = document.getElementById('screen-suspended');
   screenSuspended.classList.remove('hidden');
+
+  // Turn camera OFF when suspended
+  if (window.CameraManager) {
+    window.CameraManager.stop();
+  }
   
   // Start countdown timer
   const cooldownTimer = document.getElementById('cooldown-timer');
@@ -380,6 +402,11 @@ document.getElementById('btn-suspended-exit').addEventListener('click', () => {
   currentSessionId = null;
   isInterviewActive = false;
   violationCount = 0;
+
+  // Enforce camera OFF
+  if (window.CameraManager) {
+    window.CameraManager.stop();
+  }
 });
 
 // Continuously monitor fullscreen changes
@@ -1030,6 +1057,11 @@ function transitionToFeedback(feedback, metrics, judgeVerdict) {
   screenChat.classList.add('hidden');
   screenFeedback.classList.remove('hidden');
   lucide.createIcons();
+
+  // Turn camera OFF when session completes
+  if (window.CameraManager) {
+    window.CameraManager.stop();
+  }
 }
 
 // Restart button actions
@@ -1042,6 +1074,11 @@ btnRestart.addEventListener('click', () => {
   currentSessionId = null;
   isInterviewActive = false;
   violationCount = 0;
+
+  // Enforce camera OFF
+  if (window.CameraManager) {
+    window.CameraManager.stop();
+  }
 
   // Clear sidebar state
   updateSidebar([]);

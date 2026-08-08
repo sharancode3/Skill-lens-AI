@@ -1761,3 +1761,35 @@ html.dark .vkey-btn {
 html.dark .vkey-btn:hover {
   background-color: #334155 !important;
 }
+
+/* ==================== CAMERA PROCTORING & LIFECYCLE STYLES ==================== */
+video.scale-x-\[-1\] {
+  transform: scaleX(-1) !important;
+}
+
+#camera-setup-card {
+  transition: border-color 0.2s ease !important;
+}
+
+#sidebar-camera-container {
+  border-bottom: 2px solid #0F172A !important;
+  background-color: #F8FAFC !important;
+}
+
+.dark #sidebar-camera-container {
+  border-bottom-color: #334155 !important;
+  background-color: #0F172A !important;
+}
+
+#sidebar-camera-container h3 {
+  color: #64748B !important;
+}
+
+.dark #sidebar-camera-container h3 {
+  color: #94A3B8 !important;
+}
+
+#camera-active-dot {
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.4) !important;
+}
+
