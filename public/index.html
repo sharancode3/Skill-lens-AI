@@ -222,7 +222,7 @@
           </div>
 
           <div class="relative w-full max-w-sm mx-auto aspect-video bg-slate-900 rounded-lg border-2 border-slate-900 overflow-hidden shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
-            <video id="video-preview" autoplay playsinline muted class="w-full h-full object-cover scale-x-[-1]"></video>
+            <video id="video-preview" autoplay playsinline muted class="w-full h-full object-contain scale-x-[-1]"></video>
             <div id="camera-status-text" class="absolute bottom-2 left-2 bg-slate-900/80 text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider">
               Camera Offline
             </div>
@@ -456,7 +456,7 @@
 
     <!-- Persistent Proctoring Camera Widget -->
     <div id="camera-widget" class="bg-slate-900 rounded-lg border-2 border-slate-900 overflow-hidden hidden relative">
-      <video id="video-active" autoplay playsinline muted class="w-full h-full object-cover scale-x-[-1]"></video>
+      <video id="video-active" autoplay playsinline muted class="w-full h-full object-contain scale-x-[-1]"></video>
       <div id="camera-lost-overlay" class="absolute inset-0 bg-red-950/90 flex flex-col items-center justify-center text-center p-3 gap-2 border-2 border-red-500 hidden select-none">
         <i data-lucide="video-off" class="w-6 h-6 text-red-500 animate-pulse"></i>
         <span class="text-[10px] font-black uppercase tracking-wider text-red-400">Camera Feed Lost</span>
