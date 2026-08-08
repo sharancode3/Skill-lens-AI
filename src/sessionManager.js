@@ -12,6 +12,26 @@ export const SessionState = {
   DONE: 'DONE'
 };
 
+// Expected real-world response times lookup table per difficulty tier
+export const RESPONSE_TIME_BOUNDS = {
+  foundational: [20, 40],
+  standard: [40, 70],
+  applied: [70, 120],
+  expert: [120, 200],
+  capstone: [180, 400]
+};
+
+// Deterministic hedging-detection checks
+export function detectHedging(answerText) {
+  if (!answerText) return [];
+  const lower = answerText.toLowerCase();
+  const hedges = [
+    "i think", "maybe", "probably", "i guess",
+    "not sure", "kind of", "sort of", "i believe", "possibly"
+  ];
+  return hedges.filter(hedge => lower.includes(hedge));
+}
+
 export function checkDisengagement(message, isMCQ) {
   const clean = (message || '').trim().toLowerCase();
   if (clean === '') return true;
@@ -152,6 +172,14 @@ export async function createSession(sessionId, candidate) {
     interviewMemory: '',
     feedback: null,
     createdAt: new Date().toISOString(),
+    interviewStartedAt: new Date().toISOString(),
+    interviewEndedAt: null,
+    whyChainDepth: 0,
+    capstoneTriggered: false,
+    hallucinationCount: 0,
+    hedgeEventCount: 0,
+    questionSentAt: new Date().toISOString(),
+    pendingWhyProbe: false,
     recentScores: [],
     recentDiagrams: [],
     recentReactions: [],
@@ -327,6 +355,16 @@ export async function handleTurn(sessionId, message) {
     return session.lastResponse;
   }
 
+  // Server-side Response Timing and Hedging Check
+  const answerReceivedAt = new Date().toISOString();
+  const questionSentAt = session.questionSentAt || session.createdAt || answerReceivedAt;
+  const responseTimeSeconds = Math.max(0, Math.round((new Date(answerReceivedAt) - new Date(questionSentAt)) / 1000));
+  
+  const hedgeMarkers = detectHedging(message);
+  if (hedgeMarkers.length > 0) {
+    session.hedgeEventCount = (session.hedgeEventCount || 0) + 1;
+  }
+
   // 2. Empty/whitespace message handling
   let forceAdvanceDueToBlankRetries = false;
   const isMsgEmpty = !message || message.trim() === '';
@@ -346,6 +384,7 @@ export async function handleTurn(sessionId, message) {
         turn: session.turnCount
       });
 
+      session.questionSentAt = new Date().toISOString();
       await saveSessionDoc(sessionId, session);
 
       const responsePayload = {
@@ -361,6 +400,7 @@ export async function handleTurn(sessionId, message) {
       session.lastMessageHash = cleanMsg;
       session.lastMessageTime = new Date().toISOString();
       session.lastResponse = responsePayload;
+      session.questionSentAt = new Date().toISOString();
       await saveSessionDoc(sessionId, session);
 
       return responsePayload;
@@ -411,6 +451,7 @@ export async function handleTurn(sessionId, message) {
         turn: session.turnCount
       });
 
+      session.questionSentAt = new Date().toISOString();
       await saveSessionDoc(sessionId, session);
 
       const responsePayload = {
@@ -425,6 +466,7 @@ export async function handleTurn(sessionId, message) {
       session.lastMessageHash = cleanMsg;
       session.lastMessageTime = new Date().toISOString();
       session.lastResponse = responsePayload;
+      session.questionSentAt = new Date().toISOString();
       await saveSessionDoc(sessionId, session);
 
       return responsePayload;
@@ -439,6 +481,7 @@ export async function handleTurn(sessionId, message) {
         turn: session.turnCount
       });
 
+      session.questionSentAt = new Date().toISOString();
       await saveSessionDoc(sessionId, session);
 
       const responsePayload = {
@@ -453,11 +496,13 @@ export async function handleTurn(sessionId, message) {
       session.lastMessageHash = cleanMsg;
       session.lastMessageTime = new Date().toISOString();
       session.lastResponse = responsePayload;
+      session.questionSentAt = new Date().toISOString();
       await saveSessionDoc(sessionId, session);
 
       return responsePayload;
     } else {
       session.state = SessionState.DONE;
+      session.interviewEndedAt = new Date().toISOString();
       session.feedback = {
         summary: "The technical review was terminated early due to repeated disengagement and a refusal to attempt the technical questions.",
         strengths: [],
@@ -595,6 +640,12 @@ export async function handleTurn(sessionId, message) {
     }
   }
 
+  const hallucinationFlag = llmResponse && !!llmResponse.hallucinationFlag;
+  if (hallucinationFlag) {
+    session.hallucinationCount = (session.hallucinationCount || 0) + 1;
+  }
+  const whyProbe = !!session.pendingWhyProbe;
+
   // Update difficulty and next question type based on accuracy
   updateDifficulty(session, finalAccuracyScore);
 
@@ -614,7 +665,13 @@ export async function handleTurn(sessionId, message) {
     semanticScore,
     conceptScore,
     reasoning: llmResponse.reasoning || "No specific feedback reasoning provided.",
-    candidateAnswer: message || ""
+    candidateAnswer: message || "",
+    questionSentAt,
+    answerReceivedAt,
+    responseTimeSeconds,
+    hallucinationFlag,
+    hedgeMarkers,
+    whyProbe
   });
 
   console.log(`\n--- [LLM Evaluation Log] Session "${sessionId}" Turn ${session.turnCount} ---`);
@@ -634,6 +691,12 @@ export async function handleTurn(sessionId, message) {
     session.pendingMCQAnswer = llmResponse.mcqCorrectIndex;
   } else {
     session.pendingMCQAnswer = null;
+  }
+
+  // Set pendingWhyProbe and update whyChainDepth
+  session.pendingWhyProbe = llmResponse && !!llmResponse.whyProbe;
+  if (session.pendingWhyProbe) {
+    session.whyChainDepth = (session.whyChainDepth || 0) + 1;
   }
 
   // Store generated diagram in session to prevent structural repetition
@@ -690,6 +753,7 @@ export async function handleTurn(sessionId, message) {
       turn: session.turnCount + 1
     });
 
+    session.questionSentAt = new Date().toISOString();
     await saveSessionDoc(sessionId, session);
 
     const responsePayload = {
@@ -717,6 +781,7 @@ export async function handleTurn(sessionId, message) {
     session.lastMessageTime = new Date().toISOString();
     session.lastResponse = responsePayload;
     session.lastMCQOptions = responsePayload.mcqOptions || null;
+    session.questionSentAt = new Date().toISOString();
     await saveSessionDoc(sessionId, session);
 
     return responsePayload;
@@ -733,12 +798,14 @@ export async function handleTurn(sessionId, message) {
     }
 
     session.followupCountForCurrentTopic = 0;
+    session.whyChainDepth = 0;
 
     const isOutOfTopics = session.cursor + 1 >= session.topicQueue.length;
     const wrapUpTriggered = shouldWrapUp(session, llmResponse ? llmResponse.modelWantsToStop : false) || isOutOfTopics;
 
     if (wrapUpTriggered) {
       session.state = SessionState.DONE;
+      session.interviewEndedAt = new Date().toISOString();
       session.feedback = await generateFeedbackReport(session);
       await saveSessionDoc(sessionId, session);
 
@@ -772,6 +839,7 @@ export async function handleTurn(sessionId, message) {
       turn: session.turnCount + 1
     });
 
+    session.questionSentAt = new Date().toISOString();
     await saveSessionDoc(sessionId, session);
 
     const responsePayload = {
@@ -799,6 +867,7 @@ export async function handleTurn(sessionId, message) {
     session.lastMessageTime = new Date().toISOString();
     session.lastResponse = responsePayload;
     session.lastMCQOptions = responsePayload.mcqOptions || null;
+    session.questionSentAt = new Date().toISOString();
     await saveSessionDoc(sessionId, session);
 
     return responsePayload;

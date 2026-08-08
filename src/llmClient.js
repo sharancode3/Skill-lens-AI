@@ -41,9 +41,17 @@ export function buildResponseSchema(nextQuestionType) {
       modelWantsToStop: {
         type: 'BOOLEAN',
         description: 'Whether you want to wrap up the interview now. Set to true ONLY if floorMet is true and you have evaluated enough distinct, well-covered topics to write specific, fair feedback and there is no more meaningfully different ground left in the topic queue worth covering. Otherwise, set to false.'
+      },
+      hallucinationFlag: {
+        type: 'BOOLEAN',
+        description: 'True if candidate response contains technical hallucinations or fabricated facts.'
+      },
+      whyProbe: {
+        type: 'BOOLEAN',
+        description: 'True if the next question is a why-chain probe (asking candidate to justify a specific technical choice from their previous answer).'
       }
     },
-    required: ['classification', 'reasoning', 'action', 'reactionClause', 'reply', 'updatedMemory', 'llmConfidence', 'modelWantsToStop']
+    required: ['classification', 'reasoning', 'action', 'reactionClause', 'reply', 'updatedMemory', 'llmConfidence', 'modelWantsToStop', 'hallucinationFlag', 'whyProbe']
   };
 
   if (nextQuestionType === 'mcq') {
@@ -410,7 +418,9 @@ function mockLLMCall(candidate, topic, lastQuestion, message, followupCount, con
     reply,
     updatedMemory,
     llmConfidence,
-    modelWantsToStop
+    modelWantsToStop,
+    hallucinationFlag: false,
+    whyProbe: action === 'followup'
   };
 
   // Add MCQ fields if requested
@@ -595,6 +605,10 @@ TONE CALIBRATION CONSTRAINTS:
 2. STRICT BREVITY: Keep your reply to 1-3 sentences unless presenting a diagram/MCQ. Do not monologue.
 3. REALISTIC TERSENESS: Use short neutral acknowledgments ("Right.", "Okay, and—", "Sure.") and ask direct follow-ups or push back on weak answers ("That's part of it, but what actually triggers X?").
 4. NO GENERIC PRAISE: Do not say "nice job" or "well explained". Praise must reference a specific correct mechanism named or be omitted entirely.
+
+HALLUCINATION & WHY-PROBE CONSTRAINTS:
+1. hallucinationFlag: Evaluate if the candidate's response contains factual hallucinations, fabricated facts, or details not matching their course curriculum setup. Set to true if detected, otherwise false.
+2. whyProbe: Set this to true if the next question you are proposing (in "reply") is a why-chain probe asking the candidate to justify their technical decision or choice from their previous answer. Otherwise false.
 
 FEW-SHOT EXAMPLES (GROUNDED CURRICULUM PATTERNS):
 [STRONG ANSWER EXAMPLE]
