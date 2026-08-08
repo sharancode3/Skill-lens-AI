@@ -392,15 +392,15 @@ export function mockLLMCall(candidate, topic, lastQuestion, message, followupCou
 
   if (isDisrespectful) {
     classification = 'disrespectful';
-    action = 'followup';
+    action = followupCount >= 1 ? 'advance' : 'followup';
     reasoning = 'Candidate response is dismissive, rude, or inappropriate toward the interviewer.';
   } else if (isDisengaged) {
     classification = 'disengaged';
-    action = 'followup';
+    action = followupCount >= 1 ? 'advance' : 'followup';
     reasoning = 'Candidate explicitly refused to attempt or dodged the technical question.';
   } else if (isOffTopic) {
     classification = 'off_topic';
-    action = 'followup';
+    action = followupCount >= 1 ? 'advance' : 'followup';
     reasoning = 'Candidate response is completely unrelated to the technical topic.';
   } else if (cleanMsg.includes('strong-score')) {
     classification = 'strong';
@@ -436,16 +436,17 @@ export function mockLLMCall(candidate, topic, lastQuestion, message, followupCou
   const totalConduct = currentConduct + turnConductWeight;
   const remaining = Math.max(0, 3 - totalConduct);
 
-  if (classification === 'disrespectful') {
-    reply = `Writing "${message.trim()}" is dismissive and unprofessional in a technical evaluation. This counts as 2 conduct warnings (${remaining} warning remaining before immediate session suspension). Please provide a real technical answer for ${topic.title}.`;
-  } else if (classification === 'disengaged') {
-    if (cleanMsg.includes('how can i know')) {
-      reply = `Replying with "${message.trim()}" dodges the question rather than explaining your reasoning. A technical review requires demonstrating your problem-solving approach — you have ${remaining} conduct warning${remaining === 1 ? '' : 's'} remaining before session suspension. How would you approach ${topic.objectives[0] || topic.title}?`;
-    } else {
+  const isConductViolation = classification === 'disrespectful' || classification === 'disengaged' || classification === 'off_topic';
+  const shouldRePrompt = isConductViolation && action === 'followup';
+
+  if (shouldRePrompt) {
+    if (classification === 'disrespectful') {
+      reply = `Writing "${message.trim()}" is dismissive and unprofessional in a technical evaluation. This counts as 2 conduct warnings (${remaining} warning remaining before immediate session suspension). Please provide a real technical answer for ${topic.title}.`;
+    } else if (classification === 'disengaged') {
       reply = `Saying "${message.trim()}" leaves us with no technical detail to evaluate for ${topic.title}. We need to see how you think — you have ${remaining} conduct warning${remaining === 1 ? '' : 's'} remaining before session suspension. What is the core purpose of ${topic.objectives[0] || topic.title}?`;
+    } else {
+      reply = `Your answer "${message.trim()}" is unrelated to our technical discussion on ${topic.title}. You have ${remaining} conduct warning${remaining === 1 ? '' : 's'} remaining before session suspension. Please focus on the engineering concepts.`;
     }
-  } else if (classification === 'off_topic') {
-    reply = `Your answer "${message.trim()}" is unrelated to our technical discussion on ${topic.title}. You have ${remaining} conduct warning${remaining === 1 ? '' : 's'} remaining before session suspension. Please focus on the engineering concepts.`;
   } else if (action === 'followup') {
     const cleanText = message.trim();
     if (cleanText.toLowerCase().includes('pandas') && cleanText.toLowerCase().includes('sqlite')) {
@@ -458,8 +459,15 @@ export function mockLLMCall(candidate, topic, lastQuestion, message, followupCou
       reply = `You noted using "${cleanText.split(' ').slice(0, 4).join(' ')}" for that component. What specific concurrency, memory, or scaling constraints did you keep in mind when setting that up?`;
     }
   } else {
-    if (classification === 'off_topic') {
-      reply = `Let's keep our focus on the technical side. Moving on to the next topic.`;
+    // Action is 'advance' or 'wrapup'
+    if (isConductViolation) {
+      if (nextTopic && nextQuestionType === 'open') {
+        const tier = difficultyTier || 'standard';
+        const obj = nextTopic.objectives[0] || "understanding this day's concepts";
+        reply = `Let's keep our focus on the technical side. Moving on to the next topic. For Day ${nextTopic.day}: "${nextTopic.title}", how do you approach implementing this objective: ${obj}?`;
+      } else {
+        reply = `Let's keep our focus on the technical side. Moving on.`;
+      }
     } else {
       if (nextTopic && nextQuestionType === 'open') {
         const tier = difficultyTier || 'standard';
@@ -615,7 +623,7 @@ export function mockLLMCall(candidate, topic, lastQuestion, message, followupCou
     modelWantsToStop,
     hallucinationFlag,
     hallucinationCorrection,
-    whyProbe: isHallucination ? false : (mockAction === 'why_probe' || mockAction === 'followup'),
+    whyProbe: isHallucination ? false : (mockAction === 'why_probe'),
     communicationConfidence,
     rootUnderstandingReached: mockRootReached
   };
@@ -854,16 +862,17 @@ function mockConductAnalysis(message) {
     return { classification: 'disrespectful', reasoning: 'Message matches disrespectful/hostile template phrase.' };
   }
 
-  // Gibberish checking (keyboard mashes, e.g. "sdfds", "sdfsdf", "asdflkjh")
-  if (/^[a-z]+$/.test(clean) && clean.length > 3) {
+  // Gibberish checking (keyboard mashes, e.g. "sdfds", "sdfsdf", "asdflkjh", "g4wfsgsg")
+  const letters = clean.replace(/[^a-z]/g, '');
+  if (letters.length > 2) {
     // Vowel count
-    const vowels = (clean.match(/[aeiouy]/g) || []).length;
-    const len = clean.length;
+    const vowels = (letters.match(/[aeiouy]/g) || []).length;
+    const len = letters.length;
     if (vowels === 0 || (vowels / len) < 0.15) {
       return { classification: 'off_topic', reasoning: 'Gibberish or keyboard mashing detected (no/low vowels).' };
     }
     // High repetition
-    if (/([a-z])\1{2,}/.test(clean)) {
+    if (/([a-z])\1{2,}/.test(letters)) {
       return { classification: 'off_topic', reasoning: 'Gibberish or keyboard mashing detected (high letter repetition).' };
     }
   }
@@ -1076,7 +1085,13 @@ export async function evaluateTurnWithLLM(session, candidateMessage, detectedCon
     const mappedClass = conduct.classification === 'non_answer' ? 'disengaged' : conduct.classification;
     interviewerRes.classification = mappedClass;
     interviewerRes.reasoning = conduct.reasoning;
-    interviewerRes.action = 'advance'; // Force advance on conduct violation
+    
+    // Defensively enforce action mapping based on follow-up count to prevent looping
+    if (session && session.followupCountForCurrentTopic < 1) {
+      interviewerRes.action = 'followup';
+    } else {
+      interviewerRes.action = 'advance';
+    }
   }
 
   // 3. Evaluator Role: runs only when scoring a completed topic (meaning action === 'advance' or MCQ/diagram turn)

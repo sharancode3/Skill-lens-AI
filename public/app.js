@@ -5,6 +5,8 @@ let currentSessionId = null;
 let isInterviewActive = false;
 let violationCount = 0;
 let activeTimerInterval = null;
+let sessionTimerInterval = null;
+let sessionElapsedSeconds = 0;
 
 
 // DOM Elements
@@ -88,8 +90,19 @@ candidateSelect.addEventListener('change', () => {
 });
 
 let isReenteringFullscreen = false;
+let isFullscreenTransitionActive = false;
+let fullscreenTransitionTimeout = null;
+
+function triggerFullscreenTransitionActive() {
+  isFullscreenTransitionActive = true;
+  if (fullscreenTransitionTimeout) clearTimeout(fullscreenTransitionTimeout);
+  fullscreenTransitionTimeout = setTimeout(() => {
+    isFullscreenTransitionActive = false;
+  }, 1500);
+}
 
 async function enterFullscreen() {
+  triggerFullscreenTransitionActive();
   const docEl = document.documentElement;
   isReenteringFullscreen = true;
   setTimeout(() => { isReenteringFullscreen = false; }, 1200);
@@ -113,6 +126,29 @@ async function enterFullscreen() {
 
 function isCurrentlyFullscreen() {
   return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+}
+
+function startSessionTimer() {
+  if (sessionTimerInterval) clearInterval(sessionTimerInterval);
+  sessionElapsedSeconds = 0;
+  const timerValSpan = document.getElementById('session-timer-val');
+  if (timerValSpan) timerValSpan.textContent = '00:00';
+  
+  sessionTimerInterval = setInterval(() => {
+    sessionElapsedSeconds++;
+    const mins = Math.floor(sessionElapsedSeconds / 60);
+    const secs = sessionElapsedSeconds % 60;
+    if (timerValSpan) {
+      timerValSpan.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+  }, 1000);
+}
+
+function stopSessionTimer() {
+  if (sessionTimerInterval) {
+    clearInterval(sessionTimerInterval);
+    sessionTimerInterval = null;
+  }
 }
 
 async function startInterviewSession() {
@@ -168,6 +204,7 @@ async function startInterviewSession() {
     // Set interview active to trigger monitoring
     isInterviewActive = true;
     violationCount = 0;
+    startSessionTimer();
 
     // Append first interviewer question
     appendInterviewerMessage(data.reply, data.detectedConnections, data.nextQuestionType, data.mcqOptions, data.diagramDefinition, data.diagramQuestionText);
@@ -261,6 +298,7 @@ async function reportViolationToServer(type) {
     
     if (data.suspended) {
       isInterviewActive = false;
+      stopSessionTimer();
       showSuspensionScreen();
     } else {
       if (type === 'copy-paste' || type === 'screenshot') {
@@ -347,6 +385,7 @@ document.getElementById('btn-suspended-exit').addEventListener('click', () => {
 // Continuously monitor fullscreen changes
 async function handleFullscreenChange() {
   if (!isInterviewActive) return;
+  triggerFullscreenTransitionActive();
   if (isReenteringFullscreen) return;
 
   const warningOverlay = document.getElementById('fullscreen-warning-overlay');
@@ -375,17 +414,22 @@ async function handleFullscreenChange() {
 // Monitor visibility and window focus changes (Phase 3 Zero Tolerance Tab-Switch)
 function handleVisibilityOrFocusChange() {
   if (!isInterviewActive) return;
-  if (isReenteringFullscreen) return;
+  if (isReenteringFullscreen || isFullscreenTransitionActive) return;
 
   const warningOverlay = document.getElementById('fullscreen-warning-overlay');
   const isWarningOverlayActive = warningOverlay && !warningOverlay.classList.contains('hidden');
   if (isWarningOverlayActive) return;
 
-  // Zero-tolerance tab-switch: only fire if document is genuinely hidden (tab switched or minimized)
-  if (document.hidden) {
+  // Zero-tolerance tab-switch or window focus loss
+  const isHidden = document.hidden;
+  const isFocused = document.hasFocus();
+
+  if (isHidden || !isFocused) {
     if (blurTimeout) clearTimeout(blurTimeout);
     blurTimeout = setTimeout(() => {
-      if (document.hidden && isInterviewActive && !isReenteringFullscreen) {
+      const currentHidden = document.hidden;
+      const currentFocused = document.hasFocus();
+      if ((currentHidden || !currentFocused) && isInterviewActive && !isReenteringFullscreen && !isFullscreenTransitionActive) {
         reportViolationToServer('tab-switch');
       }
     }, 250);
@@ -550,21 +594,6 @@ async function appendInterviewerMessage(text, connections = [], nextQuestionType
   stemEl.textContent = cleanText;
   wrapper.appendChild(stemEl);
 
-  // Appending the running timer display next to the current question (Phase I6)
-  const timerContainer = document.createElement('div');
-  timerContainer.className = 'flex items-center gap-1.5 text-[10px] text-slate-400 mt-2 self-start font-mono font-semibold bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md';
-  timerContainer.innerHTML = `<i data-lucide="clock" class="w-3 h-3 text-slate-400"></i><span class="chat-timer-val">0:00</span>`;
-  wrapper.appendChild(timerContainer);
-
-  let elapsedSeconds = 0;
-  const timerValSpan = timerContainer.querySelector('.chat-timer-val');
-  if (activeTimerInterval) clearInterval(activeTimerInterval);
-  activeTimerInterval = setInterval(() => {
-    elapsedSeconds++;
-    const mins = Math.floor(elapsedSeconds / 60);
-    const secs = elapsedSeconds % 60;
-    timerValSpan.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
-  }, 1000);
 
   // Render diagram if present
   if (diagramDefinition) {
@@ -731,6 +760,7 @@ function transitionToFeedback(feedback, metrics, judgeVerdict) {
     clearInterval(activeTimerInterval);
     activeTimerInterval = null;
   }
+  stopSessionTimer();
 
   // Populate Judge Verdict (Phase I7)
   const verdictSection = document.getElementById('feedback-verdict-section');
@@ -920,7 +950,7 @@ function transitionToFeedback(feedback, metrics, judgeVerdict) {
       const timingListEl = document.getElementById('metrics-timing-list');
       if (totalDurationEl && timingListEl) {
         // Render Total Duration
-        const totalSecs = metrics.totalInterviewDurationSeconds || 0;
+        const totalSecs = sessionElapsedSeconds;
         const mins = Math.floor(totalSecs / 60);
         const secs = totalSecs % 60;
         totalDurationEl.textContent = `Total Duration: ${mins}m ${secs}s`;
@@ -1158,6 +1188,8 @@ function updateSidebar(history, currentActiveTopic = null) {
       const leftBadges = document.createElement('div');
       leftBadges.style.display = 'flex';
       leftBadges.style.gap = '0.4rem';
+      leftBadges.style.flexWrap = 'wrap';
+      leftBadges.style.maxWidth = '75%';
 
       const diffBadge = document.createElement('span');
       diffBadge.className = 'sidebar-badge';

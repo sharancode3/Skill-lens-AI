@@ -554,7 +554,13 @@ export async function handleTurn(sessionId, message) {
     if (llmResponse.classification === 'disrespectful') {
       session.conductViolations += 2;
     } else if (llmResponse.classification === 'disengaged' || llmResponse.classification === 'off_topic') {
-      session.conductViolations += 1;
+      const isRapidViolation = responseTimeSeconds !== undefined && responseTimeSeconds < 3;
+      if (isRapidViolation) {
+        console.log(`[Conduct Proctor] Rapid violation detected (Response Time: ${responseTimeSeconds}s < 3s). Escalating violation weight to 2.`);
+        session.conductViolations += 2;
+      } else {
+        session.conductViolations += 1;
+      }
     }
   }
 
@@ -840,6 +846,7 @@ export async function handleTurn(sessionId, message) {
       action,
       nextQuestionType: session.nextQuestionType,
       difficultyTier: session.difficultyTier,
+      conductViolations: session.conductViolations,
       mcqOptions: llmResponse.mcqOptions || null,
       diagramDefinition: llmResponse.diagramDefinition || null,
       diagramQuestionText: llmResponse.diagramQuestionText || null,
@@ -890,6 +897,7 @@ export async function handleTurn(sessionId, message) {
       action,
       nextQuestionType: session.nextQuestionType,
       difficultyTier: session.difficultyTier,
+      conductViolations: session.conductViolations,
       mcqOptions: null,
       diagramDefinition: null,
       diagramQuestionText: null,
@@ -962,7 +970,12 @@ export async function handleTurn(sessionId, message) {
     session.cursor++;
     const nextTopic = session.topicQueue[session.cursor];
     
-    const replyText = (forceAdvanceDueToFollowupLimit || forceAdvanceDueToBlankRetries || forceAdvanceDueToHallucinationLimit || forceAdvanceDueToWhyProbeLimit)
+    const isForcedAdvance = (forceAdvanceDueToFollowupLimit || forceAdvanceDueToBlankRetries || forceAdvanceDueToHallucinationLimit || forceAdvanceDueToWhyProbeLimit);
+    if (isForcedAdvance) {
+      session.nextQuestionType = 'open';
+    }
+    
+    const replyText = isForcedAdvance
       ? `Got it. Let's move on to the next topic. Can you tell me about your experience on Day ${nextTopic.day}: "${nextTopic.title}"?`
       : fullReply;
 
@@ -985,6 +998,7 @@ export async function handleTurn(sessionId, message) {
       action,
       nextQuestionType: session.nextQuestionType,
       difficultyTier: session.difficultyTier,
+      conductViolations: session.conductViolations,
       mcqOptions: llmResponse.mcqOptions || null,
       diagramDefinition: llmResponse.diagramDefinition || null,
       diagramQuestionText: llmResponse.diagramQuestionText || null,
