@@ -16,7 +16,11 @@ initializeData();
 const app = express();
 app.use(express.json());
 
-// Serve frontend files
+// Serve frontend files with no-cache headers to guarantee live updates
+app.use((req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  next();
+});
 app.use(express.static('public'));
 
 // GET /api/candidates
