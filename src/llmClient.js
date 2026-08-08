@@ -877,12 +877,94 @@ export const INTERVIEWER_PERSONA = `You are a senior technical interviewer at a 
 - Values: Rewards specificity and real reasoning over buzzwords; genuinely curious about trade-offs and "why," not just "what"; treats every candidate with respect, but expects the same respect back and will say so plainly if it's not given.
 - Scope: You NEVER decide whether to suspend the session or whether the interview is over — you only ever produce conversational dialogue, follow-ups, and choice parameters for the live exchange.`;
 
-/**
- * BRAIN 1: Conduct Brain (the "referee")
- * Sole job: Read the candidate's raw message and classify it into attempt, refusal, off-topic, or disrespectful input.
- * Given ONLY the exact question asked and the raw message text. Never asks questions or assigns numeric scores.
- */
+export function checkDeterministicConduct(message) {
+  const clean = (message || '').trim().toLowerCase();
+
+  // 1. Empty or whitespace-only messages
+  if (clean === '') {
+    return {
+      classification: 'non_answer',
+      reasoning: 'Deterministic Pre-Filter: Message is empty or whitespace-only.'
+    };
+  }
+
+  // 2. Extremely short dismissive replies ("idk," "skip," "pass," "no," and close variants)
+  const cleanWord = clean.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "").trim();
+
+  const shortDismissives = new Set([
+    'idk', 'skip', 'pass', 'no', 'dunno', 'dont know', 'dontknow', 'i dont know', 'idontknow',
+    'i don\'t know', 'no idea', 'none', 'nothing', 'na', 'n/a', 'next', 'skip this', 'skipquestion',
+    'i dont care', 'i don\'t care', 'id care', 'dontcare', 'dunno'
+  ]);
+
+  if (shortDismissives.has(cleanWord)) {
+    return {
+      classification: 'non_answer',
+      reasoning: `Deterministic Pre-Filter: Short dismissive reply detected ("${cleanWord}").`
+    };
+  }
+
+  // 3. Clear-cut disrespectful templates
+  const disrespectfulPhrases = [
+    'do as you like', 'do has u like', 'do as u like', 'whatever', 'hostile', 'stupid', 'rude',
+    'shut up', 'fool', 'who cares', 'whatever u want', 'whatever you want'
+  ];
+  if (disrespectfulPhrases.some(phrase => cleanWord.includes(phrase))) {
+    return {
+      classification: 'disrespectful',
+      reasoning: `Deterministic Pre-Filter: Disrespectful or non-cooperative message matched ("${cleanWord}").`
+    };
+  }
+
+  // 4. Clearly random keyboard-mashing / gibberish check
+  const keyboardRows = ['qwerty', 'asdfgh', 'zxcvbn', 'poiuy', 'lkjhg', 'mnbvc'];
+  if (keyboardRows.some(row => clean.includes(row))) {
+    return {
+      classification: 'off_topic',
+      reasoning: 'Deterministic Pre-Filter: Gibberish detected (standard keyboard row pattern).'
+    };
+  }
+
+  const letters = cleanWord.replace(/[^a-z]/g, '');
+  if (letters.length >= 4) {
+    const vowelsCount = (letters.match(/[aeiouy]/g) || []).length;
+    const vowelRatio = vowelsCount / letters.length;
+
+    // Heuristic 1: If there are 0 vowels in a 4+ character word (e.g. "sdfds", "qwtqwt", "hjkl")
+    if (vowelsCount === 0) {
+      return {
+        classification: 'off_topic',
+        reasoning: 'Deterministic Pre-Filter: Gibberish detected (zero vowels present).'
+      };
+    }
+
+    // Heuristic 2: Extremely low vowel ratio (< 15%) on a 5+ character word
+    if (letters.length >= 5 && vowelRatio < 0.15) {
+      return {
+        classification: 'off_topic',
+        reasoning: `Deterministic Pre-Filter: Gibberish detected (vowel ratio ${vowelRatio.toFixed(2)} < 15%).`
+      };
+    }
+
+    // Heuristic 3: High single-character repetition (consecutive same letter 3 or more times, e.g. "aaa", "zzzz")
+    if (/([a-z])\1{2,}/.test(letters)) {
+      return {
+        classification: 'off_topic',
+        reasoning: 'Deterministic Pre-Filter: Gibberish detected (high letter repetition).'
+      };
+    }
+  }
+
+  return null;
+}
+
 export async function analyzeConductWithLLM(candidateMessage, lastQuestion) {
+  const deterministicResult = checkDeterministicConduct(candidateMessage);
+  if (deterministicResult) {
+    console.log('[Conduct Pre-Filter] Deterministic check matched! Skipping LLM call. Classification:', deterministicResult.classification, 'Reasoning:', deterministicResult.reasoning);
+    return deterministicResult;
+  }
+
   if (process.env.SIMULATE_LLM_OUTAGE === 'true') {
     return mockConductAnalysis(candidateMessage);
   }
