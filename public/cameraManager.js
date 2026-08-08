@@ -26,10 +26,12 @@ const CameraManager = {
       if (statusText) statusText.textContent = 'Camera Live';
       
       currentState = 'PREVIEW';
+      return true;
     } catch (err) {
       console.error('[CameraManager] Camera permission denied or error:', err);
       const statusText = document.getElementById('camera-status-text');
       if (statusText) statusText.textContent = 'Camera Error / Blocked';
+      return false;
     }
   },
 

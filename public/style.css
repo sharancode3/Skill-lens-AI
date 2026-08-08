@@ -1793,3 +1793,11 @@ video.scale-x-\[-1\] {
   box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.4) !important;
 }
 
+/* Disabled button state overrides */
+#btn-accept-rules:disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}
+
+

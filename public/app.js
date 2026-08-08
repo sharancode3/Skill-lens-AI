@@ -246,10 +246,30 @@ btnStart.addEventListener('click', () => {
   window.scrollTo(0, 0);
   if (window.lucide) lucide.createIcons();
 
-  // Transition camera to PREVIEW
+  // Reset camera setup visual controls
+  const errorBanner = document.getElementById('camera-error-banner');
+  if (errorBanner) errorBanner.classList.add('hidden');
+  
+  const acceptButton = document.getElementById('btn-accept-rules');
+  if (acceptButton) {
+    acceptButton.disabled = true;
+    acceptButton.classList.add('opacity-50', 'cursor-not-allowed');
+  }
+  
+  const enableButton = document.getElementById('btn-enable-camera');
+  if (enableButton) {
+    enableButton.disabled = false;
+    enableButton.querySelector('span').textContent = 'Enable Camera for Proctoring';
+    enableButton.classList.remove('bg-emerald-600', 'hover:bg-emerald-700', 'opacity-50');
+    enableButton.classList.add('bg-blue-600', 'hover:bg-blue-700');
+  }
+
+  const statusText = document.getElementById('camera-status-text');
+  if (statusText) statusText.textContent = 'Camera Offline';
+
   const videoPreview = document.getElementById('video-preview');
-  if (window.CameraManager && videoPreview) {
-    window.CameraManager.startPreview(videoPreview);
+  if (videoPreview) {
+    videoPreview.srcObject = null;
   }
 });
 
@@ -261,6 +281,45 @@ if (btnBackToSelect) {
     // Turn camera OFF when moving back
     if (window.CameraManager) {
       window.CameraManager.stop();
+    }
+  });
+}
+
+const btnEnableCamera = document.getElementById('btn-enable-camera');
+if (btnEnableCamera) {
+  btnEnableCamera.addEventListener('click', async () => {
+    const videoPreview = document.getElementById('video-preview');
+    const acceptButton = document.getElementById('btn-accept-rules');
+    const errorBanner = document.getElementById('camera-error-banner');
+
+    if (!videoPreview || !window.CameraManager) return;
+
+    btnEnableCamera.disabled = true;
+    btnEnableCamera.querySelector('span').textContent = 'Requesting access...';
+
+    const success = await window.CameraManager.startPreview(videoPreview);
+    if (success) {
+      // Permission granted!
+      btnEnableCamera.disabled = true;
+      btnEnableCamera.querySelector('span').textContent = 'Camera Enabled';
+      btnEnableCamera.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+      btnEnableCamera.classList.add('bg-emerald-600', 'hover:bg-emerald-700', 'opacity-50');
+      if (errorBanner) errorBanner.classList.add('hidden');
+      
+      if (acceptButton) {
+        acceptButton.disabled = false;
+        acceptButton.classList.remove('opacity-50', 'cursor-not-allowed');
+      }
+    } else {
+      // Permission denied or error
+      btnEnableCamera.disabled = false;
+      btnEnableCamera.querySelector('span').textContent = 'Retry Enable Camera';
+      if (errorBanner) errorBanner.classList.remove('hidden');
+      
+      if (acceptButton) {
+        acceptButton.disabled = true;
+        acceptButton.classList.add('opacity-50', 'cursor-not-allowed');
+      }
     }
   });
 }
