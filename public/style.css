@@ -298,14 +298,22 @@ button:focus-visible {
 
 /* ==================== CHAT VIEW SPECIFICS ==================== */
 #chat-messages {
-  max-width: 64rem !important;
-  width: 100%;
-  margin: 0 auto;
+  max-width: none !important;
+  width: 100% !important;
+  margin: 0 !important;
   flex-grow: 1;
 }
 
+/* Desktop layout adjustment to prevent overlapping floating camera widget */
+@media (min-width: 768px) {
+  .chat-stream-column {
+    padding-left: 260px !important;
+  }
+}
+
 .chat-bubble {
-  max-width: 75%;
+  max-width: 800px !important;
+  width: auto;
   padding: 1rem 1.25rem;
   font-size: 0.9375rem;
   line-height: 1.5;
