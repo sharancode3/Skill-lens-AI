@@ -4,6 +4,8 @@ let selectedCandidate = null;
 let currentSessionId = null;
 let isInterviewActive = false;
 let violationCount = 0;
+let activeTimerInterval = null;
+
 
 // DOM Elements
 const screenStart = document.getElementById('screen-start');
@@ -418,6 +420,22 @@ async function appendInterviewerMessage(text, connections = [], nextQuestionType
   stemEl.textContent = text;
   wrapper.appendChild(stemEl);
 
+  // Appending the running timer display next to the current question (Phase I6)
+  const timerContainer = document.createElement('div');
+  timerContainer.className = 'flex items-center gap-1.5 text-[10px] text-slate-400 mt-2 self-start font-mono font-semibold bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md';
+  timerContainer.innerHTML = `<i data-lucide="clock" class="w-3 h-3 text-slate-400"></i><span class="chat-timer-val">0:00</span>`;
+  wrapper.appendChild(timerContainer);
+
+  let elapsedSeconds = 0;
+  const timerValSpan = timerContainer.querySelector('.chat-timer-val');
+  if (activeTimerInterval) clearInterval(activeTimerInterval);
+  activeTimerInterval = setInterval(() => {
+    elapsedSeconds++;
+    const mins = Math.floor(elapsedSeconds / 60);
+    const secs = elapsedSeconds % 60;
+    timerValSpan.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+  }, 1000);
+
   // Render diagram if present
   if (diagramDefinition) {
     const diagWrapper = document.createElement('div');
@@ -579,6 +597,12 @@ function scrollChatBottom() {
 
 // ==================== SCREEN 3: FEEDBACK PORTAL ====================
 function transitionToFeedback(feedback, metrics) {
+  // Clear running activeTimerInterval if active
+  if (activeTimerInterval) {
+    clearInterval(activeTimerInterval);
+    activeTimerInterval = null;
+  }
+
   // Populate summaries
   feedbackSummary.textContent = feedback.summary || 'Summary loaded successfully.';
 
@@ -687,6 +711,62 @@ function transitionToFeedback(feedback, metrics) {
             `;
             perdayContainer.appendChild(row);
           });
+        }
+      }
+
+      // Render Timing Analysis (Phase I6)
+      const totalDurationEl = document.getElementById('metrics-total-duration');
+      const timingListEl = document.getElementById('metrics-timing-list');
+      if (totalDurationEl && timingListEl) {
+        // Render Total Duration
+        const totalSecs = metrics.totalInterviewDurationSeconds || 0;
+        const mins = Math.floor(totalSecs / 60);
+        const secs = totalSecs % 60;
+        totalDurationEl.textContent = `Total Duration: ${mins}m ${secs}s`;
+
+        // Render timing list
+        timingListEl.innerHTML = '';
+        const qTimes = metrics.perQuestionTimes || [];
+        if (qTimes.length > 0) {
+          qTimes.forEach((q, idx) => {
+            const min = q.expectedRangeSeconds[0];
+            const max = q.expectedRangeSeconds[1];
+            const resp = q.responseTimeSeconds;
+
+            let statusClass = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+            let statusText = 'On Pace';
+            if (resp < min) {
+              statusClass = 'bg-red-50 text-red-700 border border-red-200';
+              statusText = 'Too Fast';
+            } else if (resp > max) {
+              statusClass = 'bg-amber-50 text-amber-700 border border-amber-200';
+              statusText = 'Too Slow';
+            }
+
+            const typeMap = {
+              open: 'Open Question',
+              mcq: 'MCQ',
+              diagram_interpret: 'Diagram Critique',
+              capstone: 'Capstone Challenge'
+            };
+            const displayType = typeMap[q.questionType] || q.questionType || 'Open Question';
+
+            const row = document.createElement('div');
+            row.className = 'flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 py-3 gap-2 last:border-b-0';
+            row.innerHTML = `
+              <div class="flex flex-col">
+                <span class="text-sm font-bold text-slate-800">Q${idx + 1}: ${displayType} (Day ${q.day})</span>
+                <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Difficulty: ${q.difficultyTier || 'standard'}</span>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="text-xs text-slate-600 font-medium">${resp}s <span class="text-slate-400">/ expected ${min}-${max}s</span></span>
+                <span class="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${statusClass}">${statusText}</span>
+              </div>
+            `;
+            timingListEl.appendChild(row);
+          });
+        } else {
+          timingListEl.innerHTML = '<div class="text-slate-400 text-sm text-center py-4">No timing metrics recorded.</div>';
         }
       }
     } else {

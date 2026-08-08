@@ -266,12 +266,33 @@ export function updateDifficulty(session, finalScore) {
  */
 export function computeMetrics(session) {
   const accuracyLog = session.accuracyLog || [];
+
+  // Calculate totalInterviewDurationSeconds
+  const start = session.interviewStartedAt ? new Date(session.interviewStartedAt) : (session.createdAt ? new Date(session.createdAt) : new Date());
+  const end = session.interviewEndedAt ? new Date(session.interviewEndedAt) : new Date();
+  const totalInterviewDurationSeconds = Math.max(0, Math.round((end - start) / 1000));
+
+  // Calculate perQuestionTimes
+  const perQuestionTimes = accuracyLog.map(item => {
+    const tier = item.questionType === 'capstone' ? 'capstone' : (item.difficultyTier || 'standard');
+    const bounds = RESPONSE_TIME_BOUNDS[tier] || RESPONSE_TIME_BOUNDS.standard;
+    return {
+      day: item.day,
+      questionType: item.questionType,
+      difficultyTier: item.difficultyTier,
+      responseTimeSeconds: item.responseTimeSeconds !== undefined ? item.responseTimeSeconds : 0,
+      expectedRangeSeconds: bounds
+    };
+  });
+
   if (accuracyLog.length === 0) {
     return {
       overallAccuracy: 0,
       perDay: [],
       difficultyProgression: [],
-      questionTypeBreakdown: { open: 0, mcq: 0, diagram_interpret: 0 }
+      questionTypeBreakdown: { open: 0, mcq: 0, diagram_interpret: 0 },
+      totalInterviewDurationSeconds,
+      perQuestionTimes: []
     };
   }
 
@@ -314,7 +335,9 @@ export function computeMetrics(session) {
     overallAccuracy,
     perDay,
     difficultyProgression,
-    questionTypeBreakdown
+    questionTypeBreakdown,
+    totalInterviewDurationSeconds,
+    perQuestionTimes
   };
 }
 
