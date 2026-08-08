@@ -270,6 +270,46 @@
           <i data-lucide="history" class="w-3.5 h-3.5"></i>
           <span>History</span>
         </button>
+
+        <!-- Phase 9: Settings Control Button & Popover Panel -->
+        <div class="relative">
+          <button id="btn-toggle-settings" title="Display & Layout Settings" class="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-xl border-2 border-slate-900 flex items-center gap-1.5 text-xs font-black transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0">
+            <i data-lucide="settings" class="w-4 h-4 text-slate-700"></i>
+            <span class="hidden sm:inline">Settings</span>
+          </button>
+
+          <!-- Settings Popover Dropdown Panel -->
+          <div id="settings-popover" class="absolute right-0 top-12 w-72 bg-white border-4 border-slate-900 rounded-xl p-4 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] z-50 hidden flex flex-col gap-4">
+            <div class="flex items-center justify-between border-b-2 border-slate-200 pb-2">
+              <span class="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-1.5">
+                <i data-lucide="sliders" class="w-4 h-4 text-blue-600"></i>
+                Display Settings
+              </span>
+              <button id="btn-close-settings" class="text-slate-400 hover:text-slate-900 font-black text-sm p-1">✕</button>
+            </div>
+
+            <!-- Font Size Selector -->
+            <div class="flex flex-col gap-2">
+              <label class="text-xs font-extrabold text-slate-700">Transcript Text Size</label>
+              <div class="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-lg border-2 border-slate-900">
+                <button data-size="sm" class="btn-font-size px-2 py-1.5 text-xs font-extrabold rounded-md transition-all text-slate-700 hover:bg-white">Small</button>
+                <button data-size="md" class="btn-font-size px-2 py-1.5 text-xs font-extrabold rounded-md transition-all bg-slate-900 text-white shadow-sm">Medium</button>
+                <button data-size="lg" class="btn-font-size px-2 py-1.5 text-xs font-extrabold rounded-md transition-all text-slate-700 hover:bg-white">Large</button>
+              </div>
+            </div>
+
+            <!-- History Sidebar Toggle Switch -->
+            <div class="flex items-center justify-between pt-2 border-t-2 border-slate-100">
+              <div>
+                <span class="text-xs font-extrabold text-slate-800 block">Question History Panel</span>
+                <span class="text-[10px] font-bold text-slate-500 block">Show or hide history sidebar</span>
+              </div>
+              <button id="btn-toggle-history-panel" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold rounded-lg border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0 transition shrink-0">
+                Hide Panel
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </header>
 

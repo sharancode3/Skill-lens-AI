@@ -773,4 +773,23 @@ html, body {
   }
 }
 
+/* Phase 9: Dynamic Font Size Scaling for Chat Stream */
+#chat-messages.font-size-sm .interviewer-bubble,
+#chat-messages.font-size-sm .candidate-bubble {
+  font-size: 0.8125rem !important; /* 13px */
+  line-height: 1.35rem !important;
+}
+
+#chat-messages.font-size-md .interviewer-bubble,
+#chat-messages.font-size-md .candidate-bubble {
+  font-size: 0.9375rem !important; /* 15px */
+  line-height: 1.5rem !important;
+}
+
+#chat-messages.font-size-lg .interviewer-bubble,
+#chat-messages.font-size-lg .candidate-bubble {
+  font-size: 1.125rem !important; /* 18px */
+  line-height: 1.75rem !important;
+}
+
 

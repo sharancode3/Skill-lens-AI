@@ -1236,3 +1236,93 @@ if (btnToggleSidebar && chatSidebar) {
     chatSidebar.classList.toggle('active');
   });
 }
+
+// ==================== PHASE 9: SETTINGS PANEL LOGIC ====================
+const btnToggleSettings = document.getElementById('btn-toggle-settings');
+const btnCloseSettings = document.getElementById('btn-close-settings');
+const settingsPopover = document.getElementById('settings-popover');
+const btnToggleHistoryPanel = document.getElementById('btn-toggle-history-panel');
+const fontButtons = document.querySelectorAll('.btn-font-size');
+
+// 1. Toggle Settings Popover
+if (btnToggleSettings && settingsPopover) {
+  btnToggleSettings.addEventListener('click', (e) => {
+    e.stopPropagation();
+    settingsPopover.classList.toggle('hidden');
+  });
+
+  if (btnCloseSettings) {
+    btnCloseSettings.addEventListener('click', () => {
+      settingsPopover.classList.add('hidden');
+    });
+  }
+
+  document.addEventListener('click', (e) => {
+    if (!settingsPopover.contains(e.target) && !btnToggleSettings.contains(e.target)) {
+      settingsPopover.classList.add('hidden');
+    }
+  });
+}
+
+// 2. Font Size Scaling Logic
+function applyFontSize(size) {
+  if (!chatMessages) return;
+  chatMessages.classList.remove('font-size-sm', 'font-size-md', 'font-size-lg');
+  chatMessages.classList.add(`font-size-${size}`);
+
+  fontButtons.forEach(btn => {
+    if (btn.dataset.size === size) {
+      btn.className = 'btn-font-size px-2 py-1.5 text-xs font-extrabold rounded-md transition-all bg-slate-900 text-white shadow-sm';
+    } else {
+      btn.className = 'btn-font-size px-2 py-1.5 text-xs font-extrabold rounded-md transition-all text-slate-700 hover:bg-white';
+    }
+  });
+
+  try {
+    localStorage.setItem('interview_font_size', size);
+  } catch (e) {}
+}
+
+fontButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const size = btn.dataset.size;
+    applyFontSize(size);
+  });
+});
+
+const savedFontSize = localStorage.getItem('interview_font_size') || 'md';
+applyFontSize(savedFontSize);
+
+// 3. History Panel Show / Hide Toggle Logic
+function updateHistoryPanelToggleUI(isPanelVisible) {
+  if (!chatSidebar || !btnToggleHistoryPanel) return;
+
+  if (isPanelVisible) {
+    chatSidebar.classList.remove('hidden');
+    btnToggleHistoryPanel.textContent = 'Hide Panel';
+    btnToggleHistoryPanel.className = 'px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold rounded-lg border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0 transition shrink-0';
+  } else {
+    chatSidebar.classList.add('hidden');
+    btnToggleHistoryPanel.textContent = 'Show Panel';
+    btnToggleHistoryPanel.className = 'px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-extrabold rounded-lg border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0 transition shrink-0';
+  }
+
+  try {
+    localStorage.setItem('interview_show_history_panel', isPanelVisible ? 'true' : 'false');
+  } catch (e) {}
+}
+
+if (btnToggleHistoryPanel && chatSidebar) {
+  btnToggleHistoryPanel.addEventListener('click', () => {
+    const isCurrentlyHidden = chatSidebar.classList.contains('hidden');
+    updateHistoryPanelToggleUI(isCurrentlyHidden);
+  });
+
+  const savedPanelState = localStorage.getItem('interview_show_history_panel');
+  if (savedPanelState === 'false') {
+    updateHistoryPanelToggleUI(false);
+  } else {
+    updateHistoryPanelToggleUI(true);
+  }
+}
+
