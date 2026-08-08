@@ -75,6 +75,7 @@ This document is maintained to help AI models understand the current state of th
 - [x] Phase I6: Per-Question Timer & Real-World Time Comparison (server-side timing, visual running chat timers, and final feedback timing bounds comparisons).
 - [x] Phase I7: Judge Mode (committed hiring decision, descriptive reasoning, and ordered evidence trail tracking strengths, gaps, recovery, and Capstones).
 - [x] Phase I8: Frontend: Surfacing All of This (inline warning banners inside chat bubble, confidence/why-probe/hallucination sidebar tags, and vertical timeline verdict summary cards).
+- [x] Phase I9: Full Regression Test Checklist (successful Turn 1-10 end-to-end simulated regression testing covering all features).
 
 
 
