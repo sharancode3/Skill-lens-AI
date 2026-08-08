@@ -1789,11 +1789,34 @@ video.scale-x-\[-1\] {
   border-color: #F8FAFC !important;
 }
 
-/* Disabled button state overrides */
 #btn-accept-rules:disabled {
   opacity: 0.5 !important;
   cursor: not-allowed !important;
   pointer-events: none !important;
 }
+
+#camera-lost-overlay {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  background-color: rgba(69, 10, 10, 0.95) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  padding: 0.5rem !important;
+  gap: 0.25rem !important;
+  border: 2px solid #EF4444 !important;
+  color: #FFF !important;
+  z-index: 10 !important;
+}
+
+#camera-lost-overlay.hidden {
+  display: none !important;
+}
+
 
 

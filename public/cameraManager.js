@@ -1,4 +1,4 @@
-// cameraManager.js - ES Module for Proctoring Camera Lifecycle & MediaPipe Face Landmarker & Object Detector (Phase C4)
+// cameraManager.js - ES Module for Proctoring Camera Lifecycle & MediaPipe Face Landmarker & Object Detector (Phase C7)
 
 let currentStream = null;
 let currentState = 'OFF'; // States: OFF, PREVIEW, ACTIVE
@@ -17,6 +17,7 @@ let phoneTicks = 0;
 let firedPresenceViolation = false;
 let firedGazeViolation = false;
 let firedPhoneViolation = false;
+let firedCameraLostEvent = false;
 
 async function initFaceLandmarker() {
   if (faceLandmarker || isModelLoading) return;
@@ -203,6 +204,29 @@ function processObjectDetectionSample(result) {
   }
 }
 
+function handleCameraLoss() {
+  console.warn('[CameraManager] CAMERA LOSS TRIGGERED!');
+  
+  // Update camera lost overlay
+  const overlay = document.getElementById('camera-lost-overlay');
+  if (overlay) {
+    overlay.classList.remove('hidden');
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  // Clear check interval to save CPU
+  if (activeCheckInterval) {
+    clearInterval(activeCheckInterval);
+    activeCheckInterval = null;
+  }
+
+  // Trigger camera lost proctoring event exactly once
+  if (!firedCameraLostEvent && window.ProctoringNotifier) {
+    firedCameraLostEvent = true;
+    window.ProctoringNotifier('camera_lost');
+  }
+}
+
 function startDetectionLoop(videoElement) {
   if (activeCheckInterval) clearInterval(activeCheckInterval);
 
@@ -213,6 +237,8 @@ function startDetectionLoop(videoElement) {
   firedPresenceViolation = false;
   firedGazeViolation = false;
   firedPhoneViolation = false;
+  
+  let consecutiveErrors = 0;
 
   activeCheckInterval = setInterval(async () => {
     if (currentState !== 'ACTIVE') {
@@ -221,14 +247,23 @@ function startDetectionLoop(videoElement) {
     }
 
     if (!faceLandmarker) {
-      await initFaceLandmarker();
+      try {
+        await initFaceLandmarker();
+      } catch (err) {
+        console.error('[CameraManager] FaceLandmarker init error:', err);
+      }
     }
     if (!objectDetector) {
-      await initObjectDetector();
+      try {
+        await initObjectDetector();
+      } catch (err) {
+        console.error('[CameraManager] ObjectDetector init error:', err);
+      }
     }
 
     if (videoElement && videoElement.readyState >= 2) {
       const timestamp = performance.now();
+      let hasError = false;
 
       // 1. Run FaceLandmarker proctoring
       if (faceLandmarker) {
@@ -237,6 +272,7 @@ function startDetectionLoop(videoElement) {
           processDetectionSample(faceResult);
         } catch (err) {
           console.error('[CameraManager] Error running face detection:', err);
+          hasError = true;
         }
       }
 
@@ -247,7 +283,22 @@ function startDetectionLoop(videoElement) {
           processObjectDetectionSample(objectResult);
         } catch (err) {
           console.error('[CameraManager] Error running object detection:', err);
+          hasError = true;
         }
+      }
+
+      if (hasError) {
+        consecutiveErrors++;
+        if (consecutiveErrors >= 3) {
+          handleCameraLoss();
+        }
+      } else {
+        consecutiveErrors = 0;
+      }
+    } else {
+      consecutiveErrors++;
+      if (consecutiveErrors >= 6) { // 6 consecutive seconds unready -> loss
+        handleCameraLoss();
       }
     }
   }, 1000);
@@ -291,11 +342,22 @@ const CameraManager = {
 
   async startActive(videoElement) {
     console.log('[CameraManager] Entering ACTIVE state...');
-    
+    firedCameraLostEvent = false;
+
+    // Hide camera-lost overlay if starting fresh
+    const overlay = document.getElementById('camera-lost-overlay');
+    if (overlay) overlay.classList.add('hidden');
+
     // If we have a stream active from PREVIEW, reuse it to avoid re-triggering prompt
     if (currentStream && videoElement) {
       videoElement.srcObject = currentStream;
       currentState = 'ACTIVE';
+
+      // Monitor stream tracks for track ended events
+      currentStream.getTracks().forEach(track => {
+        track.addEventListener('ended', handleCameraLoss);
+      });
+
       startDetectionLoop(videoElement);
       return;
     }
@@ -310,10 +372,17 @@ const CameraManager = {
         videoElement.srcObject = stream;
       }
       currentState = 'ACTIVE';
+
+      // Monitor stream tracks for track ended events
+      stream.getTracks().forEach(track => {
+        track.addEventListener('ended', handleCameraLoss);
+      });
+
       startDetectionLoop(videoElement);
     } catch (err) {
       console.error('[CameraManager] Camera permission error entering ACTIVE state:', err);
       currentState = 'ACTIVE';
+      handleCameraLoss();
     }
   },
 
@@ -330,6 +399,10 @@ const CameraManager = {
     firedPresenceViolation = false;
     firedGazeViolation = false;
     firedPhoneViolation = false;
+    firedCameraLostEvent = false;
+
+    const overlay = document.getElementById('camera-lost-overlay');
+    if (overlay) overlay.classList.add('hidden');
 
     if (currentStream) {
       currentStream.getTracks().forEach(track => {

@@ -448,8 +448,13 @@
     </div>
 
     <!-- Persistent Proctoring Camera Widget -->
-    <div id="camera-widget" class="bg-slate-900 rounded-lg border-2 border-slate-900 overflow-hidden hidden">
+    <div id="camera-widget" class="bg-slate-900 rounded-lg border-2 border-slate-900 overflow-hidden hidden relative">
       <video id="video-active" autoplay playsinline muted class="w-full h-full object-cover scale-x-[-1]"></video>
+      <div id="camera-lost-overlay" class="absolute inset-0 bg-red-950/90 flex flex-col items-center justify-center text-center p-3 gap-2 border-2 border-red-500 hidden select-none">
+        <i data-lucide="video-off" class="w-6 h-6 text-red-500 animate-pulse"></i>
+        <span class="text-[10px] font-black uppercase tracking-wider text-red-400">Camera Feed Lost</span>
+        <span class="text-[9px] font-semibold leading-relaxed text-red-300">Proctoring is temporarily offline. The interview continues normally.</span>
+      </div>
     </div>
   </main>
 
@@ -492,6 +497,26 @@
           <h3 class="text-xs font-black uppercase tracking-wider text-slate-500">Evidence Trail</h3>
           <div id="verdict-evidence-trail" class="flex flex-col gap-2.5">
             <!-- Evidence rows injected dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Proctoring Integrity Report (Phase C6) -->
+      <div id="feedback-proctoring-section" class="bg-white border-4 border-slate-900 rounded-xl p-8 flex flex-col gap-6 hidden animate-fadeIn shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+        <div class="flex items-center justify-between border-b-2 border-slate-900 pb-3">
+          <div class="flex items-center gap-2">
+            <i data-lucide="shield-check" class="w-6 h-6 text-slate-900"></i>
+            <h2 class="text-xl font-extrabold tracking-tight text-slate-900">Proctoring & Integrity Summary</h2>
+          </div>
+          <span id="proctoring-flag-badge" class="text-xs font-black uppercase px-3 py-1 rounded border-2 border-slate-900">Integrity Clear</span>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div class="flex flex-col justify-center">
+            <h3 class="text-sm font-bold text-slate-800 mb-1">Session Audit Log</h3>
+            <p id="proctoring-total-count" class="text-xs font-semibold text-slate-500">0 violations recorded</p>
+          </div>
+          <div id="proctoring-breakdown-list" class="flex flex-col gap-1 border-t border-slate-100 md:border-t-0 md:border-l md:border-slate-200 md:pl-8">
+            <!-- Breakdown rows dynamically injected here -->
           </div>
         </div>
       </div>

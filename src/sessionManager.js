@@ -195,7 +195,17 @@ export async function createSession(sessionId, candidate) {
     nextQuestionType: "open",
     pendingQuestionType: "open",
     pendingMCQAnswer: null,
-    accuracyLog: []
+    accuracyLog: [],
+    violations: [],
+    fullscreenExits: 0,
+    tabSwitches: 0,
+    clipboardViolations: 0,
+    flaggedForReview: false,
+    proctoring: {
+      violations: [],
+      flaggedForReview: false,
+      totalViolationCount: 0
+    }
   };
 
   // Select first topic and build template question
@@ -383,6 +393,23 @@ export function computeMetrics(session) {
 }
 
 
+function getProctoringSummary(session) {
+  const violations = session.violations || [];
+  const breakdown = {
+    presence: violations.filter(v => v.type === 'presence').length,
+    multi_face: violations.filter(v => v.type === 'multi_face').length,
+    gaze: violations.filter(v => v.type === 'gaze').length,
+    phone: violations.filter(v => v.type === 'phone').length,
+    camera_lost: violations.filter(v => v.type === 'camera_lost').length
+  };
+  return {
+    flaggedForReview: session.flaggedForReview || false,
+    totalViolationCount: violations.length,
+    breakdown
+  };
+}
+
+
 /**
  * Processes a single turn input from the candidate.
 
@@ -410,7 +437,9 @@ export async function handleTurn(sessionId, message) {
       reply: 'Interview completed.',
       done: true,
       feedback: session.feedback,
-      metrics: computeMetrics(session)
+      metrics: computeMetrics(session),
+      judgeVerdict: session.judgeVerdict || null,
+      proctoringSummary: getProctoringSummary(session)
     };
   }
 
@@ -1001,7 +1030,8 @@ export async function handleTurn(sessionId, message) {
         done: true,
         feedback: session.feedback,
         metrics: computeMetrics(session),
-        judgeVerdict: session.judgeVerdict || null
+        judgeVerdict: session.judgeVerdict || null,
+        proctoringSummary: getProctoringSummary(session)
       };
 
       session.lastMessageHash = cleanMsg;
@@ -1123,7 +1153,8 @@ export async function reportViolation(sessionId, violationType) {
         difficultyProgression: [],
         questionTypeBreakdown: { open: 0, mcq: 0, diagram_interpret: 0 }
       },
-      judgeVerdict: session.judgeVerdict || null
+      judgeVerdict: session.judgeVerdict || null,
+      proctoringSummary: getProctoringSummary(session)
     };
   }
 
@@ -1136,7 +1167,7 @@ export async function reportViolation(sessionId, violationType) {
     session.clipboardViolations += 1;
   }
   
-  const isCameraViolation = ['presence_violation', 'multi_face_violation', 'gaze_violation', 'phone_violation'].includes(violationType);
+  const isCameraViolation = ['presence_violation', 'multi_face_violation', 'gaze_violation', 'phone_violation', 'camera_lost'].includes(violationType);
   
   let cameraType = violationType;
   let severity = 'medium';
@@ -1145,6 +1176,7 @@ export async function reportViolation(sessionId, violationType) {
     if (violationType === 'multi_face_violation') { cameraType = 'multi_face'; severity = 'high'; }
     if (violationType === 'gaze_violation') cameraType = 'gaze';
     if (violationType === 'phone_violation') { cameraType = 'phone'; severity = 'high'; }
+    if (violationType === 'camera_lost') cameraType = 'camera_lost';
   }
   
   const violationCount = session.violations.length + 1;
@@ -1214,6 +1246,19 @@ export async function reportViolation(sessionId, violationType) {
     
     await saveSessionDoc(sessionId, session);
 
+    // Update session.proctoring schema
+    session.proctoring = {
+      violations: session.violations.map(v => ({
+        type: v.type,
+        timestamp: v.timestamp,
+        severity: v.severity || 'medium'
+      })),
+      flaggedForReview: session.flaggedForReview || false,
+      totalViolationCount: session.violations.length
+    };
+
+    await saveSessionDoc(sessionId, session);
+
     return {
       done: true,
       suspended: true,
@@ -1229,9 +1274,21 @@ export async function reportViolation(sessionId, violationType) {
         difficultyProgression: [],
         questionTypeBreakdown: { open: 0, mcq: 0, diagram_interpret: 0 }
       },
-      judgeVerdict: session.judgeVerdict
+      judgeVerdict: session.judgeVerdict,
+      proctoringSummary: getProctoringSummary(session)
     };
   }
+
+  // Update session.proctoring schema
+  session.proctoring = {
+    violations: session.violations.map(v => ({
+      type: v.type,
+      timestamp: v.timestamp,
+      severity: v.severity || 'medium'
+    })),
+    flaggedForReview: session.flaggedForReview || false,
+    totalViolationCount: session.violations.length
+  };
 
   await saveSessionDoc(sessionId, session);
   const warningsRemaining = (violationType === 'copy-paste' || violationType === 'screenshot')

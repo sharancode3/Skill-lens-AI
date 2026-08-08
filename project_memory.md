@@ -84,6 +84,8 @@ This document is maintained to help AI models understand the current state of th
 - [x] Phase C3: Face Presence & Head Pose Detection (throttled 1s model checking loop triggering presence, multi-face, and head yaw gaze deviation alerts).
 - [x] Phase C4: Phone / Object Detection (throttled 1s COCO object detector checking loop filtering for cell phones score >= 0.65 with 2-consecutive-sample warning trigger).
 - [x] Phase C5: Violation Logging & Warning Escalation (assigned medium/high severities on server, set session.flaggedForReview = true exactly once at 4 total violations, and built brief 4s toast -> specific 8s toast -> review modal alert escalation path).
+- [x] Phase C6: Session Schema & Reporting Integration (added session database proctoring schema block, linked dynamic save routines, and surface breakdowns inside final feedback UI views defensively only if counts > 0).
+- [x] Phase C7: Performance & Reliability Hardening (confirmed one-time model loads, handled device disconnect/loss gracefully via warning fallback overlays and camera_lost alerts without halting candidate progress).
 
 
 

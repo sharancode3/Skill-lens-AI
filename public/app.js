@@ -639,7 +639,7 @@ async function handleSendMessage() {
 
     if (data.done) {
       // Transition to feedback screen
-      transitionToFeedback(data.feedback, data.metrics, data.judgeVerdict);
+      transitionToFeedback(data.feedback, data.metrics, data.judgeVerdict, data.proctoringSummary);
     } else {
       // Check for topic transition (Emerald tag)
       if (data.action === 'advance') {
@@ -788,7 +788,7 @@ async function appendInterviewerMessage(text, connections = [], nextQuestionType
           const data = await res.json();
 
           if (data.done) {
-            transitionToFeedback(data.feedback, data.metrics);
+            transitionToFeedback(data.feedback, data.metrics, data.judgeVerdict, data.proctoringSummary);
           } else {
             if (data.action === 'advance') {
               if (data.nextQuestionType === 'capstone') {
@@ -865,13 +865,67 @@ function scrollChatBottom(force = false) {
   }, 100);
 }
 
-function transitionToFeedback(feedback, metrics, judgeVerdict) {
+function transitionToFeedback(feedback, metrics, judgeVerdict, proctoringSummary) {
   // Clear running activeTimerInterval if active
   if (activeTimerInterval) {
     clearInterval(activeTimerInterval);
     activeTimerInterval = null;
   }
   stopSessionTimer();
+
+  // Render Integrity / Proctoring Section (Phase C6)
+  const proctoringSection = document.getElementById('feedback-proctoring-section');
+  if (proctoringSection) {
+    const summary = proctoringSummary || { flaggedForReview: false, totalViolationCount: 0, breakdown: { presence: 0, multi_face: 0, gaze: 0, phone: 0 } };
+    if (summary.totalViolationCount > 0) {
+      proctoringSection.classList.remove('hidden');
+      
+      const badge = document.getElementById('proctoring-flag-badge');
+      if (badge) {
+        if (summary.flaggedForReview) {
+          badge.className = 'text-xs font-black uppercase px-3 py-1 rounded bg-rose-100 text-rose-800 border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]';
+          badge.textContent = 'Flagged for Review';
+        } else {
+          badge.className = 'text-xs font-black uppercase px-3 py-1 rounded bg-emerald-100 text-emerald-800 border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]';
+          badge.textContent = 'Integrity Clear';
+        }
+      }
+
+      const totalCount = document.getElementById('proctoring-total-count');
+      if (totalCount) {
+        totalCount.textContent = `${summary.totalViolationCount} total violation${summary.totalViolationCount === 1 ? '' : 's'} recorded`;
+      }
+
+      const breakdownList = document.getElementById('proctoring-breakdown-list');
+      if (breakdownList) {
+        const b = summary.breakdown || { presence: 0, multi_face: 0, gaze: 0, phone: 0, camera_lost: 0 };
+        breakdownList.innerHTML = `
+          <div class="flex justify-between items-center py-2 border-b border-slate-100 last:border-b-0 text-xs font-semibold text-slate-700">
+            <span>Face Not Detected:</span>
+            <span class="${b.presence > 0 ? 'text-amber-600 font-bold' : 'text-slate-400'}">${b.presence || 0}</span>
+          </div>
+          <div class="flex justify-between items-center py-2 border-b border-slate-100 last:border-b-0 text-xs font-semibold text-slate-700">
+            <span>Multiple Faces:</span>
+            <span class="${b.multi_face > 0 ? 'text-red-600 font-bold' : 'text-slate-400'}">${b.multi_face || 0}</span>
+          </div>
+          <div class="flex justify-between items-center py-2 border-b border-slate-100 last:border-b-0 text-xs font-semibold text-slate-700">
+            <span>Gaze Deviation:</span>
+            <span class="${b.gaze > 0 ? 'text-amber-600 font-bold' : 'text-slate-400'}">${b.gaze || 0}</span>
+          </div>
+          <div class="flex justify-between items-center py-2 border-b border-slate-100 last:border-b-0 text-xs font-semibold text-slate-700">
+            <span>Phone Detected:</span>
+            <span class="${b.phone > 0 ? 'text-red-600 font-bold' : 'text-slate-400'}">${b.phone || 0}</span>
+          </div>
+          <div class="flex justify-between items-center py-2 border-b border-slate-100 last:border-b-0 text-xs font-semibold text-slate-700">
+            <span>Camera Feed Lost:</span>
+            <span class="${b.camera_lost > 0 ? 'text-red-600 font-bold' : 'text-slate-400'}">${b.camera_lost || 0}</span>
+          </div>
+        `;
+      }
+    } else {
+      proctoringSection.classList.add('hidden');
+    }
+  }
 
   // Populate Judge Verdict (Phase I7)
   const verdictSection = document.getElementById('feedback-verdict-section');
@@ -1810,6 +1864,7 @@ window.ProctoringNotifier = async (type) => {
       else if (type === 'multi_face_violation') label = 'Multiple faces detected in frame';
       else if (type === 'gaze_violation') label = 'Gaze deviation detected for several seconds';
       else if (type === 'phone_violation') label = 'Phone detected in frame';
+      else if (type === 'camera_lost') label = 'Camera feed connection lost';
 
       msg = `Proctoring Warning: ${label}.`;
       duration = 8000;
