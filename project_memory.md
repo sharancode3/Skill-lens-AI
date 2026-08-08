@@ -73,6 +73,7 @@ This document is maintained to help AI models understand the current state of th
 - [x] Phase I4: System Design Transition (capstone trigger check on 4-turn average score >= 80, strongest topic extraction, and preferential why-loop redirects).
 - [x] Phase I5: Simulated AI Interrupt (simulated mid-sentence interviewer interruption, anchoring reactions on mid-answer phrasing, and preventing consecutive interruptions).
 - [x] Phase I6: Per-Question Timer & Real-World Time Comparison (server-side timing, visual running chat timers, and final feedback timing bounds comparisons).
+- [x] Phase I7: Judge Mode (committed hiring decision, descriptive reasoning, and ordered evidence trail tracking strengths, gaps, recovery, and Capstones).
 
 
 

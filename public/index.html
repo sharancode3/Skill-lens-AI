@@ -226,6 +226,26 @@
 
     <!-- Details Sections -->
     <section class="flex-grow p-6 md:p-12 max-w-5xl w-full mx-auto flex flex-col gap-12">
+      <!-- Hiring Panel Verdict (Phase I7) -->
+      <div id="feedback-verdict-section" class="bg-white border-8 border-gray-900 rounded-lg p-8 flex flex-col gap-6 hidden animate-fadeIn">
+        <div class="flex items-center justify-between border-b-4 border-gray-900 pb-3">
+          <div class="flex items-center gap-2">
+            <i data-lucide="gavel" class="w-6 h-6 text-slate-800"></i>
+            <h2 class="text-xl font-black tracking-tight text-gray-900">Interviewer Panel Verdict</h2>
+          </div>
+          <span id="verdict-decision" class="text-xs font-black uppercase px-4 py-1.5 rounded-md border-4 border-gray-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">decision</span>
+        </div>
+        <p id="verdict-reasoning" class="text-sm text-gray-700 font-semibold leading-relaxed">
+          Verdict reasoning...
+        </p>
+        <div class="flex flex-col gap-3">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-gray-500">Evidence Trail</h3>
+          <div id="verdict-evidence-trail" class="flex flex-col gap-2.5">
+            <!-- Evidence rows injected dynamically -->
+          </div>
+        </div>
+      </div>
+
       <!-- strengths (Emerald Tinted cards) -->
       <div class="flex flex-col gap-4">
         <div class="flex items-center gap-2 border-b-2 border-emerald-200 pb-2">

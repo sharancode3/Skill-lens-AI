@@ -534,6 +534,11 @@ export async function handleTurn(sessionId, message) {
         gaps: [],
         next: []
       };
+      session.judgeVerdict = {
+        decision: "would_reject",
+        reasoning: "Candidate refused to engage or answer technical questions, terminating the session early.",
+        evidenceTrail: []
+      };
       session.accuracyLog = []; // zero out/empty scores
       
       await saveSessionDoc(sessionId, session);
@@ -547,7 +552,8 @@ export async function handleTurn(sessionId, message) {
           perDay: [],
           difficultyProgression: [],
           questionTypeBreakdown: { open: 0, mcq: 0, diagram_interpret: 0 }
-        }
+        },
+        judgeVerdict: session.judgeVerdict
       };
 
       session.lastMessageHash = cleanMsg;
@@ -972,14 +978,17 @@ export async function handleTurn(sessionId, message) {
     if (wrapUpTriggered) {
       session.state = SessionState.DONE;
       session.interviewEndedAt = new Date().toISOString();
-      session.feedback = await generateFeedbackReport(session);
+      const report = await generateFeedbackReport(session);
+      session.feedback = report.feedback;
+      session.judgeVerdict = report.judgeVerdict;
       await saveSessionDoc(sessionId, session);
 
       const responsePayload = {
         reply: 'Interview completed.',
         done: true,
         feedback: session.feedback,
-        metrics: computeMetrics(session)
+        metrics: computeMetrics(session),
+        judgeVerdict: session.judgeVerdict || null
       };
 
       session.lastMessageHash = cleanMsg;
@@ -1068,7 +1077,8 @@ export async function reportViolation(sessionId, violationType) {
         perDay: [],
         difficultyProgression: [],
         questionTypeBreakdown: { open: 0, mcq: 0, diagram_interpret: 0 }
-      }
+      },
+      judgeVerdict: session.judgeVerdict || null
     };
   }
 
@@ -1094,6 +1104,11 @@ export async function reportViolation(sessionId, violationType) {
       gaps: [],
       next: []
     };
+    session.judgeVerdict = {
+      decision: "would_reject",
+      reasoning: "Candidate was suspended for repeated proctoring violations.",
+      evidenceTrail: []
+    };
     session.accuracyLog = []; // zero out/empty scores
     
     // Register cooldown
@@ -1116,7 +1131,8 @@ export async function reportViolation(sessionId, violationType) {
         perDay: [],
         difficultyProgression: [],
         questionTypeBreakdown: { open: 0, mcq: 0, diagram_interpret: 0 }
-      }
+      },
+      judgeVerdict: session.judgeVerdict
     };
   }
 

@@ -371,7 +371,7 @@ async function handleSendMessage() {
 
     if (data.done) {
       // Transition to feedback screen
-      transitionToFeedback(data.feedback, data.metrics);
+      transitionToFeedback(data.feedback, data.metrics, data.judgeVerdict);
     } else {
       // Check for topic transition (Emerald tag)
       if (data.action === 'advance') {
@@ -595,12 +595,69 @@ function scrollChatBottom() {
   });
 }
 
-// ==================== SCREEN 3: FEEDBACK PORTAL ====================
-function transitionToFeedback(feedback, metrics) {
+function transitionToFeedback(feedback, metrics, judgeVerdict) {
   // Clear running activeTimerInterval if active
   if (activeTimerInterval) {
     clearInterval(activeTimerInterval);
     activeTimerInterval = null;
+  }
+
+  // Populate Judge Verdict (Phase I7)
+  const verdictSection = document.getElementById('feedback-verdict-section');
+  const verdictDecision = document.getElementById('verdict-decision');
+  const verdictReasoning = document.getElementById('verdict-reasoning');
+  const verdictEvidenceTrail = document.getElementById('verdict-evidence-trail');
+
+  if (verdictSection && judgeVerdict) {
+    verdictSection.classList.remove('hidden');
+
+    // Setup color classes for decision
+    let decisionClass = 'bg-slate-50 text-slate-800 border-slate-400';
+    let decisionText = 'Borderline';
+    if (judgeVerdict.decision === 'would_hire') {
+      decisionClass = 'bg-emerald-50 text-emerald-800 border-emerald-400';
+      decisionText = 'Would Hire';
+    } else if (judgeVerdict.decision === 'would_reject') {
+      decisionClass = 'bg-red-50 text-red-800 border-red-400';
+      decisionText = 'Would Reject';
+    }
+
+    verdictDecision.className = `text-xs font-black uppercase px-4 py-1.5 rounded-md border-4 border-gray-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${decisionClass}`;
+    verdictDecision.textContent = decisionText;
+
+    verdictReasoning.textContent = judgeVerdict.reasoning || 'No details provided.';
+
+    // Evidence trail
+    verdictEvidenceTrail.innerHTML = '';
+    const trail = judgeVerdict.evidenceTrail || [];
+    if (trail.length > 0) {
+      trail.forEach(e => {
+        let outcomeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        let outcomeText = 'Strong';
+        if (e.outcome === 'weak') {
+          outcomeClass = 'bg-red-50 text-red-700 border-red-200';
+          outcomeText = 'Weak';
+        } else if (e.outcome === 'recovered') {
+          outcomeClass = 'bg-blue-50 text-blue-700 border-blue-200';
+          outcomeText = 'Recovered';
+        }
+
+        const row = document.createElement('div');
+        row.className = 'flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 py-3 gap-2 last:border-b-0';
+        row.innerHTML = `
+          <div class="flex flex-col">
+            <span class="text-sm font-bold text-slate-800">${e.questionRef}</span>
+            <p class="text-xs text-slate-500 mt-1">${e.note}</p>
+          </div>
+          <span class="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border self-start sm:self-center ${outcomeClass}">${outcomeText}</span>
+        `;
+        verdictEvidenceTrail.appendChild(row);
+      });
+    } else {
+      verdictEvidenceTrail.innerHTML = '<div class="text-slate-400 text-sm text-center py-4">No evidence moments logged.</div>';
+    }
+  } else if (verdictSection) {
+    verdictSection.classList.add('hidden');
   }
 
   // Populate summaries

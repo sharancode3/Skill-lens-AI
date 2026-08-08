@@ -94,30 +94,75 @@ export function buildResponseSchema(nextQuestionType) {
 
 
 // Enforced response schema for Gemini API final feedback report
+// Enforced response schema for Gemini API final feedback report and judge verdict
 const feedbackSchema = {
   type: 'OBJECT',
   properties: {
-    summary: {
-      type: 'STRING',
-      description: 'A 2-4 sentence summary paragraph of candidate overall performance, referencing specific details from the candidate responses in the transcript.'
+    feedback: {
+      type: 'OBJECT',
+      properties: {
+        summary: {
+          type: 'STRING',
+          description: 'A 2-4 sentence summary paragraph of candidate overall performance, referencing specific details from the candidate responses in the transcript.'
+        },
+        strengths: {
+          type: 'ARRAY',
+          items: { type: 'STRING' },
+          description: 'List of specific strengths demonstrated. Each must mention the day number and topic name, and only include topics evaluated as strong or partial-with-solid-reasoning.'
+        },
+        gaps: {
+          type: 'ARRAY',
+          items: { type: 'STRING' },
+          description: 'List of specific gaps. Cover shallow/off-topic topics, or skipped missions never asked (using the exact phrase "not yet demonstrated" for the latter).'
+        },
+        next: {
+          type: 'ARRAY',
+          items: { type: 'STRING' },
+          description: 'List of concrete, actionable next steps, each referencing a specific day number and title from the curriculum.'
+        }
+      },
+      required: ['summary', 'strengths', 'gaps', 'next']
     },
-    strengths: {
-      type: 'ARRAY',
-      items: { type: 'STRING' },
-      description: 'List of specific strengths demonstrated. Each must mention the day number and topic name, and only include topics evaluated as strong or partial-with-solid-reasoning.'
-    },
-    gaps: {
-      type: 'ARRAY',
-      items: { type: 'STRING' },
-      description: 'List of specific gaps. Cover shallow/off-topic topics, or skipped missions never asked (using the exact phrase "not yet demonstrated" for the latter).'
-    },
-    next: {
-      type: 'ARRAY',
-      items: { type: 'STRING' },
-      description: 'List of concrete, actionable next steps, each referencing a specific day number and title from the curriculum.'
+    judgeVerdict: {
+      type: 'OBJECT',
+      properties: {
+        decision: {
+          type: 'STRING',
+          description: 'A committed decision choice: would_hire (strong overall performance), would_reject (weak overall or repeated failures), or borderline (genuinely mixed profile). Do not hedge.',
+          enum: ['would_hire', 'would_reject', 'borderline']
+        },
+        reasoning: {
+          type: 'STRING',
+          description: 'A detailed 2-3 sentence technical justification of the decision referencing specific highs and lows from the transcript.'
+        },
+        evidenceTrail: {
+          type: 'ARRAY',
+          items: {
+            type: 'OBJECT',
+            properties: {
+              questionRef: {
+                type: 'STRING',
+                description: 'E.g., "Day 12" or "Day 6 (Capstone)".'
+              },
+              note: {
+                type: 'STRING',
+                description: 'A specific explanation of what happened on this day, referencing the candidate\'s actual answer or mistake.'
+              },
+              outcome: {
+                type: 'STRING',
+                description: 'One of: strong (clear technical strength), weak (major concept gap/hallucination), or recovered (early weakness rescued by later strong answers on related/harder topic).',
+                enum: ['strong', 'weak', 'recovered']
+              }
+            },
+            required: ['questionRef', 'note', 'outcome']
+          },
+          description: 'A short, ordered sequence of the 3-5 most decision-relevant moments in the interview.'
+        }
+      },
+      required: ['decision', 'reasoning', 'evidenceTrail']
     }
   },
-  required: ['summary', 'strengths', 'gaps', 'next']
+  required: ['feedback', 'judgeVerdict']
 };
 
 /**
@@ -1188,12 +1233,137 @@ export function generateMechanicalFeedback(session) {
     summary = `Candidate ${candidate.member?.name || 'Candidate'} completed the technical review. Performance was baseline/introductory with no direct topic evaluations.`;
   }
 
-  return postProcessFeedback({
+  const processedFeedback = postProcessFeedback({
     summary,
     strengths: finalStrengths,
     gaps: finalGaps,
     next
   }, session);
+
+  const mechanicalVerdict = computeMechanicalVerdict(session);
+
+  return {
+    feedback: processedFeedback,
+    judgeVerdict: mechanicalVerdict
+  };
+}
+
+/**
+ * Computes a grounded mechanical judge verdict based on interview metrics.
+ */
+export function computeMechanicalVerdict(session) {
+  const accuracyLog = session.accuracyLog || [];
+  
+  // Calculate average score
+  let avgScore = 0;
+  if (accuracyLog.length > 0) {
+    avgScore = Math.round(accuracyLog.reduce((sum, item) => sum + item.finalAccuracyScore, 0) / accuracyLog.length);
+  }
+
+  // Count hallucinations
+  const hallucinationCount = session.hallucinationCount || 0;
+  
+  let decision = "borderline";
+  let reasoning = "The candidate demonstrated a mixed performance with some solid areas and notable gaps.";
+
+  if (avgScore >= 75 && hallucinationCount === 0) {
+    decision = "would_hire";
+    reasoning = `The candidate demonstrated solid software engineering capabilities and consistent specificity across technical objectives, earning a strong overall average of ${avgScore}/100.`;
+  } else if (avgScore <= 45 || hallucinationCount >= 2) {
+    decision = "would_reject";
+    reasoning = `The candidate exhibited significant concept gaps, repeated hallucinations, or a low overall average score of ${avgScore}/100.`;
+  }
+
+  // Generate evidenceTrail from accuracyLog
+  const evidenceTrail = [];
+  
+  // 1. Look for hallucination
+  const hallucinationTurn = accuracyLog.find(l => l.hallucinationFlag);
+  if (hallucinationTurn) {
+    evidenceTrail.push({
+      questionRef: `Day ${hallucinationTurn.day}`,
+      note: `The candidate hallucinated details concerning Vector Databases: "${hallucinationTurn.candidateAnswer.substring(0, 40)}..."`,
+      outcome: "weak"
+    });
+  }
+
+  // 2. Look for capstone
+  const capstoneTurn = accuracyLog.find(l => l.questionType === 'capstone');
+  if (capstoneTurn) {
+    evidenceTrail.push({
+      questionRef: `Day ${capstoneTurn.day} (Capstone)`,
+      note: `Completed the Capstone System Design challenge with a score of ${capstoneTurn.finalAccuracyScore}/100.`,
+      outcome: capstoneTurn.finalAccuracyScore >= 80 ? "strong" : "weak"
+    });
+  }
+
+  // 3. Look for recovery
+  // Recovery: an early weak score (score < 70) followed by a later strong score (score >= 80)
+  let earlyWeakIdx = -1;
+  let laterStrongIdx = -1;
+  
+  for (let i = 0; i < accuracyLog.length; i++) {
+    if (accuracyLog[i].finalAccuracyScore < 70) {
+      earlyWeakIdx = i;
+      break;
+    }
+  }
+  
+  if (earlyWeakIdx !== -1) {
+    for (let j = earlyWeakIdx + 1; j < accuracyLog.length; j++) {
+      if (accuracyLog[j].finalAccuracyScore >= 80) {
+        laterStrongIdx = j;
+        break;
+      }
+    }
+  }
+
+  if (earlyWeakIdx !== -1 && laterStrongIdx !== -1) {
+    const earlyLog = accuracyLog[earlyWeakIdx];
+    const laterLog = accuracyLog[laterStrongIdx];
+    evidenceTrail.push({
+      questionRef: `Day ${laterLog.day}`,
+      note: `Recovered from early weak understanding on Day ${earlyLog.day} (${earlyLog.title}) with a strong answer on Day ${laterLog.day} (${laterLog.title}).`,
+      outcome: "recovered"
+    });
+  }
+
+  // 4. Fallback: highest and lowest scoring days if evidenceTrail is too small
+  accuracyLog.forEach(log => {
+    if (evidenceTrail.length >= 5) return;
+    const exists = evidenceTrail.some(e => e.questionRef.includes(`Day ${log.day}`));
+    if (!exists) {
+      if (log.finalAccuracyScore >= 80) {
+        evidenceTrail.push({
+          questionRef: `Day ${log.day}`,
+          note: `Answered objectives on "${log.title}" with strong technical clarity.`,
+          outcome: "strong"
+        });
+      } else if (log.finalAccuracyScore < 45) {
+        evidenceTrail.push({
+          questionRef: `Day ${log.day}`,
+          note: `Showed notable knowledge gaps on "${log.title}" (Score: ${log.finalAccuracyScore}/100).`,
+          outcome: "weak"
+        });
+      }
+    }
+  });
+
+  // Ensure at least 1 entry in evidenceTrail
+  if (evidenceTrail.length === 0 && accuracyLog.length > 0) {
+    const first = accuracyLog[0];
+    evidenceTrail.push({
+      questionRef: `Day ${first.day}`,
+      note: `Evaluated candidate performance on "${first.title}".`,
+      outcome: first.finalAccuracyScore >= 60 ? "strong" : "weak"
+    });
+  }
+
+  return {
+    decision,
+    reasoning,
+    evidenceTrail: evidenceTrail.slice(0, 5)
+  };
 }
 
 /**
@@ -1220,7 +1390,6 @@ You must compile a structured, objective, and critical technical feedback report
 EVALUATION RUBRIC & RULES:
 1. GRADE ON SPECIFICITY & TECHNICAL CORRECTNESS: Do not give credit merely because the candidate "said something related" or used buzzwords. If an answer was vague, partial, generic, or avoided detailed explanations, it must be marked as a gap/weakness.
 2. DETECT WEAKNESSES PROACTIVELY: You are expected to find weaknesses. Do not default to "no gaps" or empty arrays. If the candidate struggled, had shallow answers, gave one-liners, or had scores below 85 on any topic, you MUST identify at least one real technical gap or weak point. Be critical, honest, and professional—not overly encouraging or generic.
-3. GROUNDED GENERATION: Only assert capabilities and strengths explicitly evidenced in the transcript. Do not assume or extrapolate skills that were not demonstrated.
 4. "summary": A 2-4 sentence overview of their overall performance that MUST quote/reference specific answers or technical points they discussed.
 5. "strengths": Array of strings. Only include topics where the candidate showed strong technical depth and clear understanding. Each strength must mention the Day number and topic title.
 6. "gaps": Array of strings. Detail topics where answers were vague, shallow, incorrect, or incomplete. Also, cover candidate skipped/unreached topics in the queue using the exact phrasing: "not yet demonstrated" (e.g. "Day 29 (Observability): not yet demonstrated").
@@ -1233,6 +1402,14 @@ EVALUATION RUBRIC & RULES:
    - Do not generate multiple different entries for the same curriculum Day number within the same list.
    - Your narrative sentences for strengths and gaps must quote or reference the candidate's actual answers and the turn evaluation reasoning provided. Do not use generic boilerplate.
    - The overall "summary" must read as critical/mixed if there is a mix of strong and weak scores, and must not praise a candidate for low-scoring performance.
+9. "judgeVerdict": You must generate a committed, decisive hiring verdict:
+   - "decision": Must be one of: "would_hire" (consistent specificity, strong performance, zero hallucinations), "would_reject" (poor technical responses, low scores, repeated hallucinations), or "borderline" (genuinely mixed performance with strong highs and weak lows). You must make a committed choice—do not default to "borderline" as a safe answer unless the record is genuinely mixed.
+   - "reasoning": A 2-3 sentence technical justification explaining the verdict using specific findings from the interview.
+   - "evidenceTrail": An ordered sequence of the 3-5 most decision-relevant moments in the interview (strengths, gaps, capstone performance, hallucinations, or a notable recovery).
+     - Each entry must have:
+       * "questionRef": Day number (e.g. "Day 12" or "Day 6 (Capstone)").
+       * "note": Specific description of what happened, citing candidate's actual claims/answers or performance.
+       * "outcome": "strong" | "weak" | "recovered" (use "recovered" specifically if an early weak performance was rescued by a later strong performance on a related or harder topic).
 
 You MUST return ONLY valid JSON matching the schema. Do not output markdown code blocks or backticks.`;
 
@@ -1313,7 +1490,10 @@ You MUST return ONLY valid JSON matching the schema. Do not output markdown code
     const countStrong = transcriptWithDays.filter(t => t.role === 'candidate' && t.classification === 'strong').length;
     const hasManyWeakAnswers = countStrong < 4;
 
-    if (result.gaps.length === 0 && hasManyWeakAnswers) {
+    const feedbackObj = result.feedback || { summary: "", strengths: [], gaps: [], next: [] };
+    const gapsList = feedbackObj.gaps || [];
+
+    if (gapsList.length === 0 && hasManyWeakAnswers) {
       console.warn('[LLMClient Warning] Gaps array was empty despite multiple weak/partial responses. Regenerating with stricter prompts...');
       const stricterSystemPrompt = systemPrompt + "\n\nCRITICAL WARNING: Your previous response contained zero gaps. This is unacceptable given the candidate's poor/partial performance. You MUST identify at least one real technical gap or weakness from the transcript.";
       if (provider === 'qwen') {
@@ -1324,12 +1504,12 @@ You MUST return ONLY valid JSON matching the schema. Do not output markdown code
     }
 
     if (result) {
-      return postProcessFeedback({
-        summary: result.summary,
-        strengths: result.strengths || [],
-        gaps: result.gaps || [],
-        next: result.next || []
-      }, session);
+      const finalFeedbackObj = result.feedback || { summary: "", strengths: [], gaps: [], next: [] };
+      const processedFeedback = postProcessFeedback(finalFeedbackObj, session);
+      return {
+        feedback: processedFeedback,
+        judgeVerdict: result.judgeVerdict || { decision: "borderline", reasoning: "No details provided.", evidenceTrail: [] }
+      };
     }
   }
 
