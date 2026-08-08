@@ -717,6 +717,7 @@ html, body {
   padding: 1rem 1.5rem 1rem 260px !important;
   box-shadow: none !important;
   width: 100% !important;
+  box-sizing: border-box !important;
 }
 
 #chat-input {

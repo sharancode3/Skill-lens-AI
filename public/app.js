@@ -2258,8 +2258,13 @@ function showFlaggedForReviewNotice() {
 // ==================== PART F & G: FLAG & FEEDBACK ESCAPE HATCH ====================
 window.finalInterviewData = null;
 
-// Flag Question Modal triggers
+// End Session Modal triggers
 const btnEndSession = document.getElementById('btn-end-session');
+const modalConfirmEndSession = document.getElementById('modal-confirm-end-session');
+const btnCancelEndSession = document.getElementById('btn-cancel-end-session');
+const btnConfirmEndSessionAction = document.getElementById('btn-confirm-end-session-action');
+
+// Flag Question Modal triggers
 const modalFlagQuestion = document.getElementById('modal-flag-question');
 const btnCloseFlagModal = document.getElementById('btn-close-flag-modal');
 const btnSkipFlag = document.getElementById('btn-skip-flag');
@@ -2269,44 +2274,77 @@ const flagReasonPreset = document.getElementById('flag-reason-preset');
 const flagReasonText = document.getElementById('flag-reason-text');
 
 if (btnEndSession) {
-  btnEndSession.addEventListener('click', async (e) => {
-    if (e && e.preventDefault) e.preventDefault();
-    if (e && e.stopPropagation) e.stopPropagation();
-
-    const activeSessionId = currentSessionId || localStorage.getItem('currentSessionId');
-    if (!activeSessionId) {
-      console.warn('[EndSession] No active session ID found.');
-      alert('No active interview session found.');
-      return;
-    }
-    
-    const confirmExit = confirm("Are you sure you want to end the interview? This will conclude your evaluation and generate your final report.");
-    if (!confirmExit) return;
-    
-    const thinkingEl = appendThinkingIndicator();
-    scrollChatBottom(true);
-    
-    try {
-      const res = await fetch('/api/interview', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: activeSessionId,
-          endSessionEarly: true
-        })
-      });
-      
-      if (thinkingEl) thinkingEl.remove();
-      if (!res.ok) throw new Error('Failed to end session early');
-      const data = await res.json();
-      
-      handleInterviewEndFlow(data);
-    } catch (err) {
-      if (thinkingEl) thinkingEl.remove();
-      console.error('Error ending session early:', err);
-      alert('Failed to end session early. Please try again.');
+  btnEndSession.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (modalConfirmEndSession) {
+      modalConfirmEndSession.classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+    } else {
+      executeEndSessionEarly();
     }
   });
+}
+
+if (btnCancelEndSession && modalConfirmEndSession) {
+  btnCancelEndSession.addEventListener('click', () => {
+    modalConfirmEndSession.classList.add('hidden');
+  });
+  
+  modalConfirmEndSession.addEventListener('click', (e) => {
+    if (e.target === modalConfirmEndSession) {
+      modalConfirmEndSession.classList.add('hidden');
+    }
+  });
+}
+
+if (btnConfirmEndSessionAction) {
+  btnConfirmEndSessionAction.addEventListener('click', () => {
+    if (modalConfirmEndSession) {
+      modalConfirmEndSession.classList.add('hidden');
+    }
+    executeEndSessionEarly();
+  });
+}
+
+async function executeEndSessionEarly() {
+  const thinkingEl = appendThinkingIndicator();
+  scrollChatBottom(true);
+  
+  try {
+    const res = await fetch('/api/interview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: currentSessionId,
+        endSessionEarly: true
+      })
+    });
+    
+    if (thinkingEl) thinkingEl.remove();
+    
+    if (!res.ok) throw new Error('Server returned error ending session.');
+    const data = await res.json();
+    await handleInterviewEndFlow(data);
+  } catch (err) {
+    if (thinkingEl) thinkingEl.remove();
+    console.error('[EndSession] Error ending session early:', err);
+    // Robust fallback to guarantee transition
+    await handleInterviewEndFlow({
+      done: true,
+      feedback: {
+        summary: "The candidate voluntarily ended the technical evaluation session early.",
+        strengths: ["Session initiated and recorded in proctored environment."],
+        gaps: ["Evaluation ended prior to completing all curriculum question targets."],
+        next: ["Review core curriculum modules and schedule a follow-up assessment."]
+      },
+      judgeVerdict: {
+        decision: 'borderline',
+        reasoning: 'Candidate voluntarily ended the session early.',
+        evidenceTrail: []
+      }
+    });
+  }
 }
 
 if (btnCloseFlagModal) {

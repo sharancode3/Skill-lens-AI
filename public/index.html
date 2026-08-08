@@ -324,7 +324,7 @@
         </button>
 
         <!-- End Session Button (Early Exit) -->
-        <button id="btn-end-session" title="End the interview session early" class="h-11 px-4 bg-red-50 hover:bg-red-100 text-red-700 rounded-xl border-2 border-slate-900 flex items-center gap-1.5 text-sm font-black transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0 cursor-pointer">
+        <button id="btn-end-session" title="End the interview session early" class="h-11 px-4 bg-red-50 hover:bg-red-100 text-red-700 rounded-xl border-2 border-slate-900 flex items-center gap-1.5 text-sm font-black transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0">
           <i data-lucide="power" class="w-3.5 h-3.5 text-red-600"></i>
           <span class="hidden sm:inline">End Session</span>
         </button>
@@ -865,6 +865,28 @@
         <button class="vkey-btn vkey-special bg-slate-200 dark:bg-slate-800" data-key="clear">Clear All</button>
         <button class="vkey-btn flex-grow max-w-md bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-white font-bold" data-key="space">Space</button>
         <button class="vkey-btn vkey-special bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4" id="btn-vkey-done">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Confirm End Session Early -->
+  <div id="modal-confirm-end-session" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[999999] flex items-center justify-center p-4 hidden">
+    <div class="bg-white dark:bg-slate-900 border-4 border-slate-900 rounded-2xl p-6 max-w-md w-full shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] flex flex-col gap-4 animate-scaleUp">
+      <div class="flex items-center gap-3 text-red-600">
+        <i data-lucide="alert-triangle" class="w-6 h-6 shrink-0"></i>
+        <h3 class="text-lg font-black text-slate-900 dark:text-white">End Interview Session?</h3>
+      </div>
+      <p class="text-sm text-slate-600 dark:text-slate-300 font-bold leading-relaxed">
+        Are you sure you want to end your technical interview early? Your answers up to this point will be evaluated and submitted for your final performance report.
+      </p>
+      <div class="flex items-center justify-end gap-3 pt-2">
+        <button id="btn-cancel-end-session" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-extrabold text-sm rounded-xl border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition">
+          Continue Interview
+        </button>
+        <button id="btn-confirm-end-session-action" class="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-sm rounded-xl border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0 transition flex items-center gap-2">
+          <i data-lucide="power" class="w-4 h-4"></i>
+          <span>End & Submit</span>
+        </button>
       </div>
     </div>
   </div>
