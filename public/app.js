@@ -852,8 +852,7 @@ document.addEventListener('keydown', (e) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Unified debounced exit-event proctoring pipeline
-let exitDebounceTimeout = null;
+// Immediate warning & suspension pipeline (Phases E3 - E6)
 
 function showFullscreenWarning(type, data) {
   const warningOverlay = document.getElementById('fullscreen-warning-overlay');
@@ -864,19 +863,25 @@ function showFullscreenWarning(type, data) {
   if (!warningOverlay || !resumeBtn) return;
 
   const exits = (data && data.fullscreenExits) || 1;
-  const remaining = (data && data.warningsRemaining !== undefined) ? data.warningsRemaining : Math.max(0, 3 - exits);
 
   if (countText) {
-    countText.textContent = `Warning ${exits} of 3 — ${remaining} warning${remaining === 1 ? '' : 's'} remaining before automatic suspension.`;
+    if (exits === 1) {
+      countText.textContent = `Warning 1 of 2 — leaving fullscreen is recorded. One more will suspend your session.`;
+    } else {
+      countText.textContent = `Warning 2 of 2 — leaving fullscreen is recorded. One more will suspend your session.`;
+    }
   }
   if (msgText) {
     msgText.textContent = 'Exiting fullscreen mode or minimizing the window is not permitted during technical evaluations.';
   }
 
   resumeBtn.disabled = false;
-  resumeBtn.innerHTML = `<span>Understood & Continue</span>`;
-  resumeBtn.onclick = () => {
-    warningOverlay.classList.add('hidden');
+  resumeBtn.innerHTML = `<i data-lucide="maximize-2" class="w-5 h-5"></i> <span>Return to Fullscreen</span>`;
+  resumeBtn.onclick = async () => {
+    const success = await enterFullscreen();
+    if (success) {
+      warningOverlay.classList.add('hidden');
+    }
   };
 
   warningOverlay.classList.remove('hidden');
@@ -899,7 +904,7 @@ function showReenterPrompt(onSuccess) {
   }
 
   resumeBtn.disabled = false;
-  resumeBtn.innerHTML = `<i data-lucide="maximize-2" class="w-5 h-5"></i> <span>Re-enter Fullscreen</span>`;
+  resumeBtn.innerHTML = `<i data-lucide="maximize-2" class="w-5 h-5"></i> <span>Return to Fullscreen</span>`;
   resumeBtn.onclick = async () => {
     const success = await enterFullscreen();
     if (success) {
@@ -913,108 +918,65 @@ function showReenterPrompt(onSuccess) {
   if (window.lucide) lucide.createIcons();
 }
 
-function registerPotentialExit(signalType) {
-  if (!isInterviewActive) return;
-  if (isReenteringFullscreen || isFullscreenTransitionActive) {
-    console.log(`[Proctor] Bypassing raw signal ${signalType} during active transition/re-entry.`);
-    return;
-  }
-
-  console.log(`[Proctor] Raw signal registered: ${signalType}`);
-
-  if (exitDebounceTimeout) clearTimeout(exitDebounceTimeout);
-  exitDebounceTimeout = setTimeout(() => {
-    processLogicalExitEvent(signalType);
-  }, 500);
-}
-
-async function processLogicalExitEvent(triggerType = 'fullscreenchange') {
+// ─── Phase E3: Fullscreen Exit Listener ──────────────────────────────────────
+async function checkAndReportFullscreenExit() {
   if (!isInterviewActive) return;
   if (isReenteringFullscreen || isFullscreenTransitionActive) return;
 
-  const isHidden = document.hidden;
-  const isFocused = document.hasFocus();
-  const isFS = isCurrentlyFullscreen();
-  const isDirectSecurityEvent = triggerType === 'screenshot-attempt' || triggerType === 'clipboard-copy';
-
-  // Route fullscreen exit, minimizing/tab switching, screenshot, and copy attempts through same pipeline
-  if (!isFS || isHidden || !isFocused || isDirectSecurityEvent) {
-    console.warn(`[Proctor] Consolidated exit/security event verified: trigger=${triggerType}, FS=${isFS}, hidden=${isHidden}, focused=${isFocused}`);
-
-    // Report violation — Phase E2: response routed through handleViolationResponse
+  if (!isCurrentlyFullscreen()) {
+    console.warn('[Proctor] Fullscreen exited. Reporting immediately.');
     const data = await reportViolationToServer('fullscreen-exit');
-    // If suspended or terminated, reportViolationToServer already handled the UI
     if (data && (data.suspended || data.terminated)) return;
 
-    // Try to immediately revert back to fullscreen
-    if (!isFS) {
-      const autoReenterSuccess = await enterFullscreen();
-      if (autoReenterSuccess) {
-        console.log('[Proctor] Successfully auto-reentered fullscreen on exit.');
-        showFullscreenWarning('fullscreen-exit', data);
-        return;
-      }
-    } else {
-      // Already in fullscreen, show proctoring warning
-      showFullscreenWarning('fullscreen-exit', data);
-      return;
-    }
-
-    // Browser blocked automatic re-request (requires user gesture): prompt candidate to click returning to fullscreen
+    // Show prompt to return to fullscreen
     showReenterPrompt(() => {
       showFullscreenWarning('fullscreen-exit', data);
     });
   }
 }
 
-// Window & Visibility event listeners
-window.addEventListener('blur', () => registerPotentialExit('window-blur'));
-window.addEventListener('focusout', () => registerPotentialExit('window-focusout'));
-window.addEventListener('focus', () => {
-  if (blurTimeout) clearTimeout(blurTimeout);
-});
-document.addEventListener('visibilitychange', () => registerPotentialExit('visibilitychange'));
+document.addEventListener('fullscreenchange', checkAndReportFullscreenExit);
+document.addEventListener('webkitfullscreenchange', checkAndReportFullscreenExit);
+document.addEventListener('mozfullscreenchange', checkAndReportFullscreenExit);
+document.addEventListener('MSFullscreenChange', checkAndReportFullscreenExit);
 
-// Immediate Auto-Re-Request Fullscreen on exit event
-function handleFullscreenChangeImmediate() {
+// ─── Phase E4: Tab-Switch & Window-Blur Listeners ─────────────────────────────
+window.addEventListener('blur', () => {
   if (!isInterviewActive) return;
-  if (!isCurrentlyFullscreen()) {
-    // Attempt immediate programmatic re-entry as first action before overlay finishes
-    enterFullscreen().catch(() => {});
+  console.warn('[Proctor] window.blur detected. Reporting tab-switch immediately.');
+  reportViolationToServer('tab-switch');
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (!isInterviewActive) return;
+  if (document.hidden) {
+    console.warn('[Proctor] visibilitychange hidden detected. Reporting tab-switch immediately.');
+    reportViolationToServer('tab-switch');
   }
-  registerPotentialExit('fullscreenchange');
-}
-
-document.addEventListener('fullscreenchange', handleFullscreenChangeImmediate);
-document.addEventListener('webkitfullscreenchange', handleFullscreenChangeImmediate);
-document.addEventListener('mozfullscreenchange', handleFullscreenChangeImmediate);
-document.addEventListener('MSFullscreenChange', handleFullscreenChangeImmediate);
-
-// ==================== PHASE 13 PART G: CLIPBOARD & SCREENSHOT BLOCKING ====================
-// Note: Browser sandbox APIs allow intercepting webpage-level hotkeys and clipboard events as a 
-// strong deterrent and proctoring trigger. OS-level out-of-browser tools cannot be completely blocked by web apps.
-
-function handleClipboardCopyCut(e) {
-  if (!isInterviewActive) return;
-  if (e && e.preventDefault) e.preventDefault();
-  if (e && e.stopPropagation) e.stopPropagation();
-
-  // Clear clipboard content if supported
-  try {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText('').catch(() => {});
-    }
-  } catch (err) {}
-
-  console.warn('[Proctor] Blocked copy/cut action on interview content.');
-  registerPotentialExit('clipboard-copy');
-}
-
-['copy', 'cut'].forEach(eventType => {
-  document.addEventListener(eventType, handleClipboardCopyCut, true);
 });
 
-// Comprehensive Screenshot & Snip Key Interceptors
+// ─── Phase E5: Element-Level Copy/Paste Block & Log ───────────────────────────
+
+// Paste listener on the answer input
+chatInput.addEventListener('paste', (e) => {
+  if (!isInterviewActive) return;
+  e.preventDefault();
+  e.stopPropagation();
+  console.warn('[Proctor] Paste attempt blocked and logged.');
+  reportViolationToServer('copy-paste');
+}, true);
+
+// Copy listener on the question-display area (chat-messages)
+chatMessages.addEventListener('copy', (e) => {
+  if (!isInterviewActive) return;
+  e.preventDefault();
+  e.stopPropagation();
+  console.warn('[Proctor] Copy attempt blocked and logged.');
+  reportViolationToServer('clipboard-copy');
+}, true);
+
+// ─── Phase E6: Keyboard-Level Interceptors (F11, PrintScreen, DevTools) ────────
+
 function handleProctoredKeyEvents(e) {
   if (!isInterviewActive) return;
 
@@ -1023,41 +985,35 @@ function handleProctoredKeyEvents(e) {
   const code = e.code || '';
   const keyCode = e.keyCode || e.which || 0;
 
-  // Intercept PrintScreen / Windows Snipping Tool / Mac Grab shortcuts
+  // 1. F11 supplementary safety net (Phase E3)
+  if (e.key === 'F11' || code === 'F11' || keyCode === 122) {
+    e.preventDefault();
+    e.stopPropagation();
+    console.warn('[Proctor] Intercepted F11 key down. Reporting fullscreen-exit.');
+    reportViolationToServer('fullscreen-exit');
+    return;
+  }
+
+  // 2. PrintScreen detection (Phase E6)
   const isPrintScreenKey = e.key === 'PrintScreen' || code === 'PrintScreen' || keyCode === 44 || key === 'printscreen';
   const isWindowsSnipping = isCtrlOrCmd && e.shiftKey && (key === 's' || code === 'KeyS');
   const isMacScreenshot = e.metaKey && e.shiftKey && (key === '3' || key === '4' || key === '5' || code === 'Digit3' || code === 'Digit4' || code === 'Digit5');
   const isAltOrWinPrtScn = (isCtrlOrCmd || e.altKey) && isPrintScreenKey;
 
   if (isPrintScreenKey || isWindowsSnipping || isMacScreenshot || isAltOrWinPrtScn) {
-    if (e.preventDefault) e.preventDefault();
-    if (e.stopPropagation) e.stopPropagation();
-
-    // Clear clipboard content if supported
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText('').catch(() => {});
-      }
-    } catch (err) {}
-
-    console.warn('[Proctor] Intercepted and blocked screenshot/snip shortcut.');
-    registerPotentialExit('screenshot-attempt');
+    e.preventDefault();
+    e.stopPropagation();
+    console.warn('[Proctor] PrintScreen/Screenshot key detected. Reporting printscreen_key_detected.');
+    reportViolationToServer('printscreen_key_detected');
     return;
   }
 
-  // Intercept Copy/Cut shortcuts (Ctrl+C, Ctrl+X, Cmd+C, Cmd+X)
-  if (isCtrlOrCmd && (key === 'c' || key === 'x')) {
-    if (e.preventDefault) e.preventDefault();
-    if (e.stopPropagation) e.stopPropagation();
-    registerPotentialExit('clipboard-copy');
-    return;
-  }
-
-  // Intercept Developer Inspection Tools (F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U)
+  // 3. Developer tools intercept (F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U)
   if (e.key === 'F12' || (isCtrlOrCmd && e.shiftKey && ['i', 'j', 'c'].includes(key)) || (isCtrlOrCmd && key === 'u')) {
-    if (e.preventDefault) e.preventDefault();
-    if (e.stopPropagation) e.stopPropagation();
-    registerPotentialExit('developer-tools');
+    e.preventDefault();
+    e.stopPropagation();
+    console.warn('[Proctor] Developer tools key shortcut detected.');
+    reportViolationToServer('developer-tools');
     return;
   }
 }
@@ -1067,9 +1023,10 @@ window.addEventListener('keyup', (e) => {
   if (!isInterviewActive) return;
   const isPrintScreenKey = e.key === 'PrintScreen' || e.code === 'PrintScreen' || e.keyCode === 44;
   if (isPrintScreenKey) {
-    if (e.preventDefault) e.preventDefault();
-    if (e.stopPropagation) e.stopPropagation();
-    registerPotentialExit('screenshot-attempt');
+    e.preventDefault();
+    e.stopPropagation();
+    console.warn('[Proctor] PrintScreen key released. Reporting printscreen_key_detected.');
+    reportViolationToServer('printscreen_key_detected');
   }
 }, true);
 

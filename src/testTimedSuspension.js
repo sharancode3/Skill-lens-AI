@@ -96,16 +96,28 @@ async function runTests() {
   assert(session.state === SessionState.DONE, 'Session state is DONE after escalation termination');
   assert(session.feedback !== null, 'Feedback generated on termination');
 
-  // ── Test 5: reportViolation for fullscreen-exit → should call triggerSuspension ──
-  console.log('\n[Test 5] reportViolation(fullscreen-exit) — should produce suspended response...');
+  // ── Test 5: reportViolation for fullscreen-exit (Phase E3 Warning & Escalating) ──
+  console.log('\n[Test 5] reportViolation(fullscreen-exit) — should warn twice and suspend on 3rd...');
   const sessionId2 = `e2-repviol-test-${Date.now()}`;
   await createSession(sessionId2, candidate);
-  const vr = await reportViolation(sessionId2, 'fullscreen-exit');
-  assert(vr.suspended === true, 'reportViolation(fullscreen-exit) returns suspended=true');
-  assert(vr.terminated === false, 'reportViolation(fullscreen-exit) returns terminated=false on first hit');
+
+  // Exit 1: warning
+  const vr1 = await reportViolation(sessionId2, 'fullscreen-exit');
+  assert(vr1.suspended === false, '1st fullscreen exit: suspended=false');
+  assert(vr1.warningsRemaining === 2, '1st fullscreen exit: warningsRemaining=2');
+
+  // Exit 2: warning
+  const vr2 = await reportViolation(sessionId2, 'fullscreen-exit');
+  assert(vr2.suspended === false, '2nd fullscreen exit: suspended=false');
+  assert(vr2.warningsRemaining === 1, '2nd fullscreen exit: warningsRemaining=1');
+
+  // Exit 3: suspension
+  const vr3 = await reportViolation(sessionId2, 'fullscreen-exit');
+  assert(vr3.suspended === true, '3rd fullscreen exit: suspended=true');
+  assert(vr3.warningsRemaining === 0, '3rd fullscreen exit: warningsRemaining=0');
 
   const s2 = await getSessionDoc(sessionId2);
-  assert(s2.state === SessionState.ASKING, 'Session2 still ASKING after reportViolation fullscreen-exit');
+  assert(s2.state === SessionState.ASKING, 'Session2 still ASKING after 3rd fullscreen exit (suspension is temporary)');
 
   // ── Test 6: Camera high-severity → immediate permanent termination ─────────
   console.log('\n[Test 6] reportViolation(multi_face_violation) — should immediately terminate...');

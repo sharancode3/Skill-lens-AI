@@ -1773,7 +1773,7 @@ export async function reportViolation(sessionId, violationType) {
     session.fullscreenExits += 1;
   } else if (violationType === 'tab-switch') {
     session.tabSwitches += 1;
-  } else if (violationType === 'copy-paste' || violationType === 'screenshot') {
+  } else if (['copy-paste', 'screenshot', 'clipboard-copy', 'developer-tools', 'screenshot-attempt', 'printscreen_key_detected'].includes(violationType)) {
     session.clipboardViolations += 1;
   }
   
@@ -1813,11 +1813,14 @@ export async function reportViolation(sessionId, violationType) {
   const isHighSeverityCameraViolation = isCameraViolation &&
     (violationType === 'multi_face_violation' || violationType === 'phone_violation');
 
-  // All other non-camera violations are routed through the timed-suspension engine.
-  // The old threshold checks (fullscreenExits >= 3, tabSwitches >= 1, etc.) are replaced
-  // by triggerSuspension's internal suspensionCount escalation ceiling.
-  const nonCameraViolationCount = (session.fullscreenExits || 0) + (session.tabSwitches || 0) + (session.clipboardViolations || 0);
-  const shouldTriggerTimedSuspension = !isCameraViolation && nonCameraViolationCount >= 1;
+  // Phase E3: 3rd fullscreen exit causes timed suspension
+  const isFullscreenSuspension = (violationType === 'fullscreen-exit' && session.fullscreenExits >= 3);
+  // Phase E4: 1st tab switch causes timed suspension (zero tolerance)
+  const isTabSwitchSuspension = (violationType === 'tab-switch' && session.tabSwitches >= 1);
+  // Phase E5/E6: 1st copy/paste, screenshot, or printscreen attempt causes timed suspension
+  const isClipboardSuspension = (['copy-paste', 'screenshot', 'clipboard-copy', 'developer-tools', 'screenshot-attempt', 'printscreen_key_detected'].includes(violationType) && session.clipboardViolations >= 1);
+
+  const shouldTriggerTimedSuspension = !isCameraViolation && (isFullscreenSuspension || isTabSwitchSuspension || isClipboardSuspension);
   // Camera violations below high-severity threshold: accumulate warnings but don't trigger timed suspension
   const isCameraTermination = isHighSeverityCameraViolation || (isCameraViolation && violationCount >= 4);
 
@@ -1858,11 +1861,12 @@ export async function reportViolation(sessionId, violationType) {
   if (shouldTriggerTimedSuspension) {
     // Phase E2: Route through timed-suspension engine
     let reasonMsg = 'Proctoring violation detected.';
-    if (violationType === 'fullscreen-exit') reasonMsg = 'You exited fullscreen mode, which is not permitted during a proctored session.';
-    else if (violationType === 'tab-switch') reasonMsg = 'You switched to another tab or window during the interview.';
-    else if (violationType === 'copy-paste' || violationType === 'screenshot') reasonMsg = 'A copy, paste, or screenshot attempt was detected.';
-    else if (violationType === 'developer-tools') reasonMsg = 'Developer tools were opened during the session.';
-    else if (violationType === 'clipboard-copy') reasonMsg = 'A clipboard copy action was intercepted during the session.';
+    if (violationType === 'fullscreen-exit') reasonMsg = 'fullscreen_exit_repeated';
+    else if (violationType === 'tab-switch') reasonMsg = 'tab_switch_or_window_blur';
+    else if (['copy-paste', 'clipboard-copy'].includes(violationType)) reasonMsg = 'copy_paste_detected';
+    else if (violationType === 'screenshot' || violationType === 'screenshot-attempt') reasonMsg = 'screenshot_attempt_detected';
+    else if (violationType === 'printscreen_key_detected') reasonMsg = 'printscreen_key_detected';
+    else if (violationType === 'developer-tools') reasonMsg = 'developer_tools_detected';
 
     const suspResult = await triggerSuspension(sessionId, reasonMsg);
     // Pass along violation counts for the client to display
@@ -1871,14 +1875,15 @@ export async function reportViolation(sessionId, violationType) {
       fullscreenExits: session.fullscreenExits,
       tabSwitches: session.tabSwitches,
       clipboardViolations: session.clipboardViolations,
-      violationCount
+      violationCount,
+      warningsRemaining: 0
     };
   }
 
   // Camera violation below suspension threshold: accumulate count but continue session
-  const warningsRemaining = (violationType === 'copy-paste' || violationType === 'screenshot')
-    ? Math.max(0, 2 - session.clipboardViolations)
-    : Math.max(0, 3 - session.fullscreenExits);
+  const warningsRemaining = (violationType === 'fullscreen-exit')
+    ? Math.max(0, 3 - session.fullscreenExits)
+    : 0;
 
   return {
     done: false,

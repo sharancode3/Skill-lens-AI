@@ -83,3 +83,13 @@ curl -X POST http://localhost:3000/api/interview \
   -H "Content-Type: application/json" \
   -d '{"sessionId": "session-test-100", "message": "I configure Winston logs and stream them to Elasticsearch."}'
 ```
+
+---
+
+## 🛡️ Proctoring & Integrity Limits (Phases E3 - E6)
+
+### Screenshot Deterrent Limitations (Phase E6)
+- **What is covered**: Interception of the physical `PrintScreen` key press on Windows systems, triggering an immediate proctoring suspension.
+- **What is NOT covered**: Out-of-browser snipping tools (such as Windows Snipping Tool `Win+Shift+S`, macOS `Cmd+Shift+3/4/5`), third-party screenshot software, OS-level screen recorders, or external device photography (taking pictures with a phone).
+- **Rationale**: Web browsers run in a secure sandbox that does not expose system-level capture APIs. True 100% screenshot prevention requires system-level kernel/device driver hooks (e.g., kiosk-mode or lockdown browsers). This best-effort implementation acts as a software-level deterrent.
+
