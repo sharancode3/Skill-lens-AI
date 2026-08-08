@@ -1076,9 +1076,13 @@ function appendThinkingIndicator() {
   return container;
 }
 
-function updateProgress(questions, topics) {
+function updateProgress(questions, topics, target) {
   chatProgressQuestions.textContent = `${questions || 0}`;
   chatProgressTopics.textContent = `${topics || 0}/4`;
+  const targetEl = document.getElementById('chat-progress-target');
+  if (targetEl && target) {
+    targetEl.textContent = `(target: ${target})`;
+  }
 }
 
 function scrollChatBottom(force = false) {

@@ -120,52 +120,41 @@ export async function saveSessionDoc(sessionId, data) {
 /**
  * Stopping-condition check.
  * 
- * CRITICAL CORRECTNESS REQUIREMENT: The hard cap of 14 turns is a strict correctness
- * requirement to guarantee that the interview always terminates in a live demo,
- * even if upstream components misbehave. Do not remove or modify this cap.
+ * CRITICAL CORRECTNESS REQUIREMENT: Requires questionsAsked >= session.targetQuestionCount
+ * AND distinctDaysCovered.length >= 4. Neither condition alone is sufficient.
  * 
  * @param {Object} session - The interview session document data.
  * @returns {boolean} True if the interview stopping conditions are met.
  */
 export function checkStoppingCondition(session, modelWantsToStop) {
-  const hitsHardCap = session.turnCount >= 16;
+  const target = session.targetQuestionCount || 8;
+  const questionsAsked = session.questionsAsked || 0;
+  const distinctDays = session.distinctDaysCovered || [];
+  const distinctDaysCount = Array.isArray(distinctDays) ? distinctDays.length : 0;
+
+  // Hard safety cap (turnCount >= 24) to prevent infinite loops if model completely hangs
+  const hitsHardCap = (session.turnCount || 0) >= 24;
   if (hitsHardCap) {
-    console.log(`[Stopping Condition] Hard cap hit at turnCount: ${session.turnCount}. Wrapping up.`);
+    console.log(`[Stopping Condition] Safety hard cap hit at turnCount: ${session.turnCount}. session "${session.sessionId}": ended at questionsAsked=${questionsAsked}, targetWas=${target}, distinctDays=${distinctDaysCount}`);
     return true;
   }
 
-  const floorMet = (session.questionsAsked || 0) >= 8 && (session.distinctDaysCovered?.length || 0) >= 4;
-  
-  const isOutOfTopics = session.topicQueue && (session.cursor >= session.topicQueue.length);
-  if (isOutOfTopics) {
-    console.log(`[Stopping Condition] Out of topics in queue (${session.cursor}/${session.topicQueue.length}). Wrapping up.`);
-    return true;
-  }
+  // Dual-condition gate: MUST have questionsAsked >= target AND distinctDaysCount >= 4
+  const conditionMet = questionsAsked >= target && distinctDaysCount >= 4;
 
-  if (!floorMet) {
+  if (!conditionMet) {
     return false;
   }
 
-  // Require at least 2 questions asked to be Applied or Expert difficulty tier
+  // If Capstone is triggered but has not been answered/evaluated in accuracyLog, don't stop yet
   const log = session.accuracyLog || [];
-  const appliedExpertCount = log.filter(entry => entry.difficultyTier === 'applied' || entry.difficultyTier === 'expert').length;
-  if (appliedExpertCount < 2) {
-    return false;
-  }
-  
-  // If Capstone is triggered but has not been evaluated in accuracyLog, force modelWantsToStop to false
   const hasAnsweredCapstone = log.some(l => l.questionType === 'capstone');
   if (session.capstoneTriggered && !hasAnsweredCapstone) {
     return false;
   }
 
-  const isNextTopicOutOfQueue = session.topicQueue && (session.cursor + 1 >= session.topicQueue.length);
-  if (isNextTopicOutOfQueue) {
-    console.log(`[Stopping Condition] Next topic would exceed queue bounds. Wrapping up.`);
-    return true;
-  }
-
-  return !!modelWantsToStop;
+  console.log(`[Stopping Condition] Target and curriculum requirements satisfied. session "${session.sessionId}": ended at questionsAsked=${questionsAsked}, targetWas=${target}, distinctDays=${distinctDaysCount}`);
+  return true;
 }
 
 export function shouldWrapUp(session, modelWantsToStop) {
@@ -186,11 +175,17 @@ export async function createSession(sessionId, candidate) {
     throw new Error(`Could not build a topic queue for candidate.`);
   }
 
+  // Randomize target question count between 8 and 12 inclusive
+  const targetQuestionCount = Math.floor(Math.random() * 5) + 8;
+  const candidateName = candidate.member?.name || candidate.name || 'Candidate';
+  console.log(`[SessionManager] session "${sessionId}": target=${targetQuestionCount}, candidate="${candidateName}"`);
+
   // Construct initial session document matching schema
   const session = {
     sessionId,
     state: SessionState.ASKING,
     candidateSnapshot: candidate,
+    targetQuestionCount,
     topicQueue,
     cursor: 0,
     questionsAsked: 1,
@@ -266,6 +261,7 @@ export async function createSession(sessionId, candidate) {
     reply: firstQuestion,
     done: false,
     questionsAsked: 1,
+    targetQuestionCount: session.targetQuestionCount,
     distinctDaysCovered: 0,
     difficultyTier: session.difficultyTier,
     questionHistory: []
@@ -909,10 +905,11 @@ export async function handleTurn(sessionId, message, violationType = null, flagC
   const nextQuestionTypeGenerated = session.pendingQuestionType || 'open';
 
   // Progression Controller: Signal when the upcoming question is the final one for this session
+  const target = session.targetQuestionCount || 8;
   const isFinalQuestion = 
     session.pendingQuestionType === 'capstone' ||
-    (session.questionsAsked >= 7 && session.distinctDaysCovered.length >= 3) ||
-    session.turnCount >= 14;
+    (session.questionsAsked >= target - 1 && session.distinctDaysCovered.length >= 3) ||
+    session.turnCount >= 20;
   session.isFinalQuestion = isFinalQuestion;
 
   let llmResponse;

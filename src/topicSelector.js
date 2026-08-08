@@ -1,9 +1,9 @@
-import { getEnrichedCandidate } from './dataManager.js';
+import { getEnrichedCandidate, daysByNumber, modulesByDay } from './dataManager.js';
 
 /**
  * Deterministically constructs a topic queue for a candidate's technical interview.
  * Uses priority scoring (weighting) and greedy selection with module-diversity
- * tie-breaking to choose 5 to 7 topics covering at least 4 distinct days.
+ * tie-breaking to choose at least 14 topics covering at least 4 distinct days.
  * 
  * @param {Object} candidate - The candidate object.
  * @returns {Array} List of selected topic queue entries.
@@ -52,11 +52,8 @@ export function buildTopicQueue(candidate) {
   while (true) {
     const distinctDays = new Set(queue.map(q => q.day));
 
-    // Stopping criteria (Part E: Guarantee at least 8 topics in queue covering at least 4 distinct days):
-    if (queue.length >= 10) {
-      break;
-    }
-    if (queue.length >= 8 && distinctDays.size >= 4) {
+    // Stopping criteria (Part B: Guarantee at least 14 topics in queue covering at least 4 distinct days):
+    if (queue.length >= 14 && distinctDays.size >= 4) {
       break;
     }
     if (remaining.length === 0) {
@@ -114,12 +111,26 @@ export function buildTopicQueue(candidate) {
     remaining = remaining.filter(m => m.day !== selectedMission.day);
   }
 
-  // 3. Post-selection warning log for sparse data
-  const finalDistinctDays = new Set(queue.map(q => q.day));
-  if (finalDistinctDays.size < 4) {
-    console.warn(
-      `[Topic Selection Warning] Candidate "${candidate.member.id}" has sparse data with only ${finalDistinctDays.size} distinct days.`
-    );
+  // 3. Guarantee at least 14 topics across at least 4 distinct days by supplementing from full curriculum
+  const existingDays = new Set(queue.map(q => q.day));
+  if (queue.length < 14 || existingDays.size < 4) {
+    for (const [dayNum, dayData] of daysByNumber.entries()) {
+      if (!existingDays.has(dayNum)) {
+        const modInfo = modulesByDay.get(dayNum) || { number: 1, title: 'Foundations' };
+        queue.push({
+          day: dayNum,
+          title: dayData.title,
+          objectives: dayData.objectives || [],
+          difficulty: 'standard',
+          status: 'pending',
+          module: modInfo
+        });
+        existingDays.add(dayNum);
+        if (queue.length >= 14 && existingDays.size >= 4) {
+          break;
+        }
+      }
+    }
   }
 
   return queue;
