@@ -344,14 +344,16 @@ export function updateDifficulty(session, finalScore, currentHallucinationFlag =
   // Question Bank Integration & Bounded Mix Rule Enforcement (Max 2 MCQs, Max 2 Diagrams across session)
   const cursor = typeof session.cursor === 'number' ? session.cursor : 0;
   const nextSlotIndex = cursor + 1;
-  const assignedModality = (session.slotModalities && session.slotModalities[nextSlotIndex]) || 'open';
+  const assignedModality = (session.slotModalities && session.slotModalities[nextSlotIndex]) || session.pendingQuestionType || 'open';
   const nextTopic = (session.topicQueue && session.topicQueue[nextSlotIndex]) || null;
+  const isMCQRequested = assignedModality === 'mcq' || session.pendingQuestionType === 'mcq';
+  const isDiagramRequested = assignedModality === 'diagram_interpret' || session.pendingQuestionType === 'diagram_interpret';
 
   session.pendingQuestionType = 'open';
   session.bankMCQItem = null;
   session.bankDiagramItem = null;
 
-  if (assignedModality === 'mcq' && (session.mcqCount || 0) < 2 && nextTopic) {
+  if (isMCQRequested && (session.mcqCount || 0) < 2 && nextTopic) {
     const mcqItem = getMCQForDay(nextTopic.day, session.difficultyTier, session.usedBankQuestionIds || []);
     if (mcqItem) {
       session.pendingQuestionType = 'mcq';
@@ -365,7 +367,7 @@ export function updateDifficulty(session, finalScore, currentHallucinationFlag =
     } else {
       console.log(`[Question Bank Exhaustion] No eligible MCQ found for Day ${nextTopic.day}. Falling back to descriptive open question.`);
     }
-  } else if (assignedModality === 'diagram_interpret' && (session.diagramCount || 0) < 2 && nextTopic) {
+  } else if (isDiagramRequested && (session.diagramCount || 0) < 2 && nextTopic) {
     const diagItem = getDiagramForDay(nextTopic.day, session.difficultyTier, session.usedBankQuestionIds || []);
     if (diagItem) {
       session.pendingQuestionType = 'diagram_interpret';
