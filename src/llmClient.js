@@ -437,36 +437,25 @@ export function mockLLMCall(candidate, topic, lastQuestion, message, followupCou
   const remaining = Math.max(0, 3 - totalConduct);
 
   if (classification === 'disrespectful') {
-    reply = `That response is dismissive and does not meet professional technical review standards. This counts as 2 conduct warnings (${remaining} warning remaining before immediate session suspension). Please refocus and answer the question properly.`;
+    reply = `Writing "${message.trim()}" is dismissive and unprofessional in a technical evaluation. This counts as 2 conduct warnings (${remaining} warning remaining before immediate session suspension). Please provide a real technical answer for ${topic.title}.`;
   } else if (classification === 'disengaged') {
-    reply = `I notice you dodged that question. We require genuine technical depth to evaluate your skills — you have ${remaining} conduct warning${remaining === 1 ? '' : 's'} remaining before session suspension. In plain terms, what is your understanding of ${topic.title}?`;
-  } else if (classification === 'off_topic') {
-    reply = `That answer is unrelated to our technical review of ${topic.title}. You have ${remaining} conduct warning${remaining === 1 ? '' : 's'} remaining before session suspension. Please focus on the engineering concepts.`;
-  } else if (action === 'followup') {
-    const rawWords = message.trim().split(/\s+/).map(w => w.replace(/[^\w]/g, '')).filter(w => w.length > 3);
-    const stopWords = new Set(['about', 'their', 'there', 'which', 'would', 'could', 'should', 'other', 'first', 'these', 'those', 'using', 'doing', 'making', 'built', 'worked', 'think', 'maybe', 'guess', 'something', 'stuff', 'thing', 'things']);
-    
-    const techKeywords = rawWords.filter(w => !stopWords.has(w.toLowerCase()));
-    const keyTerm = techKeywords[0] || rawWords[0] || topic.title;
-
-    if (classification === 'shallow' || isGeneric) {
-      const shallowFollowups = [
-        `Could you walk me through the specific tools, algorithms, or code steps you used when handling ${keyTerm}?`,
-        `What specific edge cases, validation rules, or error handling did you put in place for ${keyTerm}?`,
-        `That gives a high-level picture — what exact underlying mechanics or configuration choices did you make for ${keyTerm}?`
-      ];
-      const idx = keyTerm.length % shallowFollowups.length;
-      reply = shallowFollowups[idx];
-    } else if (cleanMsg.includes('wrong') || cleanMsg.includes('error') || cleanMsg.includes('fail')) {
-      reply = `You mentioned issues around ${keyTerm} — how did you diagnose that failure mode, and what structural fix did you apply?`;
+    if (cleanMsg.includes('how can i know')) {
+      reply = `Replying with "${message.trim()}" dodges the question rather than explaining your reasoning. A technical review requires demonstrating your problem-solving approach — you have ${remaining} conduct warning${remaining === 1 ? '' : 's'} remaining before session suspension. How would you approach ${topic.objectives[0] || topic.title}?`;
     } else {
-      const probingFollowups = [
-        `What specific performance trade-offs or concurrency bottlenecks led you to pick ${keyTerm} in that setup?`,
-        `How would that implementation of ${keyTerm} scale if your traffic volume or data size increased tenfold?`,
-        `What alternative architectures did you evaluate before deciding on ${keyTerm}, and why was it the right choice?`
-      ];
-      const idx = keyTerm.length % probingFollowups.length;
-      reply = probingFollowups[idx];
+      reply = `Saying "${message.trim()}" leaves us with no technical detail to evaluate for ${topic.title}. We need to see how you think — you have ${remaining} conduct warning${remaining === 1 ? '' : 's'} remaining before session suspension. What is the core purpose of ${topic.objectives[0] || topic.title}?`;
+    }
+  } else if (classification === 'off_topic') {
+    reply = `Your answer "${message.trim()}" is unrelated to our technical discussion on ${topic.title}. You have ${remaining} conduct warning${remaining === 1 ? '' : 's'} remaining before session suspension. Please focus on the engineering concepts.`;
+  } else if (action === 'followup') {
+    const cleanText = message.trim();
+    if (cleanText.toLowerCase().includes('pandas') && cleanText.toLowerCase().includes('sqlite')) {
+      reply = `Using Pandas for initial cleaning before moving data into SQLite makes sense for relational querying. How did you handle schema creation and data type casting during that ingestion step?`;
+    } else if (cleanText.toLowerCase().includes('lock') || cleanText.toLowerCase().includes('error') || cleanText.toLowerCase().includes('fail')) {
+      reply = `Database locks under concurrency are a classic bottleneck. Did you resolve that by enabling WAL mode, introducing retry loops, or tuning transaction boundaries?`;
+    } else if (classification === 'shallow' || isGeneric) {
+      reply = `You mentioned "${cleanText}", but didn't specify the underlying implementation details. Were you handling missing values, reformatting data types, or enforcing schema constraints?`;
+    } else {
+      reply = `You noted using "${cleanText.split(' ').slice(0, 4).join(' ')}" for that component. What specific concurrency, memory, or scaling constraints did you keep in mind when setting that up?`;
     }
   } else {
     if (classification === 'off_topic') {
