@@ -177,6 +177,7 @@ export async function createSession(sessionId, candidate) {
     whyChainDepth: 0,
     capstoneTriggered: false,
     hallucinationCount: 0,
+    hallucinationCountForCurrentTopic: 0,
     hedgeEventCount: 0,
     questionSentAt: new Date().toISOString(),
     pendingWhyProbe: false,
@@ -624,8 +625,22 @@ export async function handleTurn(sessionId, message) {
     }
   }
 
+  const hallucinationFlag = llmResponse && !!llmResponse.hallucinationFlag;
+  if (hallucinationFlag) {
+    session.hallucinationCount = (session.hallucinationCount || 0) + 1;
+    session.hallucinationCountForCurrentTopic = (session.hallucinationCountForCurrentTopic || 0) + 1;
+    finalAccuracyScore = 20;
+  }
+
   // Extract reaction clause and compute fullReply
-  const reaction = llmResponse && llmResponse.reactionClause ? llmResponse.reactionClause.trim() : "";
+  let reaction = llmResponse && llmResponse.reactionClause ? llmResponse.reactionClause.trim() : "";
+  if (hallucinationFlag) {
+    const correction = llmResponse.hallucinationCorrection || "";
+    const correctionPrefix = `⚠️ ${correction}`.trim();
+    if (!reaction.includes('⚠️')) {
+      reaction = reaction ? `${correctionPrefix} ${reaction}` : correctionPrefix;
+    }
+  }
   const replyBody = llmResponse && llmResponse.reply ? llmResponse.reply.trim() : "";
   const fullReply = reaction ? `${reaction} ${replyBody}` : replyBody;
 
@@ -638,11 +653,6 @@ export async function handleTurn(sessionId, message) {
     if (session.recentReactions.length > 2) {
       session.recentReactions.shift();
     }
-  }
-
-  const hallucinationFlag = llmResponse && !!llmResponse.hallucinationFlag;
-  if (hallucinationFlag) {
-    session.hallucinationCount = (session.hallucinationCount || 0) + 1;
   }
   const whyProbe = !!session.pendingWhyProbe;
 
@@ -670,6 +680,7 @@ export async function handleTurn(sessionId, message) {
     answerReceivedAt,
     responseTimeSeconds,
     hallucinationFlag,
+    hallucinationCorrection: llmResponse ? (llmResponse.hallucinationCorrection || "") : "",
     hedgeMarkers,
     whyProbe
   });
@@ -731,6 +742,7 @@ export async function handleTurn(sessionId, message) {
   // Rule enforcement
   let action = llmResponse.action;
   let forceAdvanceDueToFollowupLimit = false;
+  let forceAdvanceDueToHallucinationLimit = false;
 
   if (isMCQTurn) {
     console.log(`[SessionManager Override] Overwriting action to "advance" because MCQ turns always transition to the next topic.`);
@@ -739,6 +751,10 @@ export async function handleTurn(sessionId, message) {
     console.log(`[SessionManager Override] Overwriting action "followup" to "advance" because followupCount is already ${session.followupCountForCurrentTopic}.`);
     action = 'advance';
     forceAdvanceDueToFollowupLimit = true;
+  } else if (action === 'followup' && session.hallucinationCountForCurrentTopic >= 2) {
+    console.log(`[SessionManager Override] Overwriting action "followup" to "advance" because hallucinationCountForCurrentTopic is ${session.hallucinationCountForCurrentTopic}.`);
+    action = 'advance';
+    forceAdvanceDueToHallucinationLimit = true;
   }
 
   // Handle follow-up action
@@ -799,6 +815,7 @@ export async function handleTurn(sessionId, message) {
 
     session.followupCountForCurrentTopic = 0;
     session.whyChainDepth = 0;
+    session.hallucinationCountForCurrentTopic = 0;
 
     const isOutOfTopics = session.cursor + 1 >= session.topicQueue.length;
     const wrapUpTriggered = shouldWrapUp(session, llmResponse ? llmResponse.modelWantsToStop : false) || isOutOfTopics;
@@ -828,7 +845,7 @@ export async function handleTurn(sessionId, message) {
     session.cursor++;
     const nextTopic = session.topicQueue[session.cursor];
     
-    const replyText = (forceAdvanceDueToFollowupLimit || forceAdvanceDueToBlankRetries)
+    const replyText = (forceAdvanceDueToFollowupLimit || forceAdvanceDueToBlankRetries || forceAdvanceDueToHallucinationLimit)
       ? `Got it. Let's move on to the next topic. Can you tell me about your experience on Day ${nextTopic.day}: "${nextTopic.title}"?`
       : fullReply;
 

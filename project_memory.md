@@ -67,6 +67,7 @@ This document is maintained to help AI models understand the current state of th
 - [x] PS2 Bugfix & Voice Pack (Phases F1 to F9): Fixed 8-question stop, sticky question modes, duplicate diagrams, reaction clauses with memory, feedback score-threshold routing (<40 and >=60), and live question history sidebar.
 - [x] LoRA Voice Adapter Pack (Phases L0 to L8): Locked scope to voice/tone adaptation using Qwen 2.5 3B / Unsloth on Colab GPU with synthetic data generation and cloud fallback.
 - [x] Phase I0: Session Schema & Turn-Input Additions (server timing, detectHedging, whyChainDepth, and schema extensions).
+- [x] Phase I1: Hallucination Detector (structured schema output, contrastive instructions, warning prefixes, and repeated hallucination advancement overrides).
 
 
 

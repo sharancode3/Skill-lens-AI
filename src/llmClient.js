@@ -46,12 +46,16 @@ export function buildResponseSchema(nextQuestionType) {
         type: 'BOOLEAN',
         description: 'True if candidate response contains technical hallucinations or fabricated facts.'
       },
+      hallucinationCorrection: {
+        type: 'STRING',
+        description: 'A short factual correction (1 sentence) if hallucinationFlag is true, otherwise empty string "".'
+      },
       whyProbe: {
         type: 'BOOLEAN',
         description: 'True if the next question is a why-chain probe (asking candidate to justify a specific technical choice from their previous answer).'
       }
     },
-    required: ['classification', 'reasoning', 'action', 'reactionClause', 'reply', 'updatedMemory', 'llmConfidence', 'modelWantsToStop', 'hallucinationFlag', 'whyProbe']
+    required: ['classification', 'reasoning', 'action', 'reactionClause', 'reply', 'updatedMemory', 'llmConfidence', 'modelWantsToStop', 'hallucinationFlag', 'hallucinationCorrection', 'whyProbe']
   };
 
   if (nextQuestionType === 'mcq') {
@@ -410,17 +414,32 @@ function mockLLMCall(candidate, topic, lastQuestion, message, followupCount, con
   const confMap = { strong: 92, partial: 68, shallow: 35, off_topic: 12 };
   const llmConfidence = confMap[classification] || 50;
 
+  const isHallucination = cleanMsg.includes('rag stores vectors inside gpt') || cleanMsg.includes('rag stores vectors inside weights');
+  const hallucinationFlag = isHallucination;
+  const hallucinationCorrection = isHallucination 
+    ? "RAG retrieves vectors from an external database and injects them as prompt context; it does not store vectors inside the neural weights of the model."
+    : "";
+
+  const finalClassification = isHallucination ? 'shallow' : classification;
+  const finalAction = isHallucination ? (followupCount >= 1 ? 'advance' : 'followup') : action;
+  const finalReaction = isHallucination ? `⚠️ ${hallucinationCorrection}` : reactionClause;
+  const finalReply = isHallucination 
+    ? (followupCount >= 1 ? "Let's move on to the next topic." : "Can you clarify how vectors are stored in a standard RAG pipeline?")
+    : reply;
+  const finalConfidence = isHallucination ? 20 : llmConfidence;
+
   const result = {
-    classification,
-    reasoning,
-    action,
-    reactionClause,
-    reply,
+    classification: finalClassification,
+    reasoning: isHallucination ? 'Candidate hallucinated vector storage mechanics.' : reasoning,
+    action: finalAction,
+    reactionClause: finalReaction,
+    reply: finalReply,
     updatedMemory,
-    llmConfidence,
+    llmConfidence: finalConfidence,
     modelWantsToStop,
-    hallucinationFlag: false,
-    whyProbe: action === 'followup'
+    hallucinationFlag,
+    hallucinationCorrection,
+    whyProbe: isHallucination ? false : (action === 'followup')
   };
 
   // Add MCQ fields if requested
@@ -607,8 +626,10 @@ TONE CALIBRATION CONSTRAINTS:
 4. NO GENERIC PRAISE: Do not say "nice job" or "well explained". Praise must reference a specific correct mechanism named or be omitted entirely.
 
 HALLUCINATION & WHY-PROBE CONSTRAINTS:
-1. hallucinationFlag: Evaluate if the candidate's response contains factual hallucinations, fabricated facts, or details not matching their course curriculum setup. Set to true if detected, otherwise false.
-2. whyProbe: Set this to true if the next question you are proposing (in "reply") is a why-chain probe asking the candidate to justify their technical decision or choice from their previous answer. Otherwise false.
+1. hallucinationFlag (boolean): Evaluate if the candidate's response contains factual hallucinations, checkably incorrect claims, or fabricated technical details. Set to true ONLY if the candidate asserts something as fact that is specifically incorrect (e.g. wrong technical relationships, wrong mechanisms, or fabricated capabilities). If the candidate gives a vague, incomplete, or uncertain response (e.g. "I am not sure, something about vector files"), do NOT flag this as a hallucination; it stays classification: "shallow" or "partial" and hallucinationFlag: false.
+2. hallucinationCorrection (string): Required when hallucinationFlag is true. Provide a concise, factual, non-lecturing 1-sentence correction. If hallucinationFlag is false, set this to an empty string "".
+3. prefix reactionClause: If hallucinationFlag is true, you MUST prefix the reactionClause with "⚠️ " followed by the hallucinationCorrection, then proceed with the interviewer voice pattern. E.g. "⚠️ RAG retrieves vectors from an external index, it does not store vectors inside GPT weights. Hm, okay — ".
+4. whyProbe: Set this to true if the next question you are proposing (in "reply") is a why-chain probe asking the candidate to justify their technical decision or choice from their previous answer. Otherwise false.
 
 FEW-SHOT EXAMPLES (GROUNDED CURRICULUM PATTERNS):
 [STRONG ANSWER EXAMPLE]
@@ -626,6 +647,16 @@ FEW-SHOT EXAMPLES (GROUNDED CURRICULUM PATTERNS):
 [NON-ANSWER / IDK REFRAMING EXAMPLE]
 - Candidate: "idk"
   Interviewer: "No worries — in plain terms, what do you think happens when you turn a sentence into an embedding? Even a rough guess is fine."
+
+[POSITIVE HALLUCINATION EXAMPLE]
+- Candidate: "RAG stores vectors inside GPT's weights."
+  Interviewer: "⚠️ RAG retrieves vectors from an external database and feeds them as prompt context; it does not store vectors inside the neural weights of the model. Hm, okay — How do you typically sync the document updates with the vector database?"
+  (Metadata: hallucinationFlag: true, hallucinationCorrection: "RAG retrieves vectors from an external database and feeds them as prompt context; it does not store vectors inside the neural weights of the model.")
+
+[NEGATIVE HALLUCINATION EXAMPLE - VAGUE BUT NOT WRONG]
+- Candidate: "I don't know much about vectors, probably they search for related words."
+  Interviewer: "Hm, okay — In simple terms, how does computing vector similarity differ from a simple keyword query search?"
+  (Metadata: hallucinationFlag: false, classification: "shallow", hallucinationCorrection: "")
 
 [BAD TONALLY - DO NOT WRITE LIKE THIS]
 - "Great question! That's a fascinating point. As an AI, I'd be happy to help you dive into chunking..."
