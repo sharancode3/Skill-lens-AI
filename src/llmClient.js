@@ -1668,8 +1668,22 @@ export function postProcessFeedback(feedback, session) {
     }
   });
 
+  let finalSummary = typeof feedback.summary === 'string' ? feedback.summary.trim() : '';
+  if (session.terminatedForRepeatedViolations) {
+    const violationReason = session.suspension?.reason || 'repeated proctoring or conduct violations';
+    const note = `The interview session was permanently terminated due to repeated proctoring or conduct violations (${violationReason}).`;
+    if (!finalSummary.includes(note)) {
+      finalSummary = note + " " + finalSummary;
+    }
+  } else if (session.endedEarlyByCandidate) {
+    const note = "The candidate voluntarily ended the interview session early.";
+    if (!finalSummary.includes(note)) {
+      finalSummary = note + " " + finalSummary;
+    }
+  }
+
   return {
-    summary: feedback.summary,
+    summary: finalSummary,
     strengths: finalStrengths,
     gaps: finalGaps,
     next: finalNext

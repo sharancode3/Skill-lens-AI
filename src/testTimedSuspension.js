@@ -12,7 +12,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import { initializeData, candidatesById, precomputeConceptTerms } from './dataManager.js';
-import { createSession, getSessionDoc, triggerSuspension, checkSuspensionResume, reportViolation, SessionState } from './sessionManager.js';
+import { createSession, getSessionDoc, triggerSuspension, checkSuspensionResume, reportViolation, SessionState, endSessionEarly } from './sessionManager.js';
 
 initializeData();
 precomputeConceptTerms();
@@ -129,6 +129,25 @@ async function runTests() {
 
   const s3 = await getSessionDoc(sessionId3);
   assert(s3.state === SessionState.DONE, 'Session3 DONE after camera termination');
+
+  // ── Test 7: Spec Compliance & Honest Content (Phase E7) ───────────────────
+  console.log('\n[Test 7] Validating technical-spec feedback shape & honest summary framing...');
+  
+  // 7a. Check forced violation termination summary content
+  const termSession = await getSessionDoc(sessionId); // From Test 4
+  assert(termSession.feedback !== null, 'Forced termination has feedback object');
+  assert(typeof termSession.feedback.summary === 'string', 'feedback.summary is string');
+  assert(Array.isArray(termSession.feedback.strengths), 'feedback.strengths is string array');
+  assert(Array.isArray(termSession.feedback.gaps), 'feedback.gaps is string array');
+  assert(Array.isArray(termSession.feedback.next), 'feedback.next is string array');
+  assert(termSession.feedback.summary.includes('permanently terminated due to repeated proctoring or conduct violations'), 'Forced termination summary honestly notes violations exit');
+
+  // 7b. Check manual early exit summary content
+  const sessionId4 = `e2-early-exit-test-${Date.now()}`;
+  await createSession(sessionId4, candidate);
+  const earlyExitRes = await endSessionEarly(sessionId4);
+  assert(earlyExitRes.feedback !== null, 'Manual early exit returns feedback');
+  assert(earlyExitRes.feedback.summary.includes('voluntarily ended the interview session early'), 'Early exit summary honestly notes early voluntary completion');
 
   // ── Summary ───────────────────────────────────────────────────────────────
   console.log('\n========================================================');

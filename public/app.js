@@ -1507,6 +1507,20 @@ function transitionToFeedback(feedback, metrics, judgeVerdict, proctoringSummary
     verdictSection.classList.add('hidden');
   }
 
+  // Populate prominent question count (Phase E7)
+  const questionCountText = document.getElementById('feedback-question-count-text');
+  if (questionCountText && metrics) {
+    const qCount = metrics.questionsAsked || 0;
+    const target = metrics.targetQuestionCount || 8;
+    if (metrics.terminatedForRepeatedViolations) {
+      questionCountText.textContent = `${qCount} question${qCount === 1 ? '' : 's'} answered — terminated due to violations`;
+    } else if (metrics.endedEarlyByCandidate) {
+      questionCountText.textContent = `${qCount} question${qCount === 1 ? '' : 's'} answered — ended early`;
+    } else {
+      questionCountText.textContent = `${qCount} of ${target} questions answered`;
+    }
+  }
+
   // Populate summaries
   feedbackSummary.textContent = feedback.summary || 'Summary loaded successfully.';
 

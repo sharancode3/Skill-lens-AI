@@ -526,7 +526,11 @@ export function computeMetrics(session) {
       depth: 0,
       reasoning: 0,
       tradeoffs: 0,
-      clarity: 0
+      clarity: 0,
+      questionsAsked: session.questionsAsked || 0,
+      targetQuestionCount: session.targetQuestionCount || 8,
+      endedEarlyByCandidate: !!session.endedEarlyByCandidate,
+      terminatedForRepeatedViolations: !!session.terminatedForRepeatedViolations
     };
   }
 
@@ -601,7 +605,11 @@ export function computeMetrics(session) {
     depth,
     reasoning: reasoningScore,
     tradeoffs,
-    clarity
+    clarity,
+    questionsAsked: session.questionsAsked || 0,
+    targetQuestionCount: session.targetQuestionCount || 8,
+    endedEarlyByCandidate: !!session.endedEarlyByCandidate,
+    terminatedForRepeatedViolations: !!session.terminatedForRepeatedViolations
   };
 }
 
@@ -1595,6 +1603,11 @@ export async function endSessionEarly(sessionId) {
   session.state = SessionState.DONE;
   session.interviewEndedAt = new Date().toISOString();
 
+  if (!session.terminatedForRepeatedViolations) {
+    session.endedEarlyByCandidate = true;
+  }
+  await saveSessionDoc(sessionId, session);
+
   let report = null;
   try {
     report = await generateFeedbackReport(session);
@@ -1604,8 +1617,10 @@ export async function endSessionEarly(sessionId) {
   }
 
   const feedbackObj = (report && report.feedback) ? report.feedback : { summary: "", strengths: [], gaps: [], next: [] };
-  // Explicitly note that the candidate voluntarily ended early
-  feedbackObj.summary = "The candidate voluntarily ended the interview session early. " + (feedbackObj.summary || "");
+  // Explicitly note that the candidate voluntarily ended early if not already present
+  if (feedbackObj.summary && !feedbackObj.summary.includes("The candidate voluntarily ended the interview session early.")) {
+    feedbackObj.summary = "The candidate voluntarily ended the interview session early. " + feedbackObj.summary;
+  }
   
   // Always use borderline for voluntary early exits regardless of mechanical verdict.
   // A mechanical verdict can legitimately compute 'would_reject' on zero answers, which
@@ -1659,6 +1674,7 @@ export async function triggerSuspension(sessionId, reason) {
   if (count >= 3) {
     console.log(`[Suspension Engine] Escalation ceiling reached (count=${count}). Permanently terminating session "${sessionId}".`);
     session.suspension.active = false;
+    session.terminatedForRepeatedViolations = true;
     await saveSessionDoc(sessionId, session);
 
     // Permanently terminate — reuse the endSessionEarly wrap-up path
