@@ -247,7 +247,7 @@ async function callGeminiREST(systemPrompt, userPrompt, schema, retryCount = 1, 
  */
 async function callQwenREST(systemPrompt, userPrompt, schema, retryCount = 1, temperature = 1.0) {
   const baseURL = process.env.QWEN_API_URL || 'http://localhost:11434/v1';
-  const modelName = process.env.QWEN_MODEL_NAME || 'qwen2.5:3b';
+  const modelName = process.env.LOCAL_MODEL_NAME || process.env.QWEN_MODEL_NAME || 'gemma3:4b';
   
   const url = `${baseURL.replace(/\/$/, '')}/chat/completions`;
   
@@ -319,7 +319,7 @@ async function callQwenREST(systemPrompt, userPrompt, schema, retryCount = 1, te
  */
 export async function generateLocalLoRAReply(systemPrompt, userPrompt) {
   const apiUrl = process.env.QWEN_API_URL || 'http://localhost:11434/v1';
-  const modelName = process.env.LORA_MODEL_NAME || process.env.QWEN_MODEL_NAME || 'qwen2.5:3b';
+  const modelName = process.env.LORA_MODEL_NAME || process.env.LOCAL_MODEL_NAME || process.env.QWEN_MODEL_NAME || 'gemma3:4b';
 
   const requestBody = {
     model: modelName,
