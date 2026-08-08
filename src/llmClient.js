@@ -958,6 +958,53 @@ export function checkDeterministicConduct(message) {
   return null;
 }
 
+export async function callBrainLLMWithFallback(brainName, systemPrompt, userPrompt, schema, mockFallbackFn) {
+  const provider = process.env.LLM_PROVIDER || 'gemini';
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (provider === 'qwen') {
+    console.log(`[LLMClient ${brainName}] Attempting local Qwen call...`);
+    try {
+      const result = await callQwenREST(systemPrompt, userPrompt, schema, 1);
+      if (result) {
+        return result;
+      }
+      console.warn(`[LLMClient ${brainName}] Local Qwen call returned empty. Falling back to cloud...`);
+    } catch (err) {
+      console.warn(`[LLMClient ${brainName}] Local Qwen call failed: ${err.message}. Falling back to cloud...`);
+    }
+
+    if (apiKey) {
+      console.log(`[LLMClient ${brainName}] Attempting fallback cloud Gemini call...`);
+      try {
+        const result = await callGeminiREST(systemPrompt, userPrompt, schema, 1);
+        if (result) {
+          return result;
+        }
+      } catch (err) {
+        console.error(`[LLMClient ${brainName}] Fallback cloud Gemini call failed:`, err.message);
+      }
+    } else {
+      console.warn(`[LLMClient ${brainName}] GEMINI_API_KEY is not defined. Skipping cloud fallback.`);
+    }
+  } else {
+    if (apiKey) {
+      console.log(`[LLMClient ${brainName}] Attempting direct cloud Gemini call...`);
+      try {
+        const result = await callGeminiREST(systemPrompt, userPrompt, schema, 1);
+        if (result) {
+          return result;
+        }
+      } catch (err) {
+        console.error(`[LLMClient ${brainName}] Direct cloud Gemini call failed:`, err.message);
+      }
+    }
+  }
+
+  console.log(`[LLMClient ${brainName}] Both local and cloud failed or are unavailable. Using offline mock...`);
+  return mockFallbackFn();
+}
+
 export async function analyzeConductWithLLM(candidateMessage, lastQuestion) {
   const deterministicResult = checkDeterministicConduct(candidateMessage);
   if (deterministicResult) {
@@ -1004,27 +1051,13 @@ CRITICAL INSTRUCTIONS:
     required: ['classification', 'reasoning']
   };
 
-  const provider = process.env.LLM_PROVIDER || 'gemini';
-  const apiKey = process.env.GEMINI_API_KEY;
-
-  if (provider === 'gemini' && !apiKey) {
-    return mockConductAnalysis(candidateMessage);
-  }
-
-  try {
-    let result;
-    if (provider === 'qwen') {
-      result = await callQwenREST(systemPrompt, userPrompt, conductSchema, 1);
-    } else {
-      result = await callGeminiREST(systemPrompt, userPrompt, conductSchema, 1);
-    }
-    if (result && result.classification) {
-      return result;
-    }
-  } catch (err) {
-    console.error('[LLMClient Conduct Analyst] API failed:', err.message);
-  }
-  return mockConductAnalysis(candidateMessage);
+  return callBrainLLMWithFallback(
+    'Conduct',
+    systemPrompt,
+    userPrompt,
+    conductSchema,
+    () => mockConductAnalysis(candidateMessage)
+  );
 }
 
 function mockConductAnalysis(message) {
@@ -1128,29 +1161,13 @@ CONSTRAINTS:
     detectedConnections: detectedConnections || []
   });
 
-  const schema = buildResponseSchema(nextQuestionType);
-  const provider = process.env.LLM_PROVIDER || 'gemini';
-  const apiKey = process.env.GEMINI_API_KEY;
-
-  if (provider === 'gemini' && !apiKey) {
-    return mockLLMCall(session.candidateSnapshot, currentTopic, lastQuestion, candidateMessage, session.followupCountForCurrentTopic, detectedConnections, nextQuestionType, nextTopic, difficultyTier, session, hedgeMarkers);
-  }
-
-  try {
-    let result;
-    if (provider === 'qwen') {
-      result = await callQwenREST(systemPrompt, userPrompt, schema, 1);
-    } else {
-      result = await callGeminiREST(systemPrompt, userPrompt, schema, 1);
-    }
-    if (result) {
-      return result;
-    }
-  } catch (err) {
-    console.error('[LLMClient Interviewer] API failed:', err.message);
-  }
-
-  return mockLLMCall(session.candidateSnapshot, currentTopic, lastQuestion, candidateMessage, session.followupCountForCurrentTopic, detectedConnections, nextQuestionType, nextTopic, difficultyTier, session, hedgeMarkers);
+  return callBrainLLMWithFallback(
+    'Interviewer',
+    systemPrompt,
+    userPrompt,
+    schema,
+    () => mockLLMCall(session.candidateSnapshot, currentTopic, lastQuestion, candidateMessage, session.followupCountForCurrentTopic, detectedConnections, nextQuestionType, nextTopic, difficultyTier, session, hedgeMarkers)
+  );
 }
 
 /**
@@ -1194,27 +1211,13 @@ ALIGNMENT RULES:
     required: ['score', 'narrativeFeedback']
   };
 
-  const provider = process.env.LLM_PROVIDER || 'gemini';
-  const apiKey = process.env.GEMINI_API_KEY;
-
-  if (provider === 'gemini' && !apiKey) {
-    return mockTopicEvaluation(currentTopic, exchangeHistory);
-  }
-
-  try {
-    let result;
-    if (provider === 'qwen') {
-      result = await callQwenREST(systemPrompt, userPrompt, evaluatorSchema, 1);
-    } else {
-      result = await callGeminiREST(systemPrompt, userPrompt, evaluatorSchema, 1);
-    }
-    if (result && typeof result.score === 'number' && result.narrativeFeedback) {
-      return result;
-    }
-  } catch (err) {
-    console.error('[LLMClient Evaluator] API failed:', err.message);
-  }
-  return mockTopicEvaluation(currentTopic, exchangeHistory);
+  return callBrainLLMWithFallback(
+    'Evaluator',
+    systemPrompt,
+    userPrompt,
+    evaluatorSchema,
+    () => mockTopicEvaluation(currentTopic, exchangeHistory)
+  );
 }
 
 function mockTopicEvaluation(currentTopic, exchangeHistory) {
