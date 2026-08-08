@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import { initFirebase, runStartupHealthCheck } from './firebase.js';
 import { initializeData, getEnrichedCandidate, candidatesById, precomputeConceptTerms } from './dataManager.js';
 import { generateEmbeddings } from './embeddingManager.js';
-import { createSession, handleTurn, reportViolation, cooldowns, getSessionDoc, endSessionEarly } from './sessionManager.js';
+import { createSession, handleTurn, reportViolation, cooldowns, getSessionDoc, endSessionEarly, triggerSuspension, checkSuspensionResume } from './sessionManager.js';
 
 dotenv.config();
 
@@ -43,11 +43,46 @@ app.get('/api/session/:sessionId', async (req, res) => {
       fullscreenExits: session.fullscreenExits || 0,
       warningLockoutUntil: session.warningLockoutUntil || null,
       suspended: session.state === 'done' && session.feedback && session.feedback.summary.includes('suspended'),
+      suspension: session.suspension || null,
       violations: session.violations || [],
       candidate: session.candidateSnapshot || null,
       transcript: session.transcript || [],
       lastResponse: session.lastResponse || null
     });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/session/:sessionId/resume-check
+// Server-authoritative gate: verifies the 5-minute lockout has elapsed on the server's clock.
+// Prevents client-side timer manipulation from bypassing the suspension wait.
+app.get('/api/session/:sessionId/resume-check', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const result = await checkSuspensionResume(sessionId);
+    if (result.error) return res.status(result.status || 500).json({ error: result.error });
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/session/:sessionId/resume
+// Final resume confirmation. Re-checks server clock and clears suspension.active.
+app.post('/api/session/:sessionId/resume', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const result = await checkSuspensionResume(sessionId);
+    if (result.error) return res.status(result.status || 500).json({ error: result.error });
+    if (!result.canResume) {
+      return res.status(423).json({
+        canResume: false,
+        msRemaining: result.msRemaining,
+        error: 'Suspension period has not elapsed. Resume not permitted yet.'
+      });
+    }
+    return res.json({ canResume: true, resumed: true });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }

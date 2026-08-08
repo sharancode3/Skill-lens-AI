@@ -633,7 +633,7 @@
     </section>
   </main>
 
-  <!-- ==================== SCREEN 4: SUSPENSION SCREEN ==================== -->
+  <!-- ==================== SCREEN 4: SUSPENSION SCREEN (legacy: permanent camera termination) ==================== -->
   <main id="screen-suspended" class="view min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center hidden">
     <div class="bg-white max-w-lg w-full p-8 md:p-10 rounded-xl border-4 border-slate-900 flex flex-col items-center gap-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
       <div class="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center border-2 border-red-300 animate-bounce">
@@ -658,6 +658,63 @@
       </button>
     </div>
   </main>
+
+  <!-- ==================== SCREEN 5: PERMANENTLY TERMINATED (Phase E2 — escalation ceiling) ==================== -->
+  <main id="screen-terminated" class="view min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center hidden">
+    <div class="bg-white max-w-lg w-full p-8 md:p-10 rounded-xl border-4 border-red-600 flex flex-col items-center gap-6 shadow-[6px_6px_0px_0px_rgba(220,38,38,1)]">
+      <div class="w-16 h-16 bg-red-600 text-white rounded-full flex items-center justify-center border-2 border-red-800">
+        <i data-lucide="x-octagon" class="w-8 h-8"></i>
+      </div>
+      <div>
+        <h1 class="text-3xl font-extrabold text-red-700 tracking-tight">Session Terminated</h1>
+        <p class="text-sm text-slate-700 mt-3 leading-relaxed font-medium">
+          This interview was ended due to repeated integrity violations. A third violation was recorded after two prior suspension periods.
+        </p>
+        <p class="text-xs font-extrabold text-red-700 mt-2 bg-red-50 py-1.5 px-3 rounded-lg border border-red-300">
+          No further attempts are permitted during this session window.
+        </p>
+      </div>
+      <button id="btn-terminated-exit" class="w-full h-14 bg-red-700 hover:bg-red-800 text-white font-extrabold rounded-xl border-2 border-red-900 transition-all flex items-center justify-center gap-2 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0">
+        <i data-lucide="home" class="w-5 h-5"></i>
+        <span>Return to Candidate Select</span>
+      </button>
+    </div>
+  </main>
+
+  <!-- ==================== PHASE E2: TIMED SUSPENSION OVERLAY (non-dismissible) ==================== -->
+  <!-- This overlay is shown INSTEAD of the suspension screen for regular violations (1st and 2nd). -->
+  <!-- The session remains ACTIVE; the candidate resumes the same question after server-verified wait. -->
+  <div id="timed-suspension-overlay" class="fixed inset-0 bg-slate-950/95 backdrop-blur-sm z-[99999] flex items-center justify-center p-4 hidden">
+    <div class="bg-white max-w-md w-full p-8 rounded-2xl border-4 border-amber-500 flex flex-col items-center gap-5 shadow-[8px_8px_0px_0px_rgba(245,158,11,1)]">
+      <div class="w-14 h-14 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center border-2 border-amber-400">
+        <i data-lucide="clock" class="w-7 h-7"></i>
+      </div>
+      <div class="text-center">
+        <h2 class="text-xl font-black text-slate-900">Interview Paused</h2>
+        <p id="timed-suspension-reason" class="text-sm font-semibold text-slate-600 mt-2 leading-relaxed">
+          A proctoring violation was detected.
+        </p>
+        <p class="text-xs font-bold text-amber-700 mt-2 bg-amber-50 py-1.5 px-3 rounded-lg border border-amber-300">
+          You may resume when the timer reaches 0:00
+        </p>
+      </div>
+      <div class="bg-slate-900 p-5 rounded-xl border-2 border-slate-700 w-full text-center">
+        <span class="text-xs font-extrabold text-slate-400 uppercase tracking-wider block mb-1">Wait Remaining</span>
+        <span id="timed-suspension-countdown" class="text-4xl font-black text-white tabular-nums">05:00</span>
+        <div id="timed-suspension-count-badge" class="mt-2 text-xs font-bold text-slate-400"></div>
+      </div>
+      <!-- Resume button: hidden until countdown reaches 0; server must confirm before it works -->
+      <button id="btn-timed-resume"
+        class="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl border-2 border-slate-900 transition-all flex items-center justify-center gap-2 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0 hidden"
+        aria-label="Resume interview after suspension wait">
+        <i data-lucide="play-circle" class="w-5 h-5"></i>
+        <span>Resume Interview</span>
+      </button>
+      <p class="text-[10px] font-semibold text-slate-400 text-center">
+        This overlay cannot be closed. Do not attempt to manipulate your browser — the resume timer is verified server-side.
+      </p>
+    </div>
+  </div>
 
   <!-- Flag Question Dialog Modal (PART F) -->
   <div id="modal-flag-question" class="fixed inset-0 bg-slate-950/70 z-50 flex items-center justify-center p-4 hidden backdrop-blur-xs">

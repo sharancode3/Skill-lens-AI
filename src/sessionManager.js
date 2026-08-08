@@ -254,6 +254,14 @@ export async function createSession(sessionId, candidate) {
     clipboardViolations: 0,
     flaggedForReview: false,
     warningLockoutUntil: null,
+    // Phase E2: Timed suspension state (replaces immediate permanent termination)
+    suspension: {
+      active: false,
+      reason: null,
+      suspendedAt: null,
+      resumeAt: null,
+      suspensionCount: 0
+    },
     proctoring: {
       violations: [],
       flaggedForReview: false,
@@ -1622,9 +1630,111 @@ export async function endSessionEarly(sessionId) {
 }
 
 /**
+ * Phase E2: Shared Timed-Suspension Engine.
+ *
+ * Callable from any violation detector. On call:
+ *   - Increments session.suspension.suspensionCount.
+ *   - If count >= 3 (escalation ceiling): permanently terminates via endSessionEarly path.
+ *   - Otherwise: sets session.suspension.{active, reason, suspendedAt, resumeAt}, keeps
+ *     session.state = ASKING (session stays alive), and returns { suspended: true }.
+ *
+ * The client renders a non-dismissible countdown overlay and only resumes after the
+ * server verifies that Date.now() >= resumeAt via GET /api/session/:id/resume-check.
+ */
+export async function triggerSuspension(sessionId, reason) {
+  const session = await getSessionDoc(sessionId);
+  if (!session) return { error: 'Session not found', status: 404 };
+
+  // Initialize suspension object if missing (older sessions before E2)
+  if (!session.suspension) {
+    session.suspension = { active: false, reason: null, suspendedAt: null, resumeAt: null, suspensionCount: 0 };
+  }
+
+  session.suspension.suspensionCount = (session.suspension.suspensionCount || 0) + 1;
+  const count = session.suspension.suspensionCount;
+
+  console.log(`[Suspension Engine] Violation triggered for session "${sessionId}". suspensionCount=${count}, reason="${reason}"`);
+
+  // Escalation ceiling: 3rd violation permanently terminates the session
+  if (count >= 3) {
+    console.log(`[Suspension Engine] Escalation ceiling reached (count=${count}). Permanently terminating session "${sessionId}".`);
+    session.suspension.active = false;
+    await saveSessionDoc(sessionId, session);
+
+    // Permanently terminate — reuse the endSessionEarly wrap-up path
+    const termResult = await endSessionEarly(sessionId);
+    // Override summary/verdict to make clear this was a termination, not a voluntary exit
+    if (termResult.feedback) {
+      termResult.feedback.summary = `Interview terminated due to repeated integrity violations (${reason}). ` + (termResult.feedback.summary || '');
+    }
+    return {
+      ...termResult,
+      terminated: true,
+      terminatedForRepeatedViolations: true,
+      suspensionCount: count
+    };
+  }
+
+  // Timed lockout: 5 minutes from now (server clock — authoritative)
+  const LOCKOUT_MS = 5 * 60 * 1000;
+  const suspendedAt = new Date();
+  const resumeAt = new Date(suspendedAt.getTime() + LOCKOUT_MS);
+
+  session.suspension.active = true;
+  session.suspension.reason = reason;
+  session.suspension.suspendedAt = suspendedAt.toISOString();
+  session.suspension.resumeAt = resumeAt.toISOString();
+  // Session state stays ASKING — candidate resumes the same question
+
+  await saveSessionDoc(sessionId, session);
+
+  console.log(`[Suspension Engine] Session "${sessionId}" suspended until ${resumeAt.toISOString()} (count=${count}).`);
+
+  return {
+    suspended: true,
+    terminated: false,
+    reason,
+    suspendedAt: suspendedAt.toISOString(),
+    resumeAt: resumeAt.toISOString(),
+    suspensionCount: count,
+    warningsRemaining: Math.max(0, 3 - count)
+  };
+}
+
+/**
+ * Server-authoritative resume gate.
+ * Checks whether the timed lockout period has genuinely elapsed on the server's clock.
+ * Returns { canResume: true } only when Date.now() >= session.suspension.resumeAt.
+ * This prevents client-side timer manipulation (devtools, JS injection) from bypassing the wait.
+ */
+export async function checkSuspensionResume(sessionId) {
+  const session = await getSessionDoc(sessionId);
+  if (!session) return { error: 'Session not found', status: 404 };
+
+  const susp = session.suspension;
+  if (!susp || !susp.active) {
+    return { canResume: true, alreadyCleared: true };
+  }
+
+  const resumeAt = new Date(susp.resumeAt).getTime();
+  const msRemaining = resumeAt - Date.now();
+
+  if (msRemaining > 0) {
+    return { canResume: false, msRemaining };
+  }
+
+  // Elapsed — clear the suspension flag and save
+  session.suspension.active = false;
+  await saveSessionDoc(sessionId, session);
+  console.log(`[Suspension Engine] Lockout cleared for session "${sessionId}". Candidate may resume.`);
+  return { canResume: true };
+}
+
+/**
  * Logs a proctoring violation server-side.
- * If total violations (including fullscreen-exit and tab-switch) exceeds 3,
- * the candidate is suspended.
+ * Phase E2: Non-camera violations now call triggerSuspension() for a timed lockout
+ * rather than immediately setting state=DONE. Camera-based high-severity violations
+ * (multi_face, phone) remain immediately permanently terminating.
  */
 export async function reportViolation(sessionId, violationType) {
   const session = await getSessionDoc(sessionId);
@@ -1698,101 +1808,20 @@ export async function reportViolation(sessionId, violationType) {
     console.log(`[Proctoring Server] SESSION FLAGGED FOR REVIEW (Total violations: ${violationCount})`);
   }
 
-  // Phase 2 Rule: 3rd fullscreen exit causes immediate suspension
-  const isFullscreenSuspension = (session.fullscreenExits >= 3);
-  // Phase 3 Rule: 1st tab switch causes immediate suspension (zero tolerance)
-  const isTabSwitchSuspension = (violationType === 'tab-switch' && session.tabSwitches >= 1);
-  // Phase 4 Rule: 2nd copy/paste or screenshot attempt causes immediate suspension
-  const isClipboardSuspension = ((violationType === 'copy-paste' || violationType === 'screenshot') && session.clipboardViolations >= 2);
-  
-  // General suspension for non-camera interface violations reaching 4
+  // Phase E2: Camera-based HIGH severity violations (multi_face, phone) remain immediately
+  // permanently terminating — they indicate another human or device, not an accidental exit.
+  const isHighSeverityCameraViolation = isCameraViolation &&
+    (violationType === 'multi_face_violation' || violationType === 'phone_violation');
+
+  // All other non-camera violations are routed through the timed-suspension engine.
+  // The old threshold checks (fullscreenExits >= 3, tabSwitches >= 1, etc.) are replaced
+  // by triggerSuspension's internal suspensionCount escalation ceiling.
   const nonCameraViolationCount = (session.fullscreenExits || 0) + (session.tabSwitches || 0) + (session.clipboardViolations || 0);
-  const isGeneralSuspension = nonCameraViolationCount >= 4;
+  const shouldTriggerTimedSuspension = !isCameraViolation && nonCameraViolationCount >= 1;
+  // Camera violations below high-severity threshold: accumulate warnings but don't trigger timed suspension
+  const isCameraTermination = isHighSeverityCameraViolation || (isCameraViolation && violationCount >= 4);
 
-  const isCameraSuspension = isCameraViolation && violationCount >= 4;
-  const shouldSuspend = isCameraSuspension || (!isCameraViolation && (isFullscreenSuspension || isTabSwitchSuspension || isClipboardSuspension || isGeneralSuspension));
-
-  if (!shouldSuspend && (violationType === 'fullscreen-exit' || violationType === 'tab-switch')) {
-    const lockoutMs = 10000; // 10 second warning lockout countdown
-    session.warningLockoutUntil = new Date(Date.now() + lockoutMs).toISOString();
-  } else {
-    session.warningLockoutUntil = null;
-  }
-
-  if (shouldSuspend) {
-    // Suspend candidate!
-    session.state = SessionState.DONE;
-    let summaryMsg = "Candidate was suspended for repeated proctoring violations.";
-    if (isClipboardSuspension) {
-      summaryMsg = "Candidate was suspended due to repeated copy/paste or screenshot attempts during an active proctored session.";
-    } else if (isTabSwitchSuspension) {
-      summaryMsg = "Candidate was suspended immediately due to switching tabs/windows during an active proctored session.";
-    } else if (isFullscreenSuspension) {
-      summaryMsg = "Candidate was suspended due to repeated fullscreen violations (exited fullscreen 3 times).";
-    } else if (isCameraSuspension) {
-      summaryMsg = "Candidate was suspended due to repeated proctoring anomalies (camera, face, or gaze deviations) detected during the session.";
-    }
-
-    session.feedback = {
-      summary: summaryMsg,
-      strengths: [],
-      gaps: [],
-      next: []
-    };
-    session.judgeVerdict = {
-      decision: "would_reject",
-      reasoning: summaryMsg,
-      evidenceTrail: []
-    };
-    session.accuracyLog = []; // zero out scores
-    
-    // Register 5-minute cooldown
-    const candSnapshot = session.candidateSnapshot;
-    const candId = candSnapshot.id || (candSnapshot.member ? candSnapshot.member.id : null);
-    if (candId) {
-      cooldowns.set(candId, new Date());
-      console.log(`[Cooldown Registered] Candidate ID "${candId}" suspended at ${new Date().toISOString()}`);
-    }
-    
-    await saveSessionDoc(sessionId, session);
-
-    // Update session.proctoring schema
-    session.proctoring = {
-      violations: session.violations.map(v => ({
-        type: v.type,
-        timestamp: v.timestamp,
-        severity: v.severity || 'medium'
-      })),
-      flaggedForReview: session.flaggedForReview || false,
-      totalViolationCount: session.violations.length,
-      warningLockoutUntil: session.warningLockoutUntil || null
-    };
-
-    await saveSessionDoc(sessionId, session);
-
-    return {
-      done: true,
-      suspended: true,
-      fullscreenExits: session.fullscreenExits,
-      tabSwitches: session.tabSwitches,
-      clipboardViolations: session.clipboardViolations,
-      warningsRemaining: 0,
-      violationCount,
-      flaggedForReview: !!session.flaggedForReview,
-      warningLockoutUntil: session.warningLockoutUntil || null,
-      feedback: session.feedback,
-      metrics: {
-        overallAccuracy: 0,
-        perDay: [],
-        difficultyProgression: [],
-        questionTypeBreakdown: { open: 0, mcq: 0, diagram_interpret: 0 }
-      },
-      judgeVerdict: session.judgeVerdict,
-      proctoringSummary: getProctoringSummary(session)
-    };
-  }
-
-  // Update session.proctoring schema
+  // Save violation log before branching
   session.proctoring = {
     violations: session.violations.map(v => ({
       type: v.type,
@@ -1803,8 +1832,50 @@ export async function reportViolation(sessionId, violationType) {
     totalViolationCount: session.violations.length,
     warningLockoutUntil: session.warningLockoutUntil || null
   };
-
   await saveSessionDoc(sessionId, session);
+
+  if (isCameraTermination) {
+    // Immediate permanent termination for high-severity camera violations
+    session.state = SessionState.DONE;
+    const summaryMsg = "Candidate was permanently suspended due to serious proctoring anomalies (multi-face or phone detected).";
+    session.feedback = { summary: summaryMsg, strengths: [], gaps: [], next: [] };
+    session.judgeVerdict = { decision: "would_reject", reasoning: summaryMsg, evidenceTrail: [] };
+    session.accuracyLog = [];
+    const candSnapshot = session.candidateSnapshot;
+    const candId = candSnapshot.id || (candSnapshot.member ? candSnapshot.member.id : null);
+    if (candId) cooldowns.set(candId, new Date());
+    await saveSessionDoc(sessionId, session);
+    return {
+      done: true, terminated: true, suspended: true,
+      fullscreenExits: session.fullscreenExits, tabSwitches: session.tabSwitches,
+      clipboardViolations: session.clipboardViolations, warningsRemaining: 0, violationCount,
+      flaggedForReview: !!session.flaggedForReview, feedback: session.feedback,
+      metrics: { overallAccuracy: 0, perDay: [], difficultyProgression: [], questionTypeBreakdown: { open: 0, mcq: 0, diagram_interpret: 0 } },
+      judgeVerdict: session.judgeVerdict, proctoringSummary: getProctoringSummary(session)
+    };
+  }
+
+  if (shouldTriggerTimedSuspension) {
+    // Phase E2: Route through timed-suspension engine
+    let reasonMsg = 'Proctoring violation detected.';
+    if (violationType === 'fullscreen-exit') reasonMsg = 'You exited fullscreen mode, which is not permitted during a proctored session.';
+    else if (violationType === 'tab-switch') reasonMsg = 'You switched to another tab or window during the interview.';
+    else if (violationType === 'copy-paste' || violationType === 'screenshot') reasonMsg = 'A copy, paste, or screenshot attempt was detected.';
+    else if (violationType === 'developer-tools') reasonMsg = 'Developer tools were opened during the session.';
+    else if (violationType === 'clipboard-copy') reasonMsg = 'A clipboard copy action was intercepted during the session.';
+
+    const suspResult = await triggerSuspension(sessionId, reasonMsg);
+    // Pass along violation counts for the client to display
+    return {
+      ...suspResult,
+      fullscreenExits: session.fullscreenExits,
+      tabSwitches: session.tabSwitches,
+      clipboardViolations: session.clipboardViolations,
+      violationCount
+    };
+  }
+
+  // Camera violation below suspension threshold: accumulate count but continue session
   const warningsRemaining = (violationType === 'copy-paste' || violationType === 'screenshot')
     ? Math.max(0, 2 - session.clipboardViolations)
     : Math.max(0, 3 - session.fullscreenExits);

@@ -536,35 +536,9 @@ async function reportViolationToServer(type) {
     });
     if (!res.ok) throw new Error('Failed to report violation.');
     const data = await res.json();
-    
-    if (data && data.suspended) {
-      handleInterviewEndFlow(data);
-    } else {
-      if (type === 'copy-paste' || type === 'screenshot') {
-        const pasteError = document.getElementById('paste-error');
-        if (pasteError) {
-          pasteError.innerHTML = `<i data-lucide="shield-alert" class="w-3.5 h-3.5 text-red-700"></i> <span>Warning 1 of 1: Copying, pasting, or screenshot attempts are prohibited. A 2nd attempt will suspend your interview.</span>`;
-          pasteError.style.display = 'flex';
-          if (window.lucide) lucide.createIcons();
-          setTimeout(() => { pasteError.style.display = 'none'; }, 6000);
-        }
-      } else {
-        const countText = document.getElementById('fullscreen-violation-count');
-        const msgText = document.getElementById('fullscreen-violation-msg');
-        
-        const exits = (data && data.fullscreenExits) || 1;
-        const remaining = (data && data.warningsRemaining !== undefined) ? data.warningsRemaining : Math.max(0, 3 - exits);
 
-        if (countText) {
-          countText.textContent = `Warning ${exits} of 2 — ${remaining} warning${remaining === 1 ? '' : 's'} remaining before automatic suspension.`;
-        }
-        if (msgText) {
-          msgText.textContent = type === 'fullscreen-exit' 
-            ? 'Exiting fullscreen mode is not permitted during proctored technical evaluations.'
-            : 'Switching away from this browser window or tab is not allowed during the interview.';
-        }
-      }
-    }
+    // Phase E2: Route through shared violation response handler
+    handleViolationResponse(data, type);
     return data;
   } catch (error) {
     console.error('Error logging violation on server:', error);
@@ -617,7 +591,7 @@ function showSuspensionScreen() {
   }, 1000);
 }
 
-// Exit button click handler for suspension screen
+// Exit button click handler for suspension screen (permanent camera termination)
 document.getElementById('btn-suspended-exit').addEventListener('click', () => {
   if (cooldownInterval) clearInterval(cooldownInterval);
   document.getElementById('screen-suspended').classList.add('hidden');
@@ -638,6 +612,245 @@ document.getElementById('btn-suspended-exit').addEventListener('click', () => {
   const cameraWidget = document.getElementById('camera-widget');
   if (cameraWidget) cameraWidget.classList.add('hidden');
 });
+
+// Exit button click handler for terminated screen (Phase E2 escalation ceiling)
+const btnTerminatedExit = document.getElementById('btn-terminated-exit');
+if (btnTerminatedExit) {
+  btnTerminatedExit.addEventListener('click', () => {
+    document.getElementById('screen-terminated').classList.add('hidden');
+    screenStart.classList.remove('hidden');
+    candidateSelect.value = '';
+    candidateCard.classList.add('hidden');
+    selectedCandidate = null;
+    currentSessionId = null;
+    localStorage.removeItem('currentSessionId');
+    isInterviewActive = false;
+    violationCount = 0;
+    firedFlaggedNotice = false;
+    if (window.CameraManager) window.CameraManager.stop();
+    const cameraWidget = document.getElementById('camera-widget');
+    if (cameraWidget) cameraWidget.classList.add('hidden');
+  });
+}
+
+// ─── Phase E2: Timed Suspension Engine (Client Side) ─────────────────────────
+
+let timedSuspensionCountdownInterval = null;
+
+/**
+ * Show the non-dismissible timed-suspension overlay.
+ * Locks all input immediately. Runs a client-side display countdown.
+ * When display reaches 0:00, reveals the "Resume Interview" button.
+ * The Resume button performs a server-authoritative check before actually resuming.
+ * @param {string} reason  - Human-readable reason for the violation.
+ * @param {string} resumeAt - ISO timestamp (server-side) when resume is permitted.
+ * @param {number} suspensionCount - Which suspension number this is (1 or 2).
+ */
+function triggerClientSuspension(reason, resumeAt, suspensionCount) {
+  // Lock all input immediately
+  chatInput.disabled = true;
+  btnSend.disabled = true;
+  isInterviewActive = false; // pause proctoring event handlers during suspension
+  stopSessionTimer();
+
+  const overlay = document.getElementById('timed-suspension-overlay');
+  const reasonEl = document.getElementById('timed-suspension-reason');
+  const countdownEl = document.getElementById('timed-suspension-countdown');
+  const countBadge = document.getElementById('timed-suspension-count-badge');
+  const resumeBtn = document.getElementById('btn-timed-resume');
+
+  if (reasonEl) reasonEl.textContent = reason || 'A proctoring violation was detected.';
+  if (countBadge) {
+    countBadge.textContent = suspensionCount
+      ? `Violation ${suspensionCount} of 2 — next violation will permanently end the session.`
+      : '';
+  }
+  if (resumeBtn) resumeBtn.classList.add('hidden');
+
+  // Exit fullscreen (browser blocks fullscreen during overlay anyway)
+  if (isCurrentlyFullscreen()) document.exitFullscreen().catch(() => {});
+
+  // Hide proctoring overlays behind the timed suspension overlay
+  const fsOverlay = document.getElementById('fullscreen-overlay');
+  const fsWarn = document.getElementById('fullscreen-warning-overlay');
+  if (fsOverlay) fsOverlay.classList.add('hidden');
+  if (fsWarn) fsWarn.classList.add('hidden');
+
+  if (overlay) overlay.classList.remove('hidden');
+  if (window.lucide) lucide.createIcons();
+
+  // Client-side countdown (display only)
+  if (timedSuspensionCountdownInterval) clearInterval(timedSuspensionCountdownInterval);
+
+  const resumeAtMs = new Date(resumeAt).getTime();
+
+  function tick() {
+    const msLeft = resumeAtMs - Date.now();
+    if (msLeft <= 0) {
+      clearInterval(timedSuspensionCountdownInterval);
+      timedSuspensionCountdownInterval = null;
+      if (countdownEl) countdownEl.textContent = '00:00';
+      // Reveal Resume button — actual resume still requires server check
+      if (resumeBtn) resumeBtn.classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
+    } else {
+      const totalSecs = Math.ceil(msLeft / 1000);
+      const mins = Math.floor(totalSecs / 60);
+      const secs = totalSecs % 60;
+      if (countdownEl) countdownEl.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+  }
+  tick(); // immediate render
+  timedSuspensionCountdownInterval = setInterval(tick, 500);
+}
+
+/**
+ * Show the permanent Session Terminated screen (Phase E2 escalation ceiling).
+ * Routes through handleInterviewEndFlow so feedback is still generated.
+ */
+function showTerminatedScreen() {
+  isInterviewActive = false;
+  stopSessionTimer();
+
+  if (isCurrentlyFullscreen()) document.exitFullscreen().catch(() => {});
+
+  // Hide all other screens
+  const overlay = document.getElementById('timed-suspension-overlay');
+  if (overlay) overlay.classList.add('hidden');
+  if (timedSuspensionCountdownInterval) {
+    clearInterval(timedSuspensionCountdownInterval);
+    timedSuspensionCountdownInterval = null;
+  }
+  document.getElementById('fullscreen-overlay').classList.add('hidden');
+  document.getElementById('fullscreen-warning-overlay').classList.add('hidden');
+  screenStart.classList.add('hidden');
+  screenChat.classList.add('hidden');
+  screenFeedback.classList.add('hidden');
+
+  // Stop camera
+  if (window.CameraManager) window.CameraManager.stop();
+  const cameraWidget = document.getElementById('camera-widget');
+  if (cameraWidget) cameraWidget.classList.add('hidden');
+
+  document.getElementById('screen-terminated').classList.remove('hidden');
+  localStorage.removeItem('currentSessionId');
+  if (window.lucide) lucide.createIcons();
+}
+
+/**
+ * Shared handler for all violation API responses (Phase E2).
+ * Routes: terminated → showTerminatedScreen, suspended → triggerClientSuspension,
+ * otherwise → existing warning overlay / fullscreen warning path.
+ */
+function handleViolationResponse(data, originalViolationType) {
+  if (!data) return;
+
+  if (data.terminated) {
+    // Escalation ceiling: 3rd violation — permanent termination
+    showTerminatedScreen();
+    return;
+  }
+
+  if (data.suspended) {
+    // Timed suspension (1st or 2nd violation)
+    triggerClientSuspension(
+      data.reason || 'A proctoring violation was detected.',
+      data.resumeAt,
+      data.suspensionCount
+    );
+    return;
+  }
+
+  // No suspension — show standard warning overlay for copy/paste or fullscreen/tab
+  if (originalViolationType === 'copy-paste' || originalViolationType === 'screenshot') {
+    const pasteError = document.getElementById('paste-error');
+    if (pasteError) {
+      pasteError.innerHTML = `<i data-lucide="shield-alert" class="w-3.5 h-3.5 text-red-700"></i> <span>Warning 1 of 1: Copying, pasting, or screenshot attempts are prohibited. A 2nd attempt will suspend your interview.</span>`;
+      pasteError.style.display = 'flex';
+      if (window.lucide) lucide.createIcons();
+      setTimeout(() => { pasteError.style.display = 'none'; }, 6000);
+    }
+  } else {
+    const countText = document.getElementById('fullscreen-violation-count');
+    const msgText = document.getElementById('fullscreen-violation-msg');
+    const exits = (data && data.fullscreenExits) || 1;
+    const remaining = (data && data.warningsRemaining !== undefined) ? data.warningsRemaining : Math.max(0, 3 - exits);
+    if (countText) countText.textContent = `Warning ${exits} of 2 — ${remaining} warning${remaining === 1 ? '' : 's'} remaining before automatic suspension.`;
+    if (msgText) {
+      msgText.textContent = originalViolationType === 'fullscreen-exit'
+        ? 'Exiting fullscreen mode is not permitted during proctored technical evaluations.'
+        : 'Switching away from this browser window or tab is not allowed during the interview.';
+    }
+  }
+}
+
+// Phase E2: Wire the Resume button — server-authoritative check before resuming
+const btnTimedResume = document.getElementById('btn-timed-resume');
+if (btnTimedResume) {
+  btnTimedResume.addEventListener('click', async () => {
+    if (!currentSessionId) return;
+
+    btnTimedResume.disabled = true;
+    btnTimedResume.innerHTML = `<i data-lucide="loader-circle" class="w-5 h-5 animate-spin"></i><span>Verifying with server…</span>`;
+    if (window.lucide) lucide.createIcons();
+
+    try {
+      const res = await fetch(`/api/session/${currentSessionId}/resume`, { method: 'POST' });
+      const data = await res.json();
+
+      if (!data.canResume) {
+        // Server says not yet — client-side manipulation attempt blocked
+        btnTimedResume.disabled = false;
+        btnTimedResume.innerHTML = `<i data-lucide="play-circle" class="w-5 h-5"></i><span>Resume Interview</span>`;
+        if (window.lucide) lucide.createIcons();
+        const countdownEl = document.getElementById('timed-suspension-countdown');
+        if (countdownEl) {
+          const secsLeft = Math.ceil((data.msRemaining || 1000) / 1000);
+          const m = Math.floor(secsLeft / 60), s = secsLeft % 60;
+          countdownEl.textContent = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+        }
+        return;
+      }
+
+      // Server confirmed resume — clear overlay, re-enable input, re-enter fullscreen
+      const overlay = document.getElementById('timed-suspension-overlay');
+      if (overlay) overlay.classList.add('hidden');
+
+      if (timedSuspensionCountdownInterval) {
+        clearInterval(timedSuspensionCountdownInterval);
+        timedSuspensionCountdownInterval = null;
+      }
+
+      chatInput.disabled = false;
+      btnSend.disabled = false;
+      isInterviewActive = true;
+      startSessionTimer();
+
+      // Re-enter fullscreen (requires fresh user gesture — this click is it)
+      await enterFullscreen();
+
+      btnTimedResume.disabled = false;
+      btnTimedResume.innerHTML = `<i data-lucide="play-circle" class="w-5 h-5"></i><span>Resume Interview</span>`;
+
+    } catch (err) {
+      console.error('[Resume] Network error during server resume-check:', err);
+      btnTimedResume.disabled = false;
+      btnTimedResume.innerHTML = `<i data-lucide="play-circle" class="w-5 h-5"></i><span>Resume Interview</span>`;
+      if (window.lucide) lucide.createIcons();
+    }
+  });
+}
+
+// Block Escape key from dismissing the timed-suspension-overlay
+document.addEventListener('keydown', (e) => {
+  const overlay = document.getElementById('timed-suspension-overlay');
+  if (overlay && !overlay.classList.contains('hidden') && e.key === 'Escape') {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }
+}, true);
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Unified debounced exit-event proctoring pipeline
 let exitDebounceTimeout = null;
@@ -728,11 +941,10 @@ async function processLogicalExitEvent(triggerType = 'fullscreenchange') {
   if (!isFS || isHidden || !isFocused || isDirectSecurityEvent) {
     console.warn(`[Proctor] Consolidated exit/security event verified: trigger=${triggerType}, FS=${isFS}, hidden=${isHidden}, focused=${isFocused}`);
 
-    // Report violation using shared proctoring counter (3-strikes threshold)
+    // Report violation — Phase E2: response routed through handleViolationResponse
     const data = await reportViolationToServer('fullscreen-exit');
-    if (data && data.suspended) {
-      return;
-    }
+    // If suspended or terminated, reportViolationToServer already handled the UI
+    if (data && (data.suspended || data.terminated)) return;
 
     // Try to immediately revert back to fullscreen
     if (!isFS) {
