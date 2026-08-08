@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { initQuestionBank } from './questionBank.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -70,6 +71,9 @@ export function initializeData() {
 
     // 4. Perform startup validation pass
     runStartupValidation(candidatesData.candidates);
+
+    // 5. Initialize Question Bank nested index
+    initQuestionBank();
 
   } catch (error) {
     console.error('[DataManager] Initialization failed critical error:', error);
