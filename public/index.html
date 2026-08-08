@@ -318,19 +318,19 @@
         </div>
 
         <!-- Mobile Drawer Toggle -->
-        <button id="btn-toggle-sidebar" class="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl border-2 border-slate-900 md:hidden flex items-center gap-1.5 text-xs font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition">
+        <button id="btn-toggle-sidebar" class="h-11 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl border-2 border-slate-900 md:hidden flex items-center gap-1.5 text-sm font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition">
           <i data-lucide="history" class="w-3.5 h-3.5"></i>
           <span>History</span>
         </button>
 
         <!-- Flag Question Button (PART F Escape Hatch) -->
-        <button id="btn-flag-question" title="Flag this question as unclear or wrong" class="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-md border-2 border-slate-300 flex items-center gap-1.5 text-xs font-black transition-all">
+        <button id="btn-flag-question" title="Flag this question as unclear or wrong" class="h-11 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl border-2 border-slate-900 flex items-center gap-1.5 text-sm font-black transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0">
           <i data-lucide="flag" class="w-3.5 h-3.5 text-amber-500"></i>
           <span class="hidden sm:inline">Flag Question</span>
         </button>
 
         <div class="relative">
-          <button id="btn-toggle-settings" title="Display & Layout Settings" class="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-xl border-2 border-slate-900 flex items-center gap-1.5 text-xs font-black transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0">
+          <button id="btn-toggle-settings" title="Display & Layout Settings" class="h-11 px-4 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-xl border-2 border-slate-900 flex items-center gap-1.5 text-sm font-black transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0">
             <i data-lucide="settings" class="w-4 h-4 text-slate-700"></i>
             <span class="hidden sm:inline">Settings</span>
           </button>
@@ -412,7 +412,7 @@
 
         <!-- Pinned Bottom Typing Console -->
         <footer class="chat-input-footer bg-white dark:bg-slate-950 border-t-2 border-slate-900 p-4 shrink-0 shadow-[0_-4px_0_0_rgba(0,0,0,0.05)]">
-          <div class="max-w-3xl mx-auto flex flex-col gap-1.5">
+          <div class="max-w-5xl mx-auto flex flex-col gap-1.5">
             <div class="flex items-end gap-3 relative">
               <div id="paste-error" class="absolute -top-10 left-2 text-xs text-red-800 font-extrabold bg-red-100 border-2 border-slate-900 px-3 py-1.5 rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] items-center gap-1.5 z-20 transition-all" style="display: none;">
                 <i data-lucide="shield-alert" class="w-3.5 h-3.5 text-red-700"></i>
@@ -424,7 +424,7 @@
                   rows="1"
                   placeholder="Type your answer here..." 
                   class="chat-input-textarea w-full py-3.5 px-4 bg-transparent text-slate-900 dark:text-white font-bold text-sm resize-none outline-none overflow-y-auto leading-relaxed"
-                  style="max-height: 180px; min-height: 50px;"
+                  style="max-height: 250px; min-height: 100px;"
                 ></textarea>
               </div>
               <button 

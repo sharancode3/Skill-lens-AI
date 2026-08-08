@@ -298,7 +298,7 @@ button:focus-visible {
 
 /* ==================== CHAT VIEW SPECIFICS ==================== */
 #chat-messages {
-  max-width: 56rem;
+  max-width: 64rem !important;
   width: 100%;
   margin: 0 auto;
   flex-grow: 1;
@@ -948,7 +948,8 @@ body.font-size-sm .header-badge, body.font-size-md .header-badge, body.font-size
 
 body.font-size-sm #chat-input, body.font-size-md #chat-input, body.font-size-lg #chat-input {
   font-size: calc(0.875rem * var(--global-scale)) !important;
-  height: calc(3.25rem * var(--global-scale)) !important;
+  min-height: calc(7rem * var(--global-scale)) !important;
+  height: auto !important;
 }
 
 body.font-size-sm #btn-send, body.font-size-md #btn-send, body.font-size-lg #btn-send {
@@ -1014,135 +1015,135 @@ body.font-size-sm button, body.font-size-md button, body.font-size-lg button {
 
 /* ==================== DARK MODE OVERRIDES ==================== */
 .dark #screen-chat {
-  background-color: #0F172A !important;
+  background-color: #121212 !important;
 }
 
 .dark header {
-  background-color: #1E293B !important;
-  border-bottom-color: #334155 !important;
-  color: #F8FAFC !important;
+  background-color: #1a1a1a !important;
+  border-bottom-color: #333333 !important;
+  color: #f3f4f6 !important;
 }
 
 .dark header #chat-cand-name {
-  color: #F8FAFC !important;
+  color: #f3f4f6 !important;
 }
 
 .dark header .header-badge {
-  background-color: #334155 !important;
-  color: #F8FAFC !important;
-  border-color: #F8FAFC !important;
-  box-shadow: 2px 2px 0px 0px #F8FAFC !important;
+  background-color: #262626 !important;
+  color: #f3f4f6 !important;
+  border-color: #f3f4f6 !important;
+  box-shadow: 2px 2px 0px 0px #f3f4f6 !important;
 }
 
 .dark header .header-badge i {
-  color: #3B82F6 !important;
+  color: #3b82f6 !important;
 }
 
 .dark header .header-badge #chat-progress-questions {
-  color: #60A5FA !important;
+  color: #60a5fa !important;
 }
 
 .dark header .header-badge #chat-progress-topics {
-  color: #C084FC !important;
+  color: #c084fc !important;
 }
 
 .dark header .header-badge #chat-progress-difficulty {
-  color: #FBBF24 !important;
+  color: #fbbf24 !important;
 }
 
 .dark header button {
-  background-color: #334155 !important;
-  color: #F8FAFC !important;
-  border-color: #F8FAFC !important;
-  box-shadow: 2px 2px 0px 0px #F8FAFC !important;
+  background-color: #262626 !important;
+  color: #f3f4f6 !important;
+  border-color: #f3f4f6 !important;
+  box-shadow: 2px 2px 0px 0px #f3f4f6 !important;
 }
 
 .dark .chat-stream-column {
-  background-color: #0F172A !important;
+  background-color: #121212 !important;
 }
 
 .dark #chat-messages {
-  background-color: #0F172A !important;
+  background-color: #121212 !important;
 }
 
 .dark .chat-bubble.interviewer {
-  background-color: #1E293B !important;
-  color: #F8FAFC !important;
-  border-color: #F8FAFC !important;
-  box-shadow: 3px 3px 0px 0px #F8FAFC !important;
+  background-color: #1a1a1a !important;
+  color: #f3f4f6 !important;
+  border-color: #f3f4f6 !important;
+  box-shadow: 3px 3px 0px 0px #f3f4f6 !important;
 }
 
 .dark .chat-bubble.candidate {
-  background-color: #3B82F6 !important;
-  color: #FFFFFF !important;
-  border-color: #F8FAFC !important;
-  box-shadow: 3px 3px 0px 0px #F8FAFC !important;
+  background-color: #3b82f6 !important;
+  color: #ffffff !important;
+  border-color: #f3f4f6 !important;
+  box-shadow: 3px 3px 0px 0px #f3f4f6 !important;
 }
 
 .dark .chat-input-footer {
-  background-color: #1E293B !important;
-  border-top-color: #334155 !important;
+  background-color: #1a1a1a !important;
+  border-top-color: #333333 !important;
   box-shadow: none !important;
 }
 
 .dark #chat-input {
-  background-color: #0F172A !important;
-  color: #F8FAFC !important;
-  border-color: #334155 !important;
+  background-color: #121212 !important;
+  color: #f3f4f6 !important;
+  border-color: #333333 !important;
 }
 
 .dark #chat-input:focus {
-  border-color: #3B82F6 !important;
-  box-shadow: 3px 3px 0px 0px #3B82F6 !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 3px 3px 0px 0px #3b82f6 !important;
 }
 
 .dark #btn-send {
-  background-color: #3B82F6 !important;
-  border-color: #F8FAFC !important;
-  box-shadow: 3px 3px 0px 0px #F8FAFC !important;
+  background-color: #3b82f6 !important;
+  border-color: #f3f4f6 !important;
+  box-shadow: 3px 3px 0px 0px #f3f4f6 !important;
 }
 
 .dark #btn-send:hover {
-  background-color: #2563EB !important;
-  box-shadow: 4px 4px 0px 0px #F8FAFC !important;
+  background-color: #2563eb !important;
+  box-shadow: 4px 4px 0px 0px #f3f4f6 !important;
 }
 
 .dark #btn-send:active {
-  box-shadow: 2px 2px 0px 0px #F8FAFC !important;
+  box-shadow: 2px 2px 0px 0px #f3f4f6 !important;
 }
 
 .dark #chat-sidebar {
-  background-color: #1E293B !important;
-  border-left-color: #334155 !important;
+  background-color: #1a1a1a !important;
+  border-left-color: #333333 !important;
 }
 
 .dark #sidebar-list {
-  background-color: #1E293B !important;
+  background-color: #1a1a1a !important;
 }
 
 .dark .sidebar-row {
-  background-color: #0F172A !important;
-  border-color: #334155 !important;
+  background-color: #121212 !important;
+  border-color: #333333 !important;
 }
 
 .dark .sidebar-row:hover {
-  border-color: #475569 !important;
+  border-color: #404040 !important;
 }
 
 .dark .sidebar-row-header span {
-  color: #F8FAFC !important;
+  color: #f3f4f6 !important;
 }
 
 .dark .sidebar-badge {
-  background-color: #334155 !important;
-  border-color: #475569 !important;
-  color: #CBD5E1 !important;
+  background-color: #262626 !important;
+  border-color: #404040 !important;
+  color: #cbd5e1 !important;
 }
 
 .dark #settings-popover {
-  background-color: #1E293B !important;
-  border-color: #F8FAFC !important;
-  box-shadow: 4px 4px 0px 0px #F8FAFC !important;
+  background-color: #1a1a1a !important;
+  border-color: #f3f4f6 !important;
+  box-shadow: 4px 4px 0px 0px #f3f4f6 !important;
 }
 
 .dark #settings-popover button {
@@ -1667,99 +1668,99 @@ body.font-size-lg #chat-cand-name {
 
 /* ==================== DARK MODE THEME ==================== */
 html.dark body {
-  background-color: #0b0f17 !important;
-  color: #f8fafc !important;
+  background-color: #121212 !important;
+  color: #f3f4f6 !important;
 }
 
 html.dark #screen-chat {
-  background-color: #0b0f17 !important;
+  background-color: #121212 !important;
 }
 
 html.dark .chat-header {
-  background-color: #0f172a !important;
-  border-color: #334155 !important;
+  background-color: #1a1a1a !important;
+  border-color: #333333 !important;
 }
 
 html.dark .chat-stream-column {
-  background-color: #0b0f17 !important;
+  background-color: #121212 !important;
 }
 
 html.dark .chat-input-footer {
-  background-color: #0f172a !important;
-  border-color: #334155 !important;
+  background-color: #1a1a1a !important;
+  border-color: #333333 !important;
 }
 
 html.dark #chat-sidebar {
-  background-color: #0f172a !important;
-  border-color: #334155 !important;
+  background-color: #1a1a1a !important;
+  border-color: #333333 !important;
 }
 
 html.dark #chat-sidebar .bg-slate-50 {
-  background-color: #1e293b !important;
-  border-color: #334155 !important;
+  background-color: #262626 !important;
+  border-color: #333333 !important;
 }
 
 html.dark .sidebar-row {
-  background-color: #1e293b !important;
-  border-color: #475569 !important;
-  color: #f8fafc !important;
+  background-color: #262626 !important;
+  border-color: #404040 !important;
+  color: #f3f4f6 !important;
 }
 
 html.dark .sidebar-badge {
-  background-color: #334155 !important;
-  color: #f8fafc !important;
-  border-color: #64748b !important;
+  background-color: #333333 !important;
+  color: #f3f4f6 !important;
+  border-color: #525252 !important;
 }
 
 html.dark .interviewer-bubble {
-  background-color: #1e293b !important;
-  border-color: #475569 !important;
-  color: #f8fafc !important;
+  background-color: #262626 !important;
+  border-color: #404040 !important;
+  color: #f3f4f6 !important;
   box-shadow: 4px 4px 0px 0px rgba(0,0,0,1) !important;
 }
 
 html.dark .candidate-bubble {
-  background-color: #1d4ed8 !important;
-  border-color: #3b82f6 !important;
+  background-color: #3b82f6 !important;
+  border-color: #60a5fa !important;
   color: #ffffff !important;
   box-shadow: 4px 4px 0px 0px rgba(0,0,0,1) !important;
 }
 
 html.dark .thinking-bubble {
-  background-color: #1e293b !important;
-  border-color: #475569 !important;
-  color: #94a3b8 !important;
+  background-color: #262626 !important;
+  border-color: #404040 !important;
+  color: #a3a3a3 !important;
 }
 
 html.dark .header-badge {
-  background-color: #1e293b !important;
-  border-color: #475569 !important;
-  color: #f8fafc !important;
+  background-color: #262626 !important;
+  border-color: #404040 !important;
+  color: #f3f4f6 !important;
 }
 
 html.dark .mcq-option-btn {
-  background-color: #1e293b !important;
-  color: #f8fafc !important;
-  border-color: #475569 !important;
+  background-color: #262626 !important;
+  color: #f3f4f6 !important;
+  border-color: #404040 !important;
 }
 
 html.dark .mcq-option-btn:hover {
-  background-color: #334155 !important;
+  background-color: #333333 !important;
 }
 
 html.dark .diagram-container {
-  background-color: #1e293b !important;
-  border-color: #475569 !important;
+  background-color: #262626 !important;
+  border-color: #404040 !important;
 }
 
 html.dark .vkey-btn {
-  background-color: #1e293b !important;
-  color: #f8fafc !important;
-  border-color: #475569 !important;
+  background-color: #262626 !important;
+  color: #f3f4f6 !important;
+  border-color: #404040 !important;
 }
 
 html.dark .vkey-btn:hover {
-  background-color: #334155 !important;
+  background-color: #333333 !important;
 }
 
 /* ==================== CAMERA PROCTORING & LIFECYCLE STYLES ==================== */
@@ -1867,6 +1868,27 @@ button:disabled:not(.selected-choice) {
 #camera-lost-overlay.hidden {
   display: none !important;
 }
+
+/* ==================== LAYOUT SPACING & GENERAL BUTTON OVERRIDES ==================== */
+button {
+  padding-left: 1.5rem !important;
+  padding-right: 1.5rem !important;
+  transition: all 0.15s ease-in-out !important;
+}
+
+/* Specific button overrides that must preserve default paddings */
+.vkey-btn, .btn-font-size, #btn-toggle-settings, #btn-flag-question, #btn-toggle-sidebar, .btn-calc-num, #modal-calculator button, #settings-popover button, .lucide {
+  padding-left: inherit !important;
+  padding-right: inherit !important;
+}
+
+/* Ensure post-feedback row inputs have comfortable margins and sizes */
+.post-feedback-comment-input {
+  padding: 0.75rem 1rem !important;
+  margin-top: 0.5rem !important;
+  font-size: 0.875rem !important;
+}
+
 
 
 

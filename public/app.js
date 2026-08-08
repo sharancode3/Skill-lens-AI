@@ -648,33 +648,10 @@ function startWarningLockoutCountdown(seconds) {
   const resumeBtn = document.getElementById('btn-fullscreen-resume');
   if (!resumeBtn) return;
 
-  resumeBtn.disabled = true;
-
-  if (activeLockoutInterval) clearInterval(activeLockoutInterval);
-
-  let currentSec = seconds;
-  const originalText = 'Re-enter Fullscreen & Resume Interview';
-  
-  const updateBtnText = () => {
-    if (currentSec > 0) {
-      resumeBtn.innerHTML = `<i data-lucide="lock" class="w-5 h-5"></i> <span>Wait ${currentSec}s to Resume</span>`;
-    } else {
-      resumeBtn.innerHTML = `<i data-lucide="maximize-2" class="w-5 h-5"></i> <span>${originalText}</span>`;
-      resumeBtn.disabled = false;
-    }
-    if (window.lucide) lucide.createIcons();
-  };
-
-  updateBtnText();
-
-  activeLockoutInterval = setInterval(() => {
-    currentSec--;
-    updateBtnText();
-    if (currentSec <= 0) {
-      clearInterval(activeLockoutInterval);
-      activeLockoutInterval = null;
-    }
-  }, 1000);
+  // 10s lockout timer removed completely - button is immediately active
+  resumeBtn.disabled = false;
+  resumeBtn.innerHTML = `<i data-lucide="maximize-2" class="w-5 h-5"></i> <span>Re-enter Fullscreen & Resume Interview</span>`;
+  if (window.lucide) lucide.createIcons();
 }
 
 function registerPotentialExit(signalType) {
@@ -703,21 +680,23 @@ async function processLogicalExitEvent() {
   if (!isFS || isHidden || !isFocused) {
     console.warn(`[Proctor] Logical exit event verified: FS=${isFS}, hidden=${isHidden}, focused=${isFocused}`);
 
-    // Show warning overlay and start 10s lockout immediately
-    startWarningLockoutCountdown(10);
-
-    // Report violation to server
+    // Report violation to server immediately
     const data = await reportViolationToServer('fullscreen-exit');
-    if (data) {
-      if (data.suspended) {
+    if (data && data.suspended) {
+      return;
+    }
+
+    // Try to immediately revert back to fullscreen
+    if (!isFS) {
+      const autoReenterSuccess = await enterFullscreen();
+      if (autoReenterSuccess) {
+        console.log('[Proctor] Successfully auto-reentered fullscreen on exit.');
         return;
       }
-      if (data.warningLockoutUntil) {
-        const remainingMs = new Date(data.warningLockoutUntil).getTime() - Date.now();
-        const remainingSecs = Math.max(1, Math.ceil(remainingMs / 1000));
-        startWarningLockoutCountdown(remainingSecs);
-      }
     }
+
+    // If auto-reenter was blocked or it was a focus/visibility loss, show warning overlay with active button
+    startWarningLockoutCountdown(0);
   }
 }
 
