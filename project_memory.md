@@ -64,6 +64,8 @@ This document is maintained to help AI models understand the current state of th
 - [x] Phases 6–8: Implement Frontend Web Interface (Landing, Chat, and Feedback screens) with flat design system and API integration.
 - [x] Phase 9: Hardening & Edge Cases (idempotency caching, whitespace re-prompts, forced advance, context truncation, outage simulation).
 - [x] Phase 10: Final Polish & Submission Checklist (flat-design pass, relative URL audits, architecture readme update).
+- [x] PS2 Bugfix & Voice Pack (Phases F1 to F9): Fixed 8-question stop, sticky question modes, duplicate diagrams, reaction clauses with memory, feedback score-threshold routing (<40 and >=60), and live question history sidebar.
+- [x] LoRA Voice Adapter Pack (Phases L0 to L8): Locked scope to voice/tone adaptation using Qwen 2.5 3B / Unsloth on Colab GPU with synthetic data generation and cloud fallback.
 
 
 

@@ -111,7 +111,12 @@ async function startInterviewSession() {
   // Set UI state
   chatCandName.textContent = selectedCandidate.member.name;
   chatCandRole.textContent = selectedCandidate.member.jobRole;
-  chatProgressQuestions.textContent = '0/8';
+  const initialsEl = document.getElementById('chat-avatar-initials');
+  if (initialsEl && selectedCandidate.member.name) {
+    const parts = selectedCandidate.member.name.trim().split(/\s+/);
+    initialsEl.textContent = parts.map(p => p[0]).join('').substring(0, 2).toUpperCase();
+  }
+  chatProgressQuestions.textContent = '0';
   chatProgressTopics.textContent = '0/4';
   if (chatProgressDifficulty) chatProgressDifficulty.textContent = 'Standard';
   chatMessages.innerHTML = '';
@@ -156,6 +161,13 @@ async function startInterviewSession() {
     // Append first interviewer question
     appendInterviewerMessage(data.reply, data.detectedConnections, data.nextQuestionType, data.mcqOptions, data.diagramDefinition, data.diagramQuestionText);
     updateProgress(data.questionsAsked, data.distinctDaysCovered, data.difficultyTier);
+
+    let activeTopic = null;
+    const match = (data.reply || '').match(/Day\s+(\d+)[:\s]+"([^"]+)"/i);
+    if (match) {
+      activeTopic = { day: parseInt(match[1]), title: match[2] };
+    }
+    updateSidebar(data.questionHistory, activeTopic);
   } catch (error) {
     console.error('Failed to start interview:', error);
     alert('Failed to start the interview session. Check backend logs.');
@@ -366,6 +378,13 @@ async function handleSendMessage() {
       
       appendInterviewerMessage(data.reply, data.detectedConnections, data.nextQuestionType, data.mcqOptions, data.diagramDefinition, data.diagramQuestionText);
       updateProgress(data.questionsAsked, data.distinctDaysCovered, data.difficultyTier);
+
+      let nextActiveTopic = null;
+      const match = (data.reply || '').match(/Day\s+(\d+)[:\s]+"([^"]+)"/i);
+      if (match) {
+        nextActiveTopic = { day: parseInt(match[1]), title: match[2] };
+      }
+      updateSidebar(data.questionHistory, nextActiveTopic);
     }
   } catch (error) {
     if (thinkingEl) thinkingEl.remove();
@@ -421,12 +440,20 @@ async function appendInterviewerMessage(text, connections = [], nextQuestionType
     }
   }
 
-  // Render MCQ choices if present
+  // Set input states based on question type
   if (nextQuestionType === 'mcq' && mcqOptions && mcqOptions.length > 0) {
     chatInput.disabled = true;
     btnSend.disabled = true;
     chatInput.placeholder = 'Please select one of the choices below...';
+  } else {
+    chatInput.disabled = false;
+    btnSend.disabled = false;
+    chatInput.placeholder = 'Type your technical response here...';
+    chatInput.focus();
+  }
 
+  // Render MCQ choices if present
+  if (nextQuestionType === 'mcq' && mcqOptions && mcqOptions.length > 0) {
     const mcqContainer = document.createElement('div');
     mcqContainer.className = 'mcq-container';
 
@@ -435,11 +462,18 @@ async function appendInterviewerMessage(text, connections = [], nextQuestionType
       optBtn.className = 'mcq-option-btn';
       optBtn.textContent = `${idx + 1}. ${optText}`;
       optBtn.addEventListener('click', async () => {
-        mcqContainer.querySelectorAll('button').forEach(b => b.disabled = true);
+        optBtn.classList.add('selected-choice');
+        mcqContainer.querySelectorAll('button').forEach(b => {
+          b.disabled = true;
+          if (!b.classList.contains('selected-choice')) {
+            b.classList.add('faded-choice');
+          }
+        });
         
-        chatInput.disabled = false;
-        btnSend.disabled = false;
-        chatInput.placeholder = 'Type your answer here...';
+        // Disable all inputs during the API fetch to prevent double clicks/typing
+        chatInput.disabled = true;
+        btnSend.disabled = true;
+        chatInput.placeholder = 'Processing your choice...';
 
         appendCandidateMessage(`Choice ${idx + 1}: ${optText}`);
 
@@ -521,19 +555,18 @@ function appendThinkingIndicator() {
 }
 
 function updateProgress(questions, topics) {
-  chatProgressQuestions.textContent = `${questions || 0}/8`;
+  chatProgressQuestions.textContent = `${questions || 0}`;
   chatProgressTopics.textContent = `${topics || 0}/4`;
 }
 
-function scrollChatBottom(force = false) {
+function scrollChatBottom() {
   if (!chatMessages) return;
-  const isNearBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 150;
-  if (force || isNearBottom) {
+  requestAnimationFrame(() => {
     chatMessages.scrollTo({
       top: chatMessages.scrollHeight,
       behavior: 'smooth'
     });
-  }
+  });
 }
 
 // ==================== SCREEN 3: FEEDBACK PORTAL ====================
@@ -669,11 +702,15 @@ btnRestart.addEventListener('click', () => {
   currentSessionId = null;
   isInterviewActive = false;
   violationCount = 0;
+
+  // Clear sidebar state
+  updateSidebar([]);
+  const chatSidebar = document.getElementById('chat-sidebar');
+  if (chatSidebar) chatSidebar.classList.remove('active');
 });
 
-// Disable paste on technical answer input field
-chatInput.addEventListener('paste', (e) => {
-  e.preventDefault();
+// Anti-cheating: Disable paste, copy, cut on answer input field
+function showPasteWarning() {
   const errorEl = document.getElementById('paste-error');
   if (errorEl) {
     errorEl.classList.remove('hidden');
@@ -681,11 +718,194 @@ chatInput.addEventListener('paste', (e) => {
       errorEl.classList.add('hidden');
     }, 3000);
   }
+}
+
+chatInput.addEventListener('paste', (e) => {
+  e.preventDefault();
+  showPasteWarning();
 });
 
-// Disable right-click context menu on the chat interface view
-screenChat.addEventListener('contextmenu', (e) => {
+chatInput.addEventListener('copy', (e) => {
+  e.preventDefault();
+});
+
+chatInput.addEventListener('cut', (e) => {
+  e.preventDefault();
+});
+
+// Disable right-click context menu during active interview
+window.addEventListener('contextmenu', (e) => {
   if (isInterviewActive) {
     e.preventDefault();
   }
 });
+
+// Block browser shortcuts (Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+A, F12, DevTools) during active interview
+window.addEventListener('keydown', (e) => {
+  if (!isInterviewActive) return;
+
+  const key = e.key.toLowerCase();
+  if (
+    (e.ctrlKey && ['c', 'v', 'x', 'a', 'u'].includes(key)) ||
+    e.key === 'F12' ||
+    (e.ctrlKey && e.shiftKey && ['i', 'j', 'c'].includes(key))
+  ) {
+    e.preventDefault();
+    if (['c', 'v', 'x'].includes(key)) {
+      showPasteWarning();
+    }
+  }
+});
+
+// Update live Question History sidebar
+let activeTopicInfo = null;
+
+function updateSidebar(history, currentActiveTopic = null) {
+  const listEl = document.getElementById('sidebar-list');
+  const countEl = document.getElementById('sidebar-count');
+  if (!listEl) return;
+
+  if (currentActiveTopic) {
+    activeTopicInfo = currentActiveTopic;
+  }
+
+  const evaluatedCount = history ? history.length : 0;
+  if (countEl) countEl.textContent = evaluatedCount;
+  listEl.innerHTML = '';
+
+  // 1. If an active question is currently awaiting response, render it at the top
+  if (activeTopicInfo) {
+    const activeRow = document.createElement('div');
+    activeRow.className = 'sidebar-row';
+    activeRow.style.borderColor = '#3B82F6';
+    activeRow.style.backgroundColor = '#EFF6FF';
+
+    const activeHeader = document.createElement('div');
+    activeHeader.className = 'sidebar-row-header';
+
+    const activeTitle = document.createElement('span');
+    activeTitle.style.fontWeight = '700';
+    activeTitle.style.fontSize = '0.85rem';
+    activeTitle.style.color = '#1D4ED8';
+    
+    let displayTitle = 'Active Topic';
+    if (activeTopicInfo && typeof activeTopicInfo === 'object') {
+      if (activeTopicInfo.title && activeTopicInfo.day) {
+        displayTitle = `Day ${activeTopicInfo.day}: ${activeTopicInfo.title}`;
+      } else if (activeTopicInfo.title) {
+        displayTitle = activeTopicInfo.title;
+      } else if (activeTopicInfo.day) {
+        displayTitle = `Day ${activeTopicInfo.day}`;
+      }
+    } else if (typeof activeTopicInfo === 'string') {
+      displayTitle = activeTopicInfo;
+    }
+    activeTitle.textContent = displayTitle;
+
+    const pulseDot = document.createElement('span');
+    pulseDot.className = 'sidebar-dot';
+    pulseDot.style.backgroundColor = '#3B82F6';
+    pulseDot.style.borderColor = '#1D4ED8';
+    pulseDot.style.animation = 'pulse 1.5s infinite';
+    pulseDot.title = 'Current active question awaiting response';
+
+    activeHeader.appendChild(activeTitle);
+    activeHeader.appendChild(pulseDot);
+
+    const activeBadges = document.createElement('div');
+    activeBadges.style.display = 'flex';
+    activeBadges.style.justifyContent = 'space-between';
+    activeBadges.style.alignItems = 'center';
+
+    const activeBadge = document.createElement('span');
+    activeBadge.className = 'sidebar-badge';
+    activeBadge.style.backgroundColor = '#DBEAFE';
+    activeBadge.style.borderColor = '#3B82F6';
+    activeBadge.style.color = '#1E40AF';
+    activeBadge.textContent = 'IN PROGRESS';
+
+    const hintSpan = document.createElement('span');
+    hintSpan.style.fontSize = '0.7rem';
+    hintSpan.style.fontWeight = '600';
+    hintSpan.style.color = '#6B7280';
+    hintSpan.textContent = 'Awaiting answer...';
+
+    activeBadges.appendChild(activeBadge);
+    activeBadges.appendChild(hintSpan);
+
+    activeRow.appendChild(activeHeader);
+    activeRow.appendChild(activeBadges);
+    listEl.appendChild(activeRow);
+  }
+
+  // 2. Render all previously evaluated questions below
+  if (history && history.length > 0) {
+    const reversed = [...history].reverse();
+    reversed.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'sidebar-row';
+
+      const header = document.createElement('div');
+      header.className = 'sidebar-row-header';
+
+      const titleSpan = document.createElement('span');
+      titleSpan.style.fontWeight = '700';
+      titleSpan.style.fontSize = '0.85rem';
+      titleSpan.style.color = '#111827';
+      titleSpan.textContent = `Day ${item.day}: ${item.title}`;
+
+      const dot = document.createElement('span');
+      dot.className = `sidebar-dot dot-${item.classification}`;
+      dot.title = `Answer evaluation: ${item.classification}`;
+
+      header.appendChild(titleSpan);
+      header.appendChild(dot);
+
+      const badges = document.createElement('div');
+      badges.style.display = 'flex';
+      badges.style.justifyContent = 'space-between';
+      badges.style.alignItems = 'center';
+
+      const leftBadges = document.createElement('div');
+      leftBadges.style.display = 'flex';
+      leftBadges.style.gap = '0.4rem';
+
+      const diffBadge = document.createElement('span');
+      diffBadge.className = 'sidebar-badge';
+      diffBadge.textContent = item.difficultyTier || 'standard';
+
+      const typeBadge = document.createElement('span');
+      typeBadge.className = 'sidebar-badge';
+      typeBadge.textContent = item.questionType === 'diagram_interpret' ? 'diagram' : (item.questionType || 'open');
+
+      leftBadges.appendChild(diffBadge);
+      leftBadges.appendChild(typeBadge);
+
+      const qualLabel = document.createElement('span');
+      qualLabel.style.fontSize = '0.7rem';
+      qualLabel.style.fontWeight = '700';
+      qualLabel.style.textTransform = 'uppercase';
+      const colorMap = { strong: '#059669', partial: '#D97706', shallow: '#EA580C', off_topic: '#DC2626' };
+      qualLabel.style.color = colorMap[item.classification] || '#6B7280';
+      qualLabel.textContent = item.classification.replace('_', ' ');
+
+      badges.appendChild(leftBadges);
+      badges.appendChild(qualLabel);
+
+      row.appendChild(header);
+      row.appendChild(badges);
+      listEl.appendChild(row);
+    });
+  }
+
+  lucide.createIcons();
+}
+
+// Collapsible mobile sidebar toggle
+const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
+const chatSidebar = document.getElementById('chat-sidebar');
+if (btnToggleSidebar && chatSidebar) {
+  btnToggleSidebar.addEventListener('click', () => {
+    chatSidebar.classList.toggle('active');
+  });
+}

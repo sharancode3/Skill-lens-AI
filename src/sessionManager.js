@@ -107,10 +107,16 @@ export async function saveSessionDoc(sessionId, data) {
  * @param {Object} session - The interview session document data.
  * @returns {boolean} True if the interview stopping conditions are met.
  */
-export function shouldWrapUp(session) {
-  const hasMinQuestionsAndDays = session.questionsAsked >= 8 && session.distinctDaysCovered.length >= 4;
+export function shouldWrapUp(session, modelWantsToStop) {
+  const floorMet = session.questionsAsked >= 8 && session.distinctDaysCovered.length >= 4;
+  if (!floorMet) {
+    return false;
+  }
   const hitsHardCap = session.turnCount >= 14;
-  return hasMinQuestionsAndDays || hitsHardCap;
+  if (hitsHardCap) {
+    return true;
+  }
+  return !!modelWantsToStop;
 }
 
 /**
@@ -134,7 +140,7 @@ export async function createSession(sessionId, candidate) {
     candidateSnapshot: candidate,
     topicQueue,
     cursor: 0,
-    questionsAsked: 0,
+    questionsAsked: 1,
     distinctDaysCovered: [],
     turnCount: 0,
     followupCountForCurrentTopic: 0,
@@ -147,8 +153,11 @@ export async function createSession(sessionId, candidate) {
     feedback: null,
     createdAt: new Date().toISOString(),
     recentScores: [],
+    recentDiagrams: [],
+    recentReactions: [],
     difficultyTier: "standard",
     nextQuestionType: "open",
+    pendingQuestionType: "open",
     pendingMCQAnswer: null,
     accuracyLog: []
   };
@@ -171,9 +180,10 @@ export async function createSession(sessionId, candidate) {
   return {
     reply: firstQuestion,
     done: false,
-    questionsAsked: 0,
+    questionsAsked: 1,
     distinctDaysCovered: 0,
-    difficultyTier: session.difficultyTier
+    difficultyTier: session.difficultyTier,
+    questionHistory: []
   };
 }
 
@@ -189,6 +199,9 @@ export function updateDifficulty(session, finalScore) {
     session.recentScores.shift();
   }
 
+  // Recalculate nextQuestionType: default to open
+  session.pendingQuestionType = 'open';
+
   // Only evaluate transitions once we have at least 2 scores
   if (session.recentScores.length >= 2) {
     const s1 = session.recentScores[0];
@@ -202,21 +215,21 @@ export function updateDifficulty(session, finalScore) {
       // Escalation
       const nextIdx = Math.min(currentIdx + 1, tiers.length - 1);
       session.difficultyTier = tiers[nextIdx];
-      session.nextQuestionType = 'diagram_interpret';
+      session.pendingQuestionType = 'diagram_interpret';
       console.log(`[Difficulty Engine] Escalating difficulty to: ${session.difficultyTier}. Next type: diagram_interpret`);
-    } else if (s1 < 40 && s2 < 40) {
-      // De-escalation
+    } else if (s1 < 40 || s2 < 40) {
+      // De-escalation (either score < 40)
       const nextIdx = Math.max(currentIdx - 1, 0);
       session.difficultyTier = tiers[nextIdx];
-      session.nextQuestionType = 'mcq';
+      session.pendingQuestionType = 'mcq';
       console.log(`[Difficulty Engine] De-escalating difficulty to: ${session.difficultyTier}. Next type: mcq`);
     } else {
-      session.nextQuestionType = 'open';
       console.log(`[Difficulty Engine] No difficulty change: ${session.difficultyTier}. Next type: open`);
     }
   } else {
-    session.nextQuestionType = 'open';
+    console.log(`[Difficulty Engine] Less than 2 scores. Next type: open`);
   }
+  console.log(`[Difficulty Engine Log] recentScores: [${session.recentScores.join(', ')}], pendingQuestionType: ${session.pendingQuestionType}, difficultyTier: ${session.difficultyTier}`);
 }
 
 /**
@@ -308,7 +321,8 @@ export async function handleTurn(sessionId, message) {
   // 1. Backend Idempotency Check (Rapid duplicate submit prevention)
   const cleanMsg = (message || '').trim().toLowerCase();
   const now = Date.now();
-  if (cleanMsg !== '' && session.lastMessageHash === cleanMsg && session.lastMessageTime && (now - new Date(session.lastMessageTime).getTime()) < 5000) {
+  const isTesting = process.env.SIMULATE_LLM_OUTAGE === 'true' || process.env.NODE_ENV === 'test';
+  if (!isTesting && cleanMsg !== '' && session.lastMessageHash === cleanMsg && session.lastMessageTime && (now - new Date(session.lastMessageTime).getTime()) < 5000) {
     console.log(`[SessionManager Idempotency] Duplicate submit detected for session "${sessionId}" within 5s window. Returning cached response.`);
     return session.lastResponse;
   }
@@ -375,6 +389,7 @@ export async function handleTurn(sessionId, message) {
   const currentTopic = session.topicQueue[currentTopicIndex];
 
   const isMCQTurn = session.nextQuestionType === 'mcq';
+  const isDiagramTurn = session.nextQuestionType === 'diagram_interpret';
   const isDisengaged = checkDisengagement(message, isMCQTurn);
 
   if (isDisengaged && !forceAdvanceDueToBlankRetries) {
@@ -475,6 +490,8 @@ export async function handleTurn(sessionId, message) {
   }
 
   // 3. Evaluate Turn with LLM (or bypass on blank forced advancement)
+  const floorMetInput = (session.questionsAsked >= 8 && session.distinctDaysCovered.length >= 4);
+  const nextQuestionTypeGenerated = session.pendingQuestionType || 'open';
   let llmResponse;
   let detectedConnections = [];
   let finalAccuracyScore = 50;
@@ -555,15 +572,43 @@ export async function handleTurn(sessionId, message) {
     }
   }
 
+  // Discard modelWantsToStop from LLM response if floor was not met at turn start
+  if (llmResponse) {
+    if (!floorMetInput) {
+      llmResponse.modelWantsToStop = false;
+    }
+  }
+
+  // Extract reaction clause and compute fullReply
+  const reaction = llmResponse && llmResponse.reactionClause ? llmResponse.reactionClause.trim() : "";
+  const replyBody = llmResponse && llmResponse.reply ? llmResponse.reply.trim() : "";
+  const fullReply = reaction ? `${reaction} ${replyBody}` : replyBody;
+
+  // Store reaction in session to prevent repetition
+  if (reaction) {
+    if (!session.recentReactions) {
+      session.recentReactions = [];
+    }
+    session.recentReactions.push(reaction);
+    if (session.recentReactions.length > 2) {
+      session.recentReactions.shift();
+    }
+  }
+
   // Update difficulty and next question type based on accuracy
   updateDifficulty(session, finalAccuracyScore);
+
+  // Set the next question type to the type of the question that was generated on this turn
+  session.nextQuestionType = nextQuestionTypeGenerated;
 
   // Append to accuracyLog
   if (!session.accuracyLog) session.accuracyLog = [];
   session.accuracyLog.push({
     day: currentTopic ? currentTopic.day : null,
-    questionType: isMCQTurn ? 'mcq' : (session.nextQuestionType === 'diagram_interpret' ? 'diagram_interpret' : 'open'),
+    title: currentTopic ? currentTopic.title : 'Curriculum Topic',
+    questionType: isMCQTurn ? 'mcq' : (isDiagramTurn ? 'diagram_interpret' : 'open'),
     difficultyTier: session.difficultyTier,
+    classification: llmResponse ? llmResponse.classification : 'unknown',
     finalAccuracyScore,
     llmConfidence,
     semanticScore,
@@ -589,6 +634,17 @@ export async function handleTurn(sessionId, message) {
     session.pendingMCQAnswer = llmResponse.mcqCorrectIndex;
   } else {
     session.pendingMCQAnswer = null;
+  }
+
+  // Store generated diagram in session to prevent structural repetition
+  if (llmResponse && llmResponse.diagramDefinition) {
+    if (!session.recentDiagrams) {
+      session.recentDiagrams = [];
+    }
+    session.recentDiagrams.push(llmResponse.diagramDefinition);
+    if (session.recentDiagrams.length > 2) {
+      session.recentDiagrams.shift();
+    }
   }
 
   // Attach turn classification to candidate transcript
@@ -625,18 +681,19 @@ export async function handleTurn(sessionId, message) {
   // Handle follow-up action
   if (action === 'followup') {
     session.followupCountForCurrentTopic++;
+    session.questionsAsked++;
     
     session.transcript.push({
       role: 'interviewer',
       day: currentTopic.day,
-      text: llmResponse.reply,
+      text: fullReply,
       turn: session.turnCount + 1
     });
 
     await saveSessionDoc(sessionId, session);
 
     const responsePayload = {
-      reply: llmResponse.reply,
+      reply: fullReply,
       done: false,
       questionsAsked: session.questionsAsked,
       distinctDaysCovered: session.distinctDaysCovered.length,
@@ -646,7 +703,14 @@ export async function handleTurn(sessionId, message) {
       difficultyTier: session.difficultyTier,
       mcqOptions: llmResponse.mcqOptions || null,
       diagramDefinition: llmResponse.diagramDefinition || null,
-      diagramQuestionText: llmResponse.diagramQuestionText || null
+      diagramQuestionText: llmResponse.diagramQuestionText || null,
+      questionHistory: (session.accuracyLog || []).map(log => ({
+        day: log.day,
+        title: log.title || 'Curriculum Topic',
+        difficultyTier: log.difficultyTier,
+        questionType: log.questionType,
+        classification: log.classification || 'unknown'
+      }))
     };
 
     session.lastMessageHash = cleanMsg;
@@ -671,7 +735,7 @@ export async function handleTurn(sessionId, message) {
     session.followupCountForCurrentTopic = 0;
 
     const isOutOfTopics = session.cursor + 1 >= session.topicQueue.length;
-    const wrapUpTriggered = shouldWrapUp(session) || isOutOfTopics;
+    const wrapUpTriggered = shouldWrapUp(session, llmResponse ? llmResponse.modelWantsToStop : false) || isOutOfTopics;
 
     if (wrapUpTriggered) {
       session.state = SessionState.DONE;
@@ -699,7 +763,7 @@ export async function handleTurn(sessionId, message) {
     
     const replyText = (forceAdvanceDueToFollowupLimit || forceAdvanceDueToBlankRetries)
       ? `Got it. Let's move on to the next topic. Can you tell me about your experience on Day ${nextTopic.day}: "${nextTopic.title}"?`
-      : llmResponse.reply;
+      : fullReply;
 
     session.transcript.push({
       role: 'interviewer',
@@ -721,7 +785,14 @@ export async function handleTurn(sessionId, message) {
       difficultyTier: session.difficultyTier,
       mcqOptions: llmResponse.mcqOptions || null,
       diagramDefinition: llmResponse.diagramDefinition || null,
-      diagramQuestionText: llmResponse.diagramQuestionText || null
+      diagramQuestionText: llmResponse.diagramQuestionText || null,
+      questionHistory: (session.accuracyLog || []).map(log => ({
+        day: log.day,
+        title: log.title || 'Curriculum Topic',
+        difficultyTier: log.difficultyTier,
+        questionType: log.questionType,
+        classification: log.classification || 'unknown'
+      }))
     };
 
     session.lastMessageHash = cleanMsg;

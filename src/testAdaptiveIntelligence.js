@@ -42,8 +42,8 @@ async function runTest() {
   // Second bad turn
   res = await handleTurn(sessionId, "agree");
   sessionDoc = await getSessionDoc(sessionId);
-  console.log(`After Turn 2 (score < 40): Tier = ${sessionDoc.difficultyTier}, Next Type = ${sessionDoc.nextQuestionType}, recentScores = [${sessionDoc.recentScores.join(', ')}]`);
-  console.log(`Is next type "mcq"? ${sessionDoc.nextQuestionType === 'mcq' ? 'PASS' : 'FAIL'}`);
+  console.log(`After Turn 2 (score < 40): Tier = ${sessionDoc.difficultyTier}, Next Type = ${sessionDoc.pendingQuestionType}, recentScores = [${sessionDoc.recentScores.join(', ')}]`);
+  console.log(`Is next type "mcq"? ${sessionDoc.pendingQuestionType === 'mcq' ? 'PASS' : 'FAIL'}`);
   console.log(`Is difficulty Tier de-escalated to "foundational"? ${sessionDoc.difficultyTier === 'foundational' ? 'PASS' : 'FAIL'}`);
   console.log('-------------------------------------------------------\n');
 
@@ -81,13 +81,13 @@ async function runTest() {
   
   // Turn 1: 90
   updateDifficulty(sessionDoc, 90);
-  console.log(`After Score 1 (90): Tier = ${sessionDoc.difficultyTier}, Next Type = ${sessionDoc.nextQuestionType}, recentScores = [${sessionDoc.recentScores.join(', ')}]`);
+  console.log(`After Score 1 (90): Tier = ${sessionDoc.difficultyTier}, Next Type = ${sessionDoc.pendingQuestionType}, recentScores = [${sessionDoc.recentScores.join(', ')}]`);
   
   // Turn 2: 95
   updateDifficulty(sessionDoc, 95);
-  console.log(`After Score 2 (95): Tier = ${sessionDoc.difficultyTier}, Next Type = ${sessionDoc.nextQuestionType}, recentScores = [${sessionDoc.recentScores.join(', ')}]`);
+  console.log(`After Score 2 (95): Tier = ${sessionDoc.difficultyTier}, Next Type = ${sessionDoc.pendingQuestionType}, recentScores = [${sessionDoc.recentScores.join(', ')}]`);
   
-  console.log(`Is next type "diagram_interpret"? ${sessionDoc.nextQuestionType === 'diagram_interpret' ? 'PASS' : 'FAIL'}`);
+  console.log(`Is next type "diagram_interpret"? ${sessionDoc.pendingQuestionType === 'diagram_interpret' ? 'PASS' : 'FAIL'}`);
   console.log(`Is difficulty Tier escalated to "applied"? ${sessionDoc.difficultyTier === 'applied' ? 'PASS' : 'FAIL'}`);
   console.log('-------------------------------------------------------\n');
 

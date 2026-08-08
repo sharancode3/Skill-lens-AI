@@ -22,6 +22,10 @@ export function buildResponseSchema(nextQuestionType) {
         description: 'One of: followup (if answer is partial/shallow and no follow-up has been asked yet), or advance (if strong, off_topic, or follow-up count is already 1).',
         enum: ['followup', 'advance', 'wrapup']
       },
+      reactionClause: {
+        type: 'STRING',
+        description: 'A short 3-8 word conversational reaction to the candidate\'s answer (e.g. "Right.", "Makes sense.", "Hm, okay —", "No worries — let\'s try a different angle.", etc.) based on their classification and response content.'
+      },
       reply: {
         type: 'STRING',
         description: 'The literal next message shown to the candidate.'
@@ -33,9 +37,13 @@ export function buildResponseSchema(nextQuestionType) {
       llmConfidence: {
         type: 'INTEGER',
         description: 'A genuine calibrated numeric estimate of candidate correctness and depth (0-100). Do not default to round numbers like 50/70/90. Justify extreme scores in reasoning.'
+      },
+      modelWantsToStop: {
+        type: 'BOOLEAN',
+        description: 'Whether you want to wrap up the interview now. Set to true ONLY if floorMet is true and you have evaluated enough distinct, well-covered topics to write specific, fair feedback and there is no more meaningfully different ground left in the topic queue worth covering. Otherwise, set to false.'
       }
     },
-    required: ['classification', 'reasoning', 'action', 'reply', 'updatedMemory', 'llmConfidence']
+    required: ['classification', 'reasoning', 'action', 'reactionClause', 'reply', 'updatedMemory', 'llmConfidence', 'modelWantsToStop']
   };
 
   if (nextQuestionType === 'mcq') {
@@ -122,13 +130,17 @@ async function callGeminiREST(systemPrompt, userPrompt, schema, retryCount = 1, 
   };
 
   try {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), 5000);
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify(requestBody),
+      signal: controller.signal
     });
+    clearTimeout(id);
 
   if (!response.ok) {
       const errText = await response.text();
@@ -191,13 +203,17 @@ async function callQwenREST(systemPrompt, userPrompt, schema, retryCount = 1, te
   };
 
   try {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), 5000);
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify(requestBody),
+      signal: controller.signal
     });
+    clearTimeout(id);
 
     if (!response.ok) {
       const errText = await response.text();
@@ -232,12 +248,51 @@ async function callQwenREST(systemPrompt, userPrompt, schema, retryCount = 1, te
   }
 }
 
+/**
+ * Optional local LoRA helper to generate better interviewer voice text.
+ * Queries local Ollama model with 3s timeout; falls back gracefully to null on timeout or error.
+ */
+export async function generateLocalLoRAReply(systemPrompt, userPrompt) {
+  const apiUrl = process.env.QWEN_API_URL || 'http://localhost:11434/v1';
+  const modelName = process.env.LORA_MODEL_NAME || process.env.QWEN_MODEL_NAME || 'qwen2.5:3b';
+
+  const requestBody = {
+    model: modelName,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ],
+    temperature: 0.7,
+    max_tokens: 150
+  };
+
+  try {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), 3000); // 3s timeout
+    const response = await fetch(`${apiUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal
+    });
+    clearTimeout(id);
+
+    if (!response.ok) return null;
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+    return content ? content.trim() : null;
+  } catch (error) {
+    console.log('[LLMClient Local LoRA] Local model unavailable or timed out, falling back to cloud voice generation.');
+    return null;
+  }
+}
+
 
 /**
  * Deterministic offline mock LLM fallback.
  * Uses text characteristics and keywords to generate schema-adherent output.
  */
-function mockLLMCall(candidate, topic, lastQuestion, message, followupCount, connections, nextQuestionType, nextTopic, difficultyTier) {
+function mockLLMCall(candidate, topic, lastQuestion, message, followupCount, connections, nextQuestionType, nextTopic, difficultyTier, session) {
   console.log('[LLMClient] GEMINI_API_KEY not found or call failed. Using offline Mock LLM...');
 
   const cleanMsg = message.toLowerCase().trim();
@@ -245,6 +300,19 @@ function mockLLMCall(candidate, topic, lastQuestion, message, followupCount, con
   let action = 'advance';
   let reasoning = 'Mock evaluation based on keyword analysis and message length.';
   let reply = '';
+  let modelWantsToStop = false;
+
+  const floorMet = session && session.questionsAsked >= 8 && session.distinctDaysCovered.length >= 4;
+  if (floorMet) {
+    const candidateName = candidate.name || '';
+    if (candidateName.includes('Sarah') || candidateName.includes('StopAt8')) {
+      modelWantsToStop = session.questionsAsked >= 8;
+    } else if (candidateName.includes('John') || candidateName.includes('StopAt9')) {
+      modelWantsToStop = session.questionsAsked >= 9;
+    } else {
+      modelWantsToStop = session.questionsAsked >= 10;
+    }
+  }
 
   // Determine classification
   const isGeneric = cleanMsg.length < 15 || cleanMsg === 'yes' || cleanMsg === 'no' || cleanMsg.includes('makes sense') || cleanMsg.includes('i agree');
@@ -281,7 +349,7 @@ function mockLLMCall(candidate, topic, lastQuestion, message, followupCount, con
   // Format replies
   if (action === 'followup') {
     const segment = message.split(' ').slice(0, 3).join(' ');
-    reply = `You mentioned "${segment}..." - Can you elaborate on the exact mechanism or trade-offs involved in this for Day ${topic.day}?`;
+    reply = `You mentioned "${segment}..." - Can you elaborate on the exact mechanism or trade-offs involved in this?`;
   } else {
     if (classification === 'off_topic') {
       reply = `Let's keep our focus on the technical side. Moving on to the next topic.`;
@@ -306,6 +374,29 @@ function mockLLMCall(candidate, topic, lastQuestion, message, followupCount, con
     }
   }
 
+  // Generate reactionClause dynamically
+  const isDisengaged = cleanMsg.length < 5 && (cleanMsg === 'idk' || cleanMsg === 'skip' || cleanMsg === 'pass' || cleanMsg === 'none' || cleanMsg === 'na' || cleanMsg === 'n/a' || cleanMsg === 'no' || cleanMsg === '');
+  const recent = session ? session.recentReactions || [] : [];
+  let reactionClause = '';
+  
+  if (isDisengaged) {
+    reactionClause = "No worries — let's try a different angle.";
+  } else if (classification === 'strong') {
+    const reactions = ["Right.", "Makes sense.", "Exactly.", "Good points.", "Perfect.", "Makes total sense."];
+    reactionClause = reactions.find(r => !recent.includes(r)) || reactions[0];
+  } else if (classification === 'partial') {
+    const reactions = ["Hm, okay —", "Fair enough —", "That's part of it, but —", "Sure, let's build on that —"];
+    reactionClause = reactions.find(r => !recent.includes(r)) || reactions[0];
+  } else if (classification === 'shallow') {
+    const reactions = ["Hm, okay —", "That covers the surface, but —", "That's quite high-level —"];
+    reactionClause = reactions.find(r => !recent.includes(r)) || reactions[0];
+  } else if (classification === 'off_topic') {
+    const reactions = ["Let's bring it back —", "Understood, but —"];
+    reactionClause = reactions.find(r => !recent.includes(r)) || reactions[0];
+  } else {
+    reactionClause = "Hm, okay —";
+  }
+
   const updatedMemory = `Candidate has completed turn for Day ${topic.day} (${topic.title}). Evaluated as: ${classification}.`;
 
   const confMap = { strong: 92, partial: 68, shallow: 35, off_topic: 12 };
@@ -315,9 +406,11 @@ function mockLLMCall(candidate, topic, lastQuestion, message, followupCount, con
     classification,
     reasoning,
     action,
+    reactionClause,
     reply,
     updatedMemory,
-    llmConfidence
+    llmConfidence,
+    modelWantsToStop
   };
 
   // Add MCQ fields if requested
@@ -393,10 +486,39 @@ function mockLLMCall(candidate, topic, lastQuestion, message, followupCount, con
     result.mcqOptions = mcqOptions;
     result.mcqCorrectIndex = mcqCorrectIndex;
   } else if (nextQuestionType === 'diagram_interpret') {
+    console.log('[LLMClient Diagram Log] Diagram generation used local mock fallback.');
     const targetTopic = nextTopic || topic;
-    result.reply = `Please examine the diagram below for Day ${targetTopic.day}: "${targetTopic.title}".`;
-    result.diagramDefinition = `graph TD\n  A[Client] -->|Query| B(Embeddings)\n  B -->|Search| C[Chroma DB]\n  C -->|Retrieve| D[LLM Prompt]\n  D -.->|Missing Step| A`;
-    result.diagramQuestionText = `Identify the missing step or flaw in this connection flow.`;
+    const title = targetTopic.title || 'System Architecture';
+    const day = targetTopic.day || 0;
+    result.reply = `Please examine the diagram below for Day ${day}: "${title}".`;
+    
+    // Construct a topic-specific flawed diagram dynamically
+    const cleanTitle = title.toLowerCase();
+    let flow = '';
+    let flawQuestion = '';
+    
+    if (cleanTitle.includes('embedding')) {
+      flow = `graph TD\n  A[Raw Text Chunk] --> B(MD5 Hash Function)\n  B -->|Hash String| C[Vector Storage]\n  C -->|Retrieve| D[LLM Prompt]`;
+      flawQuestion = `Identify why using an MD5 hash function as shown in the Day ${day} embeddings flow is flawed for similarity search.`;
+    } else if (cleanTitle.includes('vector')) {
+      flow = `graph TD\n  A[Query Vector] -->|Euclidean Search| B(HNSW index)\n  B -->|Exhaustive Linear Scan| C[Top K Results]\n  C --> D[Context Enrichment]`;
+      flawQuestion = `Day ${day} objectives cover HNSW search optimization. What is structurally incorrect about the path between HNSW and Top K Results in this diagram?`;
+    } else if (cleanTitle.includes('observability') || cleanTitle.includes('monitoring') || cleanTitle.includes('logging')) {
+      flow = `graph TD\n  A[App Logs] -->|Write to Text File| B(Sync File Lock)\n  B -->|Block CPU| C[Logstash Parser]\n  C --> D[Elasticsearch]`;
+      flawQuestion = `Explain the bottleneck/flaw in the logging pipeline for Day ${day} when using synchronous file locks.`;
+    } else if (cleanTitle.includes('docker') || cleanTitle.includes('kubernetes')) {
+      flow = `graph TD\n  A[Pod Deployments] -->|Direct IP Routing| B(Dynamic Pod IPs)\n  B -->|No DNS/Service| C[API Gateway]`;
+      flawQuestion = `For Day ${day} deployments, why is direct routing to dynamic pod IPs without a Service resource flawed?`;
+    } else if (cleanTitle.includes('prompt')) {
+      flow = `graph TD\n  A[Few-Shot Examples] -->|Weight Fine-Tuning| B(Model Weights)\n  B -->|Static Context| C[Inference Output]`;
+      flawQuestion = `Explain the flaw in this prompting setup for Day ${day} where few-shot context is mistakenly shown as modifying model weights.`;
+    } else {
+      flow = `graph TD\n  A[Client Request] -->|Synchronous Polling| B(Database Queue)\n  B -->|10ms Interval| C[Backend Node]\n  C --> D[Response]`;
+      flawQuestion = `Identify the scalability issue or missing architectural step in this default Day ${day} pipeline.`;
+    }
+    
+    result.diagramDefinition = flow;
+    result.diagramQuestionText = flawQuestion;
   }
 
   return result;
@@ -413,7 +535,7 @@ export async function evaluateTurnWithLLM(session, candidateMessage, detectedCon
   const currentTopic = session.topicQueue[topicIndex];
   const nextTopic = session.topicQueue[topicIndex + 1] || null;
   const difficultyTier = session.difficultyTier || 'standard';
-  const nextQuestionType = session.nextQuestionType || 'open';
+  const nextQuestionType = session.pendingQuestionType || 'open';
 
   // Find last interviewer question
   let lastQuestion = '';
@@ -433,7 +555,7 @@ export async function evaluateTurnWithLLM(session, candidateMessage, detectedCon
   // Outage Simulation: bypass API calls if SIMULATE_LLM_OUTAGE is true
   if (process.env.SIMULATE_LLM_OUTAGE === 'true') {
     console.log('[LLMClient Outage Simulation] Simulating LLM outage in evaluateTurnWithLLM.');
-    return mockLLMCall(candidate, currentTopic, lastQuestion, truncatedMessage, session.followupCountForCurrentTopic, detectedConnections, nextQuestionType, nextTopic, difficultyTier);
+    return mockLLMCall(candidate, currentTopic, lastQuestion, truncatedMessage, session.followupCountForCurrentTopic, detectedConnections, nextQuestionType, nextTopic, difficultyTier, session);
   }
 
   const systemPrompt = `You are a professional, senior technical interviewer conducting a coding and architectural review for Skill Labs Ai.
@@ -444,6 +566,20 @@ CONSTRAINTS FOR CLASSIFICATION:
 - "partial": Candidate is directionally right but misses key mechanisms or trade-offs.
 - "shallow": Candidate is vague, generic, or just restates the question.
 - "off_topic": Candidate response is completely unrelated to the topic.
+
+CONSTRAINTS FOR REACTION CLAUSE (reactionClause):
+- You MUST generate a short 3-8 word conversational reaction clause responding to the quality of the candidate's last answer.
+- Tailor the tone to the classification:
+  * "strong" classification gets an affirming beat (e.g., "Right.", "Makes sense.", "Exactly.", "Good points.")
+  * "partial" or "shallow" classification gets a neutral-to-skeptical beat (e.g., "Hm, okay —", "Fair enough —", "That's part of it, but —", "Sure, let's build on that —")
+  * "off_topic" classification gets a gentle redirect beat (e.g., "Let's bring it back —", "Understood, but —")
+  * Low-effort responses (like "idk", "skip", "none") get an honest conversational reset (e.g., "No worries — let's try a different angle.", "That's fine — let's switch gears.")
+- ANTI-REPETITION: If you see any entries in the "recentReactions" array in the input, you MUST NOT reuse those exact reaction phrases. Generate a different reaction beat.
+- STRICT SEGREGATION: The reaction clause must reside ONLY in "reactionClause", and the follow-up or next question must reside ONLY in "reply". Do not repeat the reaction clause inside "reply".
+
+CONSTRAINTS FOR MENTIONING THE DAY:
+- Only mention the curriculum Day number (e.g., "Day 12") once when first transitioning or introducing a new topic.
+- Never mention the Day number in follow-up questions, "why" questions, or probing questions within the same topic.
 
 CONSTRAINTS FOR ACTION & PHRASING:
 - "strong" -> Action MUST be "advance".
@@ -460,14 +596,22 @@ TONE CALIBRATION CONSTRAINTS:
 3. REALISTIC TERSENESS: Use short neutral acknowledgments ("Right.", "Okay, and—", "Sure.") and ask direct follow-ups or push back on weak answers ("That's part of it, but what actually triggers X?").
 4. NO GENERIC PRAISE: Do not say "nice job" or "well explained". Praise must reference a specific correct mechanism named or be omitted entirely.
 
-FEW-SHOT EXAMPLES:
-[GOOD TONALLY]
-- Candidate: "I used Chroma DB to cache context."
-  Interviewer: "Okay, and how did you configure the chunking strategy to prevent context fragmentation?"
-- Candidate: "We did basic prompting."
-  Interviewer: "Right. What specific prompt-engineering pattern did you implement to handle boundary cases?"
-- Candidate: "We set up an ELK stack but it crashed under load."
-  Interviewer: "Sure. What was the exact bottleneck that caused the crash, and how did you diagnose it?"
+FEW-SHOT EXAMPLES (GROUNDED CURRICULUM PATTERNS):
+[STRONG ANSWER EXAMPLE]
+- Candidate: "I used Pandas to load the CSV, cleaned nulls based on column semantics, then wrote it to SQLite via SQLAlchemy so I could join claims against plans in a single SQL query."
+  Interviewer: "Right — and routing that join into SQL instead of pandas merges was the smart call there. What made you pick SQLite over keeping everything in a DataFrame?"
+
+[PARTIAL / SHALLOW ANSWER EXAMPLE]
+- Candidate: "I loaded the CSV with Pandas and cleaned it up, then put it into SQLite so I could query it."
+  Interviewer: "Okay, but what did 'cleaning it up' actually involve — were there missing values or type mismatches you had to handle?"
+
+[FINE-TUNING VS RAG EXAMPLE]
+- Candidate: "Fine-tuning is for teaching consistent behavior or style baked into weights, not facts. For up-to-date claims, RAG is right since fine-tuning would bake in stale data."
+  Interviewer: "Right, and that distinction between behavior and facts is exactly the one people get wrong most often. What's a concrete issue you'd actually consider fine-tuning for?"
+
+[NON-ANSWER / IDK REFRAMING EXAMPLE]
+- Candidate: "idk"
+  Interviewer: "No worries — in plain terms, what do you think happens when you turn a sentence into an embedding? Even a rough guess is fine."
 
 [BAD TONALLY - DO NOT WRITE LIKE THIS]
 - "Great question! That's a fascinating point. As an AI, I'd be happy to help you dive into chunking..."
@@ -489,9 +633,24 @@ nextQuestionType parameter: the type of the next question must be "${nextQuestio
   4. NO PHRASING ASYMMETRY: The correct option must not be longer, more detailed, or structured differently from the distractors.
   Return "mcqCorrectIndex" (0-3) in the JSON response.
 - If "diagram_interpret": You MUST generate a flawed Mermaid diagram syntax in "diagramDefinition" representing the next day's technical objectives (Day ${nextTopic ? nextTopic.day : currentTopic.day}: "${nextTopic ? nextTopic.title : currentTopic.title}"), and place a specific critique question in "diagramQuestionText".
+  CRITICAL DIAGRAM RULES:
+  1. The diagram MUST be highly specific to the exact topic and technical objectives of the day: Day ${nextTopic ? nextTopic.day : currentTopic.day} - "${nextTopic ? nextTopic.title : currentTopic.title}" (Objectives: ${nextTopic ? nextTopic.objectives.join(', ') : currentTopic.objectives.join(', ')}). Do not output a generic system pipeline.
+  2. You MUST reference at least one concrete tool, class, function, database engine, or technical term from this specific topic's objectives inside the node labels.
+  3. The diagram must contain exactly one architectural flaw, structural bottleneck, or misconfiguration (e.g. wrong sequence ordering, cyclic dependencies, missing middleware, or insecure connection bypass) that the candidate should critique.
+  4. Avoid syntax errors: Output only clean, valid Mermaid flowchart syntax (e.g., starting with 'graph TD') or sequence diagram syntax (e.g. starting with 'sequenceDiagram'). Do NOT use markdown code fences in "diagramDefinition".
+  5. ANTI-REPETITION: If you see any entries in the "recentDiagrams" array in the input, you MUST generate a diagram that has a different structure and node layout. DO NOT reuse those exact node connections or graph flow structures again.
 - If "open": Return normal open-ended text question in "reply".
 
-detectedConnections parameter: if populated, it contains curriculum days matching the candidate response semantically. You may optionally weave a brief acknowledgment of this connection into the reply if relevant, e.g. "That actually touches on Day 8 vector databases..." but never force it.`;
+detectedConnections parameter: if populated, it contains curriculum days matching the candidate response semantically. You may optionally weave a brief acknowledgment of this connection into the reply if relevant, e.g. "That actually touches on Day 8 vector databases..." but never force it.
+
+modelWantsToStop instruction: You MUST decide if we should wrap up the interview. 
+- The parameter "floorMet" in the input indicates whether the minimum interview length (at least 8 questions asked and at least 4 distinct days covered) is met.
+- The parameter "topicsRemainingInQueue" indicates how many topics remain in the queue.
+- If "floorMet" is false, you MUST set "modelWantsToStop" to false.
+- If "floorMet" is true:
+  * Only set "modelWantsToStop" to true once you have evaluated enough distinct, well-covered topics to write specific, fair feedback, and there is no more meaningfully different ground left in the topic queue worth covering.
+  * If the candidate has shown solid understanding but there are still interesting topics to explore (topicsRemainingInQueue > 0), set "modelWantsToStop" to false to continue, unless you feel you already have complete and sufficient signal.
+  * Otherwise, set it to false and keep going.`;
 
   const userPrompt = JSON.stringify({
     candidateProfile: {
@@ -518,13 +677,15 @@ detectedConnections parameter: if populated, it contains curriculum days matchin
     followupCountForCurrentTopic: session.followupCountForCurrentTopic,
     detectedConnections: detectedConnections || [],
     floorMet: (session.questionsAsked >= 8 && session.distinctDaysCovered.length >= 4),
-    topicsRemainingInQueue: session.topicQueue.length - (session.cursor + 1)
+    topicsRemainingInQueue: session.topicQueue.length - (session.cursor + 1),
+    recentDiagrams: session.recentDiagrams || [],
+    recentReactions: session.recentReactions || []
   }, null, 2);
 
   const provider = process.env.LLM_PROVIDER || 'gemini';
   const apiKey = process.env.GEMINI_API_KEY;
   if (provider === 'gemini' && !apiKey) {
-    return mockLLMCall(candidate, currentTopic, lastQuestion, truncatedMessage, session.followupCountForCurrentTopic, detectedConnections, nextQuestionType, nextTopic, difficultyTier);
+    return mockLLMCall(candidate, currentTopic, lastQuestion, truncatedMessage, session.followupCountForCurrentTopic, detectedConnections, nextQuestionType, nextTopic, difficultyTier, session);
   }
 
   console.log(`[LLMClient] Calling LLM (${provider}) for session "${session.sessionId}"...`);
@@ -541,7 +702,9 @@ detectedConnections parameter: if populated, it contains curriculum days matchin
     if (nextQuestionType === 'diagram_interpret' && llmResult.diagramDefinition) {
       const cleanedMermaid = llmResult.diagramDefinition.trim();
       const isValidMermaid = cleanedMermaid.startsWith('graph') || cleanedMermaid.startsWith('sequenceDiagram') || cleanedMermaid.startsWith('classDiagram');
-      if (!isValidMermaid) {
+      if (isValidMermaid) {
+        console.log('[LLMClient Diagram Log] Diagram generation succeeded on the first try.');
+      } else {
         console.warn('[LLMClient Warning] Invalid Mermaid syntax detected. Retrying with enforcement...');
         const correctiveMermaidPrompt = "\n\nCRITICAL: The diagramDefinition you returned was not valid Mermaid flowchart or sequenceDiagram syntax. You MUST return ONLY valid Mermaid syntax (e.g. starting with 'graph TD' or 'sequenceDiagram'), no markdown fences.";
         let retryResult;
@@ -551,9 +714,10 @@ detectedConnections parameter: if populated, it contains curriculum days matchin
           retryResult = await callGeminiREST(systemPrompt + correctiveMermaidPrompt, userPrompt, schema, 0);
         }
         if (retryResult && (retryResult.diagramDefinition.trim().startsWith('graph') || retryResult.diagramDefinition.trim().startsWith('sequenceDiagram'))) {
+          console.log('[LLMClient Diagram Log] Diagram generation succeeded after retry.');
           return retryResult;
         }
-        console.warn('[LLMClient Fallback] Mermaid retry failed. Falling back to open question...');
+        console.warn('[LLMClient Diagram Log] Diagram generation hit fallback (Mermaid validation failed twice). Falling back to open question...');
         llmResult.reply = llmResult.diagramQuestionText || "Let's discuss the architectural design instead. " + llmResult.reply;
         delete llmResult.diagramDefinition;
         delete llmResult.diagramQuestionText;
@@ -586,10 +750,21 @@ detectedConnections parameter: if populated, it contains curriculum days matchin
           return retryResult;
         }
         console.log('[LLMClient Fallback] MCQ regeneration failed or still contained meta-descriptions. Using programmatic backup...');
-        const backupMCQ = mockLLMCall(candidate, currentTopic, lastQuestion, truncatedMessage, session.followupCountForCurrentTopic, detectedConnections, nextQuestionType, nextTopic, difficultyTier);
+        const backupMCQ = mockLLMCall(candidate, currentTopic, lastQuestion, truncatedMessage, session.followupCountForCurrentTopic, detectedConnections, nextQuestionType, nextTopic, difficultyTier, session);
         llmResult.reply = backupMCQ.reply;
         llmResult.mcqOptions = backupMCQ.mcqOptions;
         llmResult.mcqCorrectIndex = backupMCQ.mcqCorrectIndex;
+      }
+    }
+
+    // Optional Local LoRA voice swap-in (Phase L7)
+    if (process.env.ENABLE_LORA_REPLY === 'true' && nextQuestionType === 'open') {
+      const loraSystemPrompt = `You are an expert technical interviewer. Follow these rules: 1. React first with a 3-8 word conversational beat. 2. Ask a follow-up or transition grounded on Day ${currentTopic.day} (${currentTopic.title}). 3. Maximum 2 sentences. 4. Omit day numbers from follow-ups.`;
+      const loraUserPrompt = `Classification: ${llmResult.classification}\nCandidate Answer: ${truncatedMessage}`;
+      const localReply = await generateLocalLoRAReply(loraSystemPrompt, loraUserPrompt);
+      if (localReply) {
+        console.log('[LLMClient Local LoRA] Successfully enhanced reply text using local LoRA model.');
+        llmResult.reply = localReply;
       }
     }
 
@@ -598,7 +773,133 @@ detectedConnections parameter: if populated, it contains curriculum days matchin
 
   // Fallback if API fails twice
   console.warn('[LLMClient Warning] LLM call failed or returned invalid JSON twice. Triggering hardcoded safety fallback...');
-  return mockLLMCall(candidate, currentTopic, lastQuestion, candidateMessage, session.followupCountForCurrentTopic, detectedConnections, nextQuestionType, nextTopic, difficultyTier);
+  return mockLLMCall(candidate, currentTopic, lastQuestion, candidateMessage, session.followupCountForCurrentTopic, detectedConnections, nextQuestionType, nextTopic, difficultyTier, session);
+}
+
+
+/**
+ * Post-processes the generated feedback report to enforce score-threshold rules,
+ * prevent duplicate Day references across lists, resolve unasked topics, and deduplicate next steps.
+ */
+export function postProcessFeedback(feedback, session) {
+  console.log('[LLMClient] Running post-generation feedback verification and routing...');
+  
+  // Group accuracyLog entries by day and compute average scores
+  const dayScores = {};
+  const accuracyLog = session.accuracyLog || [];
+  accuracyLog.forEach(log => {
+    if (log.day !== null && log.day !== undefined) {
+      if (!dayScores[log.day]) dayScores[log.day] = [];
+      dayScores[log.day].push(log.finalAccuracyScore);
+    }
+  });
+
+  const avgScores = {};
+  Object.keys(dayScores).forEach(day => {
+    const scores = dayScores[day];
+    avgScores[parseInt(day)] = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+  });
+
+  const finalStrengths = [];
+  const finalGaps = [];
+  const strengthsDays = new Set();
+  const gapsDays = new Set();
+
+  // 1. Process strengths: must have score >= 60 to remain a strength
+  (feedback.strengths || []).forEach(str => {
+    const match = str.match(/Day\s+(\d+)/i);
+    if (match) {
+      const dayNum = parseInt(match[1]);
+      const score = avgScores[dayNum];
+      
+      if (score === undefined || score < 60) {
+        // Move to gaps
+        if (!gapsDays.has(dayNum)) {
+          let gapText = str;
+          if (score !== undefined) {
+            gapText = `Day ${dayNum}: Showed gaps in understanding objectives (Score: ${score}/100).`;
+          } else {
+            const topic = session.topicQueue.find(t => t.day === dayNum);
+            gapText = `Day ${dayNum} ("${topic ? topic.title : 'Curriculum Topic'}"): not yet demonstrated.`;
+          }
+          finalGaps.push(gapText);
+          gapsDays.add(dayNum);
+        }
+      } else {
+        if (!strengthsDays.has(dayNum)) {
+          finalStrengths.push(str);
+          strengthsDays.add(dayNum);
+        }
+      }
+    } else {
+      // If no day number is parsed, keep it as is
+      finalStrengths.push(str);
+    }
+  });
+
+  // 2. Process gaps: score >= 60 cannot be a gap; score < 40 must be a gap
+  (feedback.gaps || []).forEach(gap => {
+    const match = gap.match(/Day\s+(\d+)/i);
+    if (match) {
+      const dayNum = parseInt(match[1]);
+      const score = avgScores[dayNum];
+
+      if (score !== undefined && score >= 60) {
+        // Move to strengths
+        if (!strengthsDays.has(dayNum)) {
+          const topic = session.topicQueue.find(t => t.day === dayNum);
+          finalStrengths.push(`Day ${dayNum} (${topic ? topic.title : 'Curriculum Topic'}): Demonstrated understanding of objectives (Score: ${score}/100).`);
+          strengthsDays.add(dayNum);
+        }
+      } else {
+        // Avoid duplicate entry or having same day in both arrays
+        if (!gapsDays.has(dayNum) && !strengthsDays.has(dayNum)) {
+          finalGaps.push(gap);
+          gapsDays.add(dayNum);
+        }
+      }
+    } else {
+      finalGaps.push(gap);
+    }
+  });
+
+  // 3. Ensure unreached topicQueue topics go to gaps
+  session.topicQueue.forEach(topic => {
+    const dayNum = topic.day;
+    const reached = avgScores[dayNum] !== undefined;
+    if (!reached && !gapsDays.has(dayNum) && !strengthsDays.has(dayNum)) {
+      finalGaps.push(`Day ${dayNum} ("${topic.title}"): not yet demonstrated.`);
+      gapsDays.add(dayNum);
+    }
+  });
+
+  // 4. Ensure recommendations (next steps) have no duplicate days
+  const finalNext = [];
+  const nextDays = new Set();
+  (feedback.next || []).forEach(item => {
+    const match = item.match(/Day\s+(\d+)/i);
+    if (match) {
+      const dayNum = parseInt(match[1]);
+      if (!nextDays.has(dayNum)) {
+        finalNext.push(item);
+        nextDays.add(dayNum);
+      }
+    } else {
+      finalNext.push(item);
+    }
+  });
+
+  // If next is empty, add standard fallback
+  if (finalNext.length === 0) {
+    finalNext.push('Review curriculum modules for deeper advanced system project designs.');
+  }
+
+  return {
+    summary: feedback.summary,
+    strengths: finalStrengths,
+    gaps: finalGaps,
+    next: finalNext
+  };
 }
 
 
@@ -640,13 +941,19 @@ export function generateMechanicalFeedback(session) {
       const sampleAnswer = logs.map(l => l.candidateAnswer).filter(a => a).join('; ') || 'No answer details';
       const sampleReasoning = logs.map(l => l.reasoning).filter(r => r).join(' ') || 'No evaluation reasoning';
 
-      // 50 is the cutoff threshold:
-      // If score is below 50, it goes to gaps.
-      // If score is 50 or above, it goes to strengths.
-      if (avgScore >= 50) {
+      // Threshold rules: strengths >= 60, gaps < 40, dynamic in between
+      if (avgScore >= 60) {
         strengths.push(`Day ${dayData.day} (${dayData.title}): Demonstrated understanding of objectives (Score: ${avgScore}/100). Candidate discussion: "${sampleAnswer.substring(0, 60)}...". Feedback: ${sampleReasoning}`);
-      } else {
+      } else if (avgScore < 40) {
         gaps.push(`Day ${dayData.day} (${dayData.title}): Showed gaps in understanding objectives (Score: ${avgScore}/100). Candidate response: "${sampleAnswer.substring(0, 60)}...". Gaps identified: ${sampleReasoning}`);
+      } else {
+        // Intermediate score (40-59): put in strengths or gaps based on classification
+        const hasShallow = logs.some(l => l.questionType === 'open' && l.finalAccuracyScore < 50);
+        if (hasShallow) {
+          gaps.push(`Day ${dayData.day} (${dayData.title}): Showed gaps in understanding objectives (Score: ${avgScore}/100). Candidate response: "${sampleAnswer.substring(0, 60)}...". Gaps identified: ${sampleReasoning}`);
+        } else {
+          strengths.push(`Day ${dayData.day} (${dayData.title}): Demonstrated understanding of objectives (Score: ${avgScore}/100). Candidate discussion: "${sampleAnswer.substring(0, 60)}...". Feedback: ${sampleReasoning}`);
+        }
       }
     }
   });
@@ -705,12 +1012,12 @@ export function generateMechanicalFeedback(session) {
     summary = `Candidate ${candidate.member?.name || 'Candidate'} completed the technical review. Performance was baseline/introductory with no direct topic evaluations.`;
   }
 
-  return {
+  return postProcessFeedback({
     summary,
-    strengths: Array.from(new Set(finalStrengths)),
-    gaps: Array.from(new Set(finalGaps)),
-    next: Array.from(new Set(next))
-  };
+    strengths: finalStrengths,
+    gaps: finalGaps,
+    next
+  }, session);
 }
 
 /**
@@ -743,8 +1050,11 @@ EVALUATION RUBRIC & RULES:
 6. "gaps": Array of strings. Detail topics where answers were vague, shallow, incorrect, or incomplete. Also, cover candidate skipped/unreached topics in the queue using the exact phrasing: "not yet demonstrated" (e.g. "Day 29 (Observability): not yet demonstrated").
 7. "next": Array of concrete, actionable recommendations, each tied to a specific Day number and title from the curriculum. No generic advice.
 8. STRICT SCORE-NARRATIVE ALIGNMENT: You are provided with the exact computed numeric scores and turn evaluation reasonings for each day.
-   - If a day's average score is below 50/100, that topic MUST go to the "gaps" array and NEVER to "strengths".
-   - If a day's average score is 50/100 or above, that topic can go to "strengths" (or "gaps" if there are specific concerns).
+   - If a day's average score is below 40/100, that topic MUST go to the "gaps" array and NEVER to "strengths".
+   - If a day's average score is 60/100 or above, that topic is eligible for the "strengths" array.
+   - If a day's average score is between 40 and 59, it may appear in strengths or gaps depending on specific response quality.
+   - Each description in every array MUST use distinct, customized wording specific to the candidate's actual answers—never copy-paste or reuse the same sentence structures.
+   - Do not generate multiple different entries for the same curriculum Day number within the same list.
    - Your narrative sentences for strengths and gaps must quote or reference the candidate's actual answers and the turn evaluation reasoning provided. Do not use generic boilerplate.
    - The overall "summary" must read as critical/mixed if there is a mix of strong and weak scores, and must not praise a candidate for low-scoring performance.
 
@@ -838,12 +1148,12 @@ You MUST return ONLY valid JSON matching the schema. Do not output markdown code
     }
 
     if (result) {
-      return {
+      return postProcessFeedback({
         summary: result.summary,
-        strengths: Array.from(new Set(result.strengths || [])),
-        gaps: Array.from(new Set(result.gaps || [])),
-        next: Array.from(new Set(result.next || []))
-      };
+        strengths: result.strengths || [],
+        gaps: result.gaps || [],
+        next: result.next || []
+      }, session);
     }
   }
 

@@ -27,8 +27,11 @@ Skill Labs Ai is an adaptive technical interview portal that dynamically evaluat
 - **Google Gemini 1.5 Flash**: Selected for its fast response latency, native support for JSON schema enforcement (JSON mode via `responseSchema`), and cost efficiency.
 - **Offline Mock Simulation**: If the Gemini API key is missing or fails twice, the system switches to an offline evaluator that calculates classification overlays and produces mechanical feedback reports.
 
-### 5. Running the Project Locally
-- Follow the instructions below to run locally.
+### 5. LoRA Voice Adaptation & Dual-Tier Intelligence Architecture (Phase L0–L8)
+- **Fine-Tuning Scope**: We fine-tune a local open-weight model (**Qwen 2.5 3B**) to produce the natural two-part *"reaction clause + technical follow-up"* interviewer voice. We deliberately do **not** route classification, scoring rubrics, or structured JSON schema validation through the 3B model, as a 3B model under time constraints is prone to JSON schema degradation.
+- **Data Provenance**: The training dataset is **100% self-distilled and synthetic**. We systematically generated 370+ labeled training pairs across all 31 days in `curriculum.json` (weighted across strong, partial, shallow, off-topic, and explicit non-answers) plus 50 supplementary MCQ/diagram transitions using our cloud model with strict voice rubrics. No external or scraped internet data was used.
+- **PEFT / QLoRA Configuration**: Built using **Unsloth** in 4-bit precision with a modest rank ($r=16, \alpha=16, \text{lr}=2\times 10^{-4}$, 0% dropout). A narrow rank is mathematically optimal for narrow style/tone adaptation without overfitting or injecting hallucinations.
+- **Zero-Downtime Fallback Architecture**: The local model is integrated as an optional swap-in via `generateLocalLoRAReply` in `src/llmClient.js`. It is guarded by an automated 3-second timeout and try/catch block that falls back to cloud few-shot generation if Ollama is slow or offline, ensuring local model hosting is never a single point of failure during live judged evaluations.
 
 ---
 

@@ -29,7 +29,7 @@
       <div class="deco-shape circle absolute"></div>
 
       <div class="max-w-3xl z-10">
-        <span class="badge bg-blue-500 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full border border-blue-400">Phase 6 Active</span>
+        <span class="badge bg-blue-500 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full border border-blue-400">AI Technical Evaluation</span>
         <h1 class="text-4xl md:text-6xl font-extrabold tracking-tight mt-4 leading-none">Ready for your interview?</h1>
         <p class="text-lg md:text-xl text-blue-100 mt-4 max-w-xl mx-auto font-light">
           Experience an adaptive, multi-turn AI technical evaluation customized to your actual course completions.
@@ -88,54 +88,119 @@
   </main>
 
   <!-- ==================== SCREEN 2: CHAT INTERVIEW SCREEN ==================== -->
-  <main id="screen-chat" class="view h-screen flex flex-col bg-gray-50 hidden">
-    <!-- Header Bar -->
-    <header class="h-18 bg-white border-b-2 border-gray-200 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4 z-10">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-extrabold text-lg">SL</div>
-        <div>
-          <h2 id="chat-cand-name" class="text-lg font-bold tracking-tight text-gray-900">Sarah Johnson</h2>
-          <p id="chat-cand-role" class="text-xs font-semibold tracking-wider text-gray-500 uppercase">Backend Engineer</p>
+  <main id="screen-chat" class="view h-screen max-h-screen overflow-hidden flex flex-col bg-slate-100 hidden">
+    <!-- Sleek Top Navbar -->
+    <header class="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0 z-30 shadow-sm">
+      <!-- Left: Logo & Candidate Identity -->
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2 pr-4 border-r border-slate-200">
+          <div class="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center font-black text-sm shadow-sm">SL</div>
+          <span class="font-extrabold text-slate-800 text-sm tracking-tight hidden sm:inline">SKILL LABS AI</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 bg-slate-900 text-white rounded-full flex items-center justify-center font-bold text-xs">
+            <span id="chat-avatar-initials">CD</span>
+          </div>
+          <div>
+            <h2 id="chat-cand-name" class="text-sm font-bold text-slate-900 leading-none">Candidate Name</h2>
+            <p id="chat-cand-role" class="text-[11px] font-semibold text-blue-600 uppercase tracking-wider mt-0.5">Software Engineer</p>
+          </div>
         </div>
       </div>
 
-      <!-- Solid Color Block Progress Indicators -->
-      <div class="flex gap-3">
-        <div class="progress-pill bg-blue-600 text-white px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-bold">
-          <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+      <!-- Right: Live Progress & Status Indicators -->
+      <div class="flex items-center gap-3">
+        <!-- Live Proctoring Badge -->
+        <div class="hidden lg:flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-bold">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span>Proctored Screen</span>
+        </div>
+
+        <!-- Questions Count Pill -->
+        <div class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-800 border border-blue-200 rounded-full text-xs font-bold shadow-sm">
+          <i data-lucide="help-circle" class="w-3.5 h-3.5 text-blue-600"></i>
           <span>Questions:</span>
-          <span id="chat-progress-questions">0/8</span>
+          <span id="chat-progress-questions" class="font-extrabold text-blue-700">0</span>
+          <span class="text-[10px] font-normal text-blue-600 hidden sm:inline">(min. 8)</span>
         </div>
-        <div class="progress-pill bg-emerald-600 text-white px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-bold">
-          <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+
+        <!-- Topics Count Pill -->
+        <div class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-800 border border-purple-200 rounded-full text-xs font-bold shadow-sm">
+          <i data-lucide="layers" class="w-3.5 h-3.5 text-purple-600"></i>
           <span>Topics:</span>
-          <span id="chat-progress-topics">0/4</span>
+          <span id="chat-progress-topics" class="font-extrabold text-purple-700">0/4</span>
         </div>
-        <div class="progress-pill bg-purple-600 text-white px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-bold">
-          <i data-lucide="shield" class="w-3.5 h-3.5"></i>
-          <span>Difficulty:</span>
+
+        <!-- Difficulty Pill -->
+        <div class="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-full text-xs font-bold shadow-sm">
+          <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-600"></i>
           <span id="chat-progress-difficulty" class="capitalize">Standard</span>
         </div>
+
+        <!-- Mobile Drawer Toggle -->
+        <button id="btn-toggle-sidebar" class="h-8 px-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg border border-slate-300 md:hidden flex items-center gap-1 text-xs font-bold transition">
+          <i data-lucide="history" class="w-3.5 h-3.5"></i>
+          <span>History</span>
+        </button>
       </div>
     </header>
 
-    <!-- Message Thread Window -->
-    <section id="chat-messages" class="flex-grow overflow-y-auto p-6 md:p-8 flex flex-col gap-6 max-w-4xl w-full mx-auto">
-      <!-- Chat bubbles injected dynamically -->
-    </section>
-
-    <!-- Sticky Bottom Input Section -->
-    <footer class="bg-white border-t-2 border-gray-200 p-4 md:p-6 sticky bottom-0">
-      <div class="max-w-4xl mx-auto flex gap-4 items-center">
-        <div class="flex-grow relative">
-          <div id="paste-error" class="absolute -top-6 left-2 text-xs text-red-500 font-bold hidden">Pasting is disabled during the interview</div>
-          <input type="text" id="chat-input" placeholder="Type your technical response here..." class="w-full h-14 px-6 bg-gray-100 rounded-md text-gray-900 border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all duration-200" />
+    <!-- Main Workspace: Split Chat Feed & Sidebar -->
+    <div class="chat-workspace-container flex-grow flex overflow-hidden relative">
+      <!-- Left Column: Chat Conversation Stream -->
+      <section class="chat-stream-column flex-grow flex flex-col overflow-hidden h-full bg-slate-50">
+        <!-- Message Bubbles Scroll Area -->
+        <div id="chat-messages" class="flex-grow overflow-y-auto p-6 md:p-8 flex flex-col gap-6 max-w-3xl w-full mx-auto">
+          <!-- Chat messages dynamically rendered here -->
         </div>
-        <button id="btn-send" class="w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center transition-all duration-200 transform hover:scale-105 active:scale-95 outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-          <i data-lucide="send" class="w-5 h-5"></i>
-        </button>
-      </div>
-    </footer>
+
+        <!-- Pinned Bottom Typing Console -->
+        <footer class="chat-input-footer bg-white border-t border-slate-200 p-4 shrink-0 shadow-lg">
+          <div class="max-w-3xl mx-auto flex flex-col gap-1.5">
+            <div class="flex items-center gap-3 relative">
+              <div id="paste-error" class="absolute -top-7 left-2 text-xs text-red-600 font-bold bg-red-50 border border-red-200 px-2 py-0.5 rounded shadow-sm hidden flex items-center gap-1">
+                <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
+                Pasting is blocked in exam mode
+              </div>
+              <input 
+                type="text" 
+                id="chat-input" 
+                placeholder="Type your technical response here..." 
+                class="flex-grow h-13 px-5 bg-slate-100 rounded-xl text-slate-900 font-medium text-sm border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all duration-150 shadow-inner"
+              />
+              <button 
+                id="btn-send" 
+                class="h-13 px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl flex items-center justify-center gap-2 transition-all duration-150 transform active:scale-95 shadow-md shrink-0"
+              >
+                <span>Send</span>
+                <i data-lucide="send" class="w-4 h-4"></i>
+              </button>
+            </div>
+            <div class="flex justify-between items-center px-1 text-[11px] text-slate-400 font-medium">
+              <span>Respond with your own architectural reasoning</span>
+              <span>Press <kbd class="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded text-slate-600 font-mono text-[10px]">Enter ↵</kbd> to submit</span>
+            </div>
+          </div>
+        </footer>
+      </section>
+
+      <!-- Right Column: Live Session Intelligence Panel (Sidebar) -->
+      <aside id="chat-sidebar" class="w-80 md:w-96 bg-white border-l border-slate-200 flex flex-col h-full overflow-hidden shrink-0 shadow-sm">
+        <!-- Sidebar Header -->
+        <div class="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+          <div class="flex items-center gap-2">
+            <i data-lucide="activity" class="w-4 h-4 text-blue-600"></i>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Live Question History</h3>
+          </div>
+          <span id="sidebar-count" class="text-xs font-extrabold bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full">0</span>
+        </div>
+
+        <!-- Sidebar Question Cards List -->
+        <div id="sidebar-list" class="flex-grow overflow-y-auto p-4 flex flex-col gap-3">
+          <!-- Active question in progress & historical cards dynamically rendered here -->
+        </div>
+      </aside>
+    </div>
   </main>
 
   <!-- ==================== SCREEN 3: FEEDBACK SCREEN ==================== -->

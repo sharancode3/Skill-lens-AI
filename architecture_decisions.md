@@ -64,3 +64,23 @@ Instead of IRT, we built a **Rolling Performance Window & Discrete Difficulty Ti
   - **De-escalation Trigger**: Any score $< 40$ drops the tier and presents MCQs to keep struggling candidates engaged without stalling.
 - **Tone Calibration**: Direct, terse system-prompt instructions enforce realistic interviewer tone and keep turn lengths under 3 sentences to mimic a real coding session.
 
+---
+
+## 6. LoRA Fine-Tuning Voice Adapter (Phase L0 Scope Lock & Go/No-Go Checkpoints)
+
+### A. Precise Scope Definition
+- **Target Role**: Adapts the conversational tone and interviewer voice for the `reply` text field only (enforcing reaction-then-question structure and banned phrase elimination).
+- **Decoupled Architecture**: Scoring, accuracy logging, classification, MCQ generation, Mermaid diagram generation, and stopping decisions remain exclusively on the cloud model (`gemini-1.5-flash` or `qwen` with structured JSON schema enforcement). A 3-4B parameter model is not trusted to reliably emit structured JSON under time pressure.
+- **Base Model Selection**: **Qwen 2.5 3B** (`unsloth/Qwen2.5-3B-Instruct-bnb-4bit`), chosen for native integration with local Ollama runtime and low VRAM footprint.
+- **Training Tool**: **Unsloth** (QLoRA 4-bit with `r=16`, `lora_alpha=16`, `lr=2e-4`).
+- **Compute Environment**: Free-tier Google Colab (T4/L4 GPU).
+- **Data Provenance**: 100% self-distilled synthetic data generated systematically across all 31 days in `curriculum.json` using the cloud model with strict voice rubric prompts (not scraped web data).
+
+### B. Time-Budgeted Go/No-Go Checkpoints
+1. **Checkpoint 1 (Target: +2 hours)**: Synthetic dataset generated and spot-checked. If fewer than 250 valid, clean examples are produced, abort training and fall back to the cloud few-shot prompt.
+2. **Checkpoint 2 (Target: +4 hours)**: Training run completes and exports a valid LoRA adapter/GGUF model. If training repeatedly crashes or fails to decrease loss after 2 attempts, fall back to cloud few-shot prompt.
+3. **Checkpoint 3 (Target: +5.5 hours)**: Blind side-by-side evaluation (fine-tuned vs. cloud few-shot). If the fine-tuned version is not a clear, consistent winner in blind testing across 8+ diverse candidate answers, ship the cloud few-shot version to avoid local hosting demo risks.
+
+### C. Live Fallback Mechanism
+- The backend incorporates `generateLocalLoRAReply` with an automated 3-second timeout and try/catch block in `src/llmClient.js`. If the local model is slow, offline, or errors, the turn seamlessly falls back to the cloud few-shot generator with zero candidate interruption.
+
