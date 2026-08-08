@@ -767,31 +767,274 @@ export function mockLLMCall(candidate, topic, lastQuestion, message, followupCou
 
 
 /**
+ * Conduct Analyst Role: given candidate's raw message and the question that was asked,
+ * classifies message into attempt, refusal, off-topic, or disrespectful input.
+ */
+export async function analyzeConductWithLLM(candidateMessage, lastQuestion) {
+  if (process.env.SIMULATE_LLM_OUTAGE === 'true') {
+    return mockConductAnalysis(candidateMessage);
+  }
+
+  const systemPrompt = `You are a highly precise Conduct Analyst for a technical software engineering interview.
+Your single job is to analyze the candidate's last raw message in response to the question asked and classify it into one of four mutually exclusive categories:
+
+1. "genuine_attempt": The candidate makes a genuine technical effort to answer the question, even if the answer is incorrect, partial, vague, shallow, or brief (e.g. "i used python for that").
+2. "non_answer": The candidate explicitly refuses to answer, admits they don't know, or requests to move on/skip (e.g. "idk", "i don't know", "skip", "next question", "pass", "no idea").
+3. "off_topic": The candidate's response is irrelevant to the technical question, contains random keyboard mashing/gibberish (e.g. "sdfds", "sdfsdf", "asdflkjh"), or is completely unrelated to software engineering.
+4. "disrespectful": The candidate is dismissive, rude, hostile, or uses inappropriate language (e.g. "do as you like", "whatever", "this is stupid").
+
+You must genuinely analyze the semantics and structure of the input. Do NOT rely on simple keyword matching. For example, gibberish strings like "sdfds" or "sdfsdf" are off-topic/nonsensical, not genuine attempts.`;
+
+  const userPrompt = JSON.stringify({
+    previousQuestion: lastQuestion,
+    candidateMessage: candidateMessage
+  });
+
+  const conductSchema = {
+    type: 'OBJECT',
+    properties: {
+      classification: {
+        type: 'STRING',
+        enum: ['genuine_attempt', 'non_answer', 'off_topic', 'disrespectful'],
+        description: 'The conduct classification of the message.'
+      },
+      reasoning: {
+        type: 'STRING',
+        description: 'A brief 1-sentence reasoning justifying the classification.'
+      }
+    },
+    required: ['classification', 'reasoning']
+  };
+
+  const provider = process.env.LLM_PROVIDER || 'gemini';
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (provider === 'gemini' && !apiKey) {
+    return mockConductAnalysis(candidateMessage);
+  }
+
+  try {
+    let result;
+    if (provider === 'qwen') {
+      result = await callQwenREST(systemPrompt, userPrompt, conductSchema, 1);
+    } else {
+      result = await callGeminiREST(systemPrompt, userPrompt, conductSchema, 1);
+    }
+    if (result && result.classification) {
+      return result;
+    }
+  } catch (err) {
+    console.error('[LLMClient Conduct Analyst] API failed:', err.message);
+  }
+  return mockConductAnalysis(candidateMessage);
+}
+
+function mockConductAnalysis(message) {
+  const clean = (message || '').trim().toLowerCase();
+  if (clean === '') {
+    return { classification: 'non_answer', reasoning: 'Message is empty.' };
+  }
+
+  // Check exact refusals
+  const exactRefusals = [
+    'idk', 'i don\'t know', 'i dont know', 'no idea', 'skip', 'dunno', 'pass', 
+    'dont know', 'next question', 'move on', 'n/a', 'na', 'none', 'nothing',
+    'no clue', 'not sure', 'i do not know', 'cant say', 'can\'t say', 'i cannot answer',
+    'whatever', 'i don’t know', 'i don\'t care', 'id care', 'skip this', 'next'
+  ];
+  if (exactRefusals.includes(clean)) {
+    return { classification: 'non_answer', reasoning: 'Explicit non-answer/refusal keyword matched.' };
+  }
+
+  // Check disrespectful
+  const disrespectfulPhrases = [
+    'do as you like', 'do has u like', 'do as u like', 'whatever', 'hostile', 'stupid', 'rude'
+  ];
+  if (disrespectfulPhrases.some(phrase => clean.includes(phrase))) {
+    return { classification: 'disrespectful', reasoning: 'Message matches disrespectful/hostile template phrase.' };
+  }
+
+  // Gibberish checking (keyboard mashes, e.g. "sdfds", "sdfsdf", "asdflkjh")
+  if (/^[a-z]+$/.test(clean) && clean.length > 3) {
+    // Vowel count
+    const vowels = (clean.match(/[aeiouy]/g) || []).length;
+    const len = clean.length;
+    if (vowels === 0 || (vowels / len) < 0.15) {
+      return { classification: 'off_topic', reasoning: 'Gibberish or keyboard mashing detected (no/low vowels).' };
+    }
+    // High repetition
+    if (/([a-z])\1{2,}/.test(clean)) {
+      return { classification: 'off_topic', reasoning: 'Gibberish or keyboard mashing detected (high letter repetition).' };
+    }
+  }
+
+  return { classification: 'genuine_attempt', reasoning: 'Fallback assumes it is a genuine technical response.' };
+}
+
+/**
+ * Interviewer Role: given conduct classification, curriculum topic, and history,
+ * generates the conversational dialogue, follow-ups, and choice parameters.
+ */
+export async function generateInterviewerResponseWithLLM(
+  session,
+  candidateMessage,
+  conductClassification,
+  detectedConnections,
+  hedgeMarkers,
+  nextQuestionType,
+  nextTopic,
+  difficultyTier
+) {
+  if (process.env.SIMULATE_LLM_OUTAGE === 'true') {
+    return mockLLMCall(session.candidateSnapshot, session.topicQueue[session.cursor], '', candidateMessage, session.followupCountForCurrentTopic, detectedConnections, nextQuestionType, nextTopic, difficultyTier, session, hedgeMarkers);
+  }
+
+  const currentTopic = session.topicQueue[session.cursor];
+  const lastQuestion = session.transcript.filter(e => e.role === 'interviewer').slice(-1)[0]?.text || '';
+
+  const systemPrompt = `You are a professional, senior technical interviewer conducting a coding and architectural review for Skill Labs Ai.
+Your single job is to generate the next response (question, follow-up, or reaction) to the candidate.
+
+INPUT METADATA:
+- Candidate conduct classification: "${conductClassification}" (Note: If this is not "genuine_attempt", you MUST output a natural, human-sounding reaction clause and transition or re-prompt).
+- Current topic: Day ${currentTopic.day} - "${currentTopic.title}"
+- Topic objectives: ${currentTopic.objectives.join(', ')}
+- Next question type requested: "${nextQuestionType}"
+- Difficulty tier: "${difficultyTier}"
+
+CONSTRAINTS:
+1. If nextQuestionType is "mcq": You MUST generate a multiple choice question stem in "reply", and return the "mcqOptions" (array of exactly 4 choices: 3 plausible distractors and 1 correct option, related to the objectives of the NEXT topic day: Day ${nextTopic ? nextTopic.day : currentTopic.day} - "${nextTopic ? nextTopic.title : currentTopic.title}").
+2. If nextQuestionType is "diagram_interpret": You MUST generate a flawed Mermaid diagram syntax in "diagramDefinition" representing the next day's objectives, and place a specific critique question in "diagramQuestionText".
+3. reactionClause: A short 3-8 word conversational reaction.
+4. Omit day numbers from follow-up questions within the same topic.
+5. REALISTIC BREVITY: Keep your reply to 1-3 sentences.`;
+
+  const userPrompt = JSON.stringify({
+    candidateLastMessage: candidateMessage,
+    previousQuestion: lastQuestion,
+    runningInterviewMemory: session.interviewMemory || 'No history yet.',
+    followupCount: session.followupCountForCurrentTopic,
+    detectedConnections: detectedConnections || []
+  });
+
+  const schema = buildResponseSchema(nextQuestionType);
+  const provider = process.env.LLM_PROVIDER || 'gemini';
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (provider === 'gemini' && !apiKey) {
+    return mockLLMCall(session.candidateSnapshot, currentTopic, lastQuestion, candidateMessage, session.followupCountForCurrentTopic, detectedConnections, nextQuestionType, nextTopic, difficultyTier, session, hedgeMarkers);
+  }
+
+  try {
+    let result;
+    if (provider === 'qwen') {
+      result = await callQwenREST(systemPrompt, userPrompt, schema, 1);
+    } else {
+      result = await callGeminiREST(systemPrompt, userPrompt, schema, 1);
+    }
+    if (result) {
+      return result;
+    }
+  } catch (err) {
+    console.error('[LLMClient Interviewer] API failed:', err.message);
+  }
+
+  return mockLLMCall(session.candidateSnapshot, currentTopic, lastQuestion, candidateMessage, session.followupCountForCurrentTopic, detectedConnections, nextQuestionType, nextTopic, difficultyTier, session, hedgeMarkers);
+}
+
+/**
+ * Evaluator Role: runs only when scoring a completed topic (not every turn).
+ * Given the full exchange for a day, produces numeric score and narrative feedback together.
+ */
+export async function evaluateTopicPerformanceWithLLM(currentTopic, exchangeHistory) {
+  if (process.env.SIMULATE_LLM_OUTAGE === 'true') {
+    return mockTopicEvaluation(currentTopic, exchangeHistory);
+  }
+
+  const systemPrompt = `You are a professional technical Evaluator for a software engineering interview.
+Your single job is to analyze the full exchange history for a curriculum day and produce:
+1. A numeric technical depth score (0 to 100) reflecting the candidate's understanding of the objectives.
+2. A specific, factual narrative feedback (1-3 sentences) detailing their demonstrated strengths or gaps on this topic, referencing their actual claims or responses.
+
+CURRICULUM TOPIC: Day ${currentTopic.day} - "${currentTopic.title}"
+OBJECTIVES: ${currentTopic.objectives.join(', ')}
+
+Your score and narrative feedback must align:
+- High depth / specific details -> score 80-100, strength feedback.
+- Vague / shallow / incorrect details -> score 20-59, gap feedback.
+- Refusal / gibberish / nonsense -> score 10-20, gap feedback.`;
+
+  const userPrompt = JSON.stringify({
+    exchangeHistory: exchangeHistory.map(e => `${e.role.toUpperCase()}: ${e.text}`).join('\n')
+  });
+
+  const evaluatorSchema = {
+    type: 'OBJECT',
+    properties: {
+      score: {
+        type: 'INTEGER',
+        description: 'The numeric score from 0 to 100.'
+      },
+      narrativeFeedback: {
+        type: 'STRING',
+        description: 'The specific narrative feedback detailing strengths or gaps.'
+      }
+    },
+    required: ['score', 'narrativeFeedback']
+  };
+
+  const provider = process.env.LLM_PROVIDER || 'gemini';
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (provider === 'gemini' && !apiKey) {
+    return mockTopicEvaluation(currentTopic, exchangeHistory);
+  }
+
+  try {
+    let result;
+    if (provider === 'qwen') {
+      result = await callQwenREST(systemPrompt, userPrompt, evaluatorSchema, 1);
+    } else {
+      result = await callGeminiREST(systemPrompt, userPrompt, evaluatorSchema, 1);
+    }
+    if (result && typeof result.score === 'number' && result.narrativeFeedback) {
+      return result;
+    }
+  } catch (err) {
+    console.error('[LLMClient Evaluator] API failed:', err.message);
+  }
+  return mockTopicEvaluation(currentTopic, exchangeHistory);
+}
+
+function mockTopicEvaluation(currentTopic, exchangeHistory) {
+  const candidateReplies = exchangeHistory.filter(e => e.role === 'candidate').map(e => e.text);
+  const fullText = candidateReplies.join(' ').toLowerCase();
+
+  let score = 50;
+  let feedback = '';
+
+  if (fullText.trim() === '' || fullText.includes('[empty response]')) {
+    score = 10;
+    feedback = `Candidate skipped topic Day ${currentTopic.day} (${currentTopic.title}) due to consecutive blank answers.`;
+  } else if (fullText.includes('idk') || fullText.includes("don't know") || fullText.includes('dont know')) {
+    score = 20;
+    feedback = `Candidate was unable to address the technical objectives of Day ${currentTopic.day} (${currentTopic.title}), stating they did not know.`;
+  } else if (fullText.includes('sdfds') || fullText.includes('sdfsdf') || fullText.length < 15) {
+    score = 20;
+    feedback = `Candidate response for Day ${currentTopic.day} (${currentTopic.title}) was very short or nonsensical, showing gaps in understanding objectives.`;
+  } else {
+    score = 85;
+    feedback = `Demonstrated solid understanding of objectives for Day ${currentTopic.day} (${currentTopic.title}).`;
+  }
+
+  return { score, narrativeFeedback: feedback };
+}
+
+/**
  * Main intelligence layer evaluation entrypoint.
- * Assembles prompts, manages Gemini REST vs offline fallback, and validates schemas.
+ * Orchestrates Conduct Analyst, Interviewer, and Evaluator roles sequentially.
  */
 export async function evaluateTurnWithLLM(session, candidateMessage, detectedConnections, detectedHedgeMarkers = []) {
-  const candidate = session.candidateSnapshot;
-  const topicIndex = session.cursor;
-  const currentTopic = session.topicQueue[topicIndex];
-  const nextTopic = session.topicQueue[topicIndex + 1] || null;
-  const difficultyTier = session.difficultyTier || 'standard';
-  const nextQuestionType = session.pendingQuestionType || 'open';
-
-  // Compute recentInterrupts for model constraints
-  const logLengthForInterrupt = (session.accuracyLog || []).length;
-  let lastWasInterrupt = false;
-  let prevWasInterrupt = false;
-  if (logLengthForInterrupt > 0) {
-    const lastLog = session.accuracyLog[logLengthForInterrupt - 1];
-    lastWasInterrupt = (lastLog.reactionClause || '').includes('Sorry to interrupt') || !!lastLog.interruptFlag;
-  }
-  if (logLengthForInterrupt > 1) {
-    const prevLog = session.accuracyLog[logLengthForInterrupt - 2];
-    prevWasInterrupt = (prevLog.reactionClause || '').includes('Sorry to interrupt') || !!prevLog.interruptFlag;
-  }
-  const recentInterrupts = lastWasInterrupt || prevWasInterrupt;
-
   // Find last interviewer question
   let lastQuestion = '';
   for (let i = session.transcript.length - 1; i >= 0; i--) {
@@ -801,271 +1044,73 @@ export async function evaluateTurnWithLLM(session, candidateMessage, detectedCon
     }
   }
 
-  // Input Truncation: Truncate candidate message to a maximum of 300 words for LLM context
+  // Truncate candidate message
   const words = candidateMessage.split(/\s+/);
   const truncatedMessage = words.length > 300 
     ? words.slice(0, 300).join(' ') + ' ... [Truncated for Context]' 
     : candidateMessage;
 
-  // Outage Simulation: bypass API calls if SIMULATE_LLM_OUTAGE is true
-  if (process.env.SIMULATE_LLM_OUTAGE === 'true') {
-    console.log('[LLMClient Outage Simulation] Simulating LLM outage in evaluateTurnWithLLM.');
-    return mockLLMCall(candidate, currentTopic, lastQuestion, truncatedMessage, session.followupCountForCurrentTopic, detectedConnections, nextQuestionType, nextTopic, difficultyTier, session, detectedHedgeMarkers);
+  // 1. Conduct Analyst Role
+  const conduct = await analyzeConductWithLLM(truncatedMessage, lastQuestion);
+  console.log(`[Multi-Agent] Conduct Analyst classification: "${conduct.classification}" (${conduct.reasoning})`);
+
+  const currentTopic = session.topicQueue[session.cursor];
+  const nextTopic = session.topicQueue[session.cursor + 1] || null;
+  const difficultyTier = session.difficultyTier || 'standard';
+  const nextQuestionType = session.pendingQuestionType || 'open';
+
+  // 2. Interviewer Role
+  const interviewerRes = await generateInterviewerResponseWithLLM(
+    session,
+    truncatedMessage,
+    conduct.classification,
+    detectedConnections,
+    detectedHedgeMarkers,
+    nextQuestionType,
+    nextTopic,
+    difficultyTier
+  );
+
+  // Map conduct classification if it is a violation/non-attempt
+  if (conduct.classification !== 'genuine_attempt') {
+    const mappedClass = conduct.classification === 'non_answer' ? 'disengaged' : conduct.classification;
+    interviewerRes.classification = mappedClass;
+    interviewerRes.reasoning = conduct.reasoning;
+    interviewerRes.action = 'advance'; // Force advance on conduct violation
   }
 
-  const systemPrompt = `You are a professional, senior technical interviewer conducting a coding and architectural review for Skill Labs Ai.
-You must evaluate the candidate's last response for the current topic.
+  // 3. Evaluator Role: runs only when scoring a completed topic (meaning action === 'advance' or MCQ/diagram turn)
+  const isMCQ = nextQuestionType === 'mcq';
+  const isDiagram = nextQuestionType === 'diagram_interpret';
+  const isAdvancing = interviewerRes.action === 'advance' || interviewerRes.action === 'wrapup' || isMCQ || isDiagram;
 
-CONSTRAINTS FOR CLASSIFICATION:
-- "strong": Candidate demonstrates clear understanding with real specificity.
-- "partial": Candidate is directionally right but misses key mechanisms or trade-offs.
-- "shallow": Candidate is vague, generic, or just restates the question.
-- "off_topic": Candidate response is completely unrelated to the topic.
+  if (isAdvancing && currentTopic) {
+    const dayExchangeHistory = [];
+    if (lastQuestion) {
+      dayExchangeHistory.push({ role: 'interviewer', text: lastQuestion });
+    }
+    dayExchangeHistory.push({ role: 'candidate', text: candidateMessage });
 
-CONSTRAINTS FOR REACTION CLAUSE (reactionClause):
-- You MUST generate a short 3-8 word conversational reaction clause responding to the quality of the candidate's last answer.
-- Tailor the tone to the classification:
-  * "strong" classification gets an affirming beat (e.g., "Right.", "Makes sense.", "Exactly.", "Good points.")
-  * "partial" or "shallow" classification gets a neutral-to-skeptical beat (e.g., "Hm, okay —", "Fair enough —", "That's part of it, but —", "Sure, let's build on that —")
-  * "off_topic" classification gets a gentle redirect beat (e.g., "Let's bring it back —", "Understood, but —")
-  * Low-effort responses (like "idk", "skip", "none") get an honest conversational reset (e.g., "No worries — let's try a different angle.", "That's fine — let's switch gears.")
-- ANTI-REPETITION: If you see any entries in the "recentReactions" array in the input, you MUST NOT reuse those exact reaction phrases. Generate a different reaction beat.
-- STRICT SEGREGATION: The reaction clause must reside ONLY in "reactionClause", and the follow-up or next question must reside ONLY in "reply". Do not repeat the reaction clause inside "reply".
+    const evaluation = await evaluateTopicPerformanceWithLLM(currentTopic, dayExchangeHistory);
+    console.log(`[Multi-Agent] Evaluator score for Day ${currentTopic.day}: ${evaluation.score} (${evaluation.narrativeFeedback})`);
 
-CONSTRAINTS FOR SIMULATED INTERRUPTS:
-- Occasionally (roughly 1 in 5-6 turns where candidate response contains a specific pivotal term or claim in the middle of their answer), you may frame the reaction clause as a mid-sentence interruption: "Sorry to interrupt — you mentioned {specific phrase they used}. {pointed question about that specific phrase}".
-- You MUST only use this if "recentInterrupts" in the input is false (never do this on consecutive turns to avoid a jarring repetition).
-- Ensure the interruption references a specific mid-answer technical term or claim, not just their overall or final conclusion.
-
-CONSTRAINTS FOR MENTIONING THE DAY:
-- Only mention the curriculum Day number (e.g., "Day 12") once when first transitioning or introducing a new topic.
-- Never mention the Day number in follow-up questions, "why" questions, or probing questions within the same topic.
-
-CONSTRAINTS FOR ACTION & PHRASING:
-- "why_probe": Usable ONLY when the current turn's classification is "strong" or "partial" (never on "shallow" or "off_topic"). Selecting "why_probe" triggers a recursive follow-up asking the candidate to justify their technical decisions or explain the underlying root mechanisms of their previous answer. E.g. "Why did you choose SQLite instead of keeping the DataFrame in memory?"
-- "strong" -> Action can be "why_probe" (if whyChainDepth < 3 to drill deeper into the mechanism) or "advance" (if we have completed the drilling).
-- "off_topic" -> Action MUST be "advance". You must gently redirect the conversation back in the reply text.
-- "partial" or "shallow" -> If "shallow", Action MUST be "followup" (or advance if followupCount >= 1). If "partial", Action can be "why_probe" (if whyChainDepth < 3) or "followup" (if we just want a standard clarification).
-- When action is "followup" or "why_probe": The reply MUST reference something concrete or quote a word/phrase from the candidate's last message. DO NOT ask generic "can you elaborate?" questions.
-- Adjust your vocabulary and question depth based on the candidate's years of experience:
-  * Junior candidate (<3 years): Maintain supportive, concept-focused language.
-  * Senior candidate (5+ years): Ask for architectural trade-offs, edge cases, scalability, and "why" decisions.
-
-TONE CALIBRATION CONSTRAINTS:
-1. NEVER use the following phrases: "great question", "that's a fascinating point", "as an AI", "I'd be happy to", "let's dive into", "sounds like a good plan", or restating the candidate's answer back before responding.
-2. STRICT BREVITY: Keep your reply to 1-3 sentences unless presenting a diagram/MCQ. Do not monologue.
-3. REALISTIC TERSENESS: Use short neutral acknowledgments ("Right.", "Okay, and—", "Sure.") and ask direct follow-ups or push back on weak answers ("That's part of it, but what actually triggers X?").
-4. NO GENERIC PRAISE: Do not say "nice job" or "well explained". Praise must reference a specific correct mechanism named or be omitted entirely.
-
-HALLUCINATION & WHY-PROBE CONSTRAINTS:
-1. hallucinationFlag (boolean): Evaluate if the candidate's response contains factual hallucinations, checkably incorrect claims, or fabricated technical details. Set to true ONLY if the candidate asserts something as fact that is specifically incorrect (e.g. wrong technical relationships, wrong mechanisms, or fabricated capabilities). If the candidate gives a vague, incomplete, or uncertain response (e.g. "I am not sure, something about vector files"), do NOT flag this as a hallucination; it stays classification: "shallow" or "partial" and hallucinationFlag: false.
-2. hallucinationCorrection (string): Required when hallucinationFlag is true. Provide a concise, factual, non-lecturing 1-sentence correction. If hallucinationFlag is false, set this to an empty string "".
-3. prefix reactionClause: If hallucinationFlag is true, you MUST prefix the reactionClause with "⚠️ " followed by the hallucinationCorrection, then proceed with the interviewer voice pattern. E.g. "⚠️ RAG retrieves vectors from an external index, it does not store vectors inside GPT weights. Hm, okay — ".
-4. whyProbe: Set this to true if the next question you are proposing (in "reply") is a why-chain probe asking the candidate to justify their technical decision or choice from their previous answer. Otherwise false.
-
-COMMUNICATION CONFIDENCE CONSTRAINTS:
-1. communicationConfidence (string): Classify as "low", "medium", or "high". This is about phrasing delivery and certainty, NOT correctness of content. Look at directness, hedging words, and self-deprecation.
-   - "low": Frequent hedging words like "I think", "maybe", "probably", "I guess", "not sure", or hesitant vocabulary.
-   - "medium": Neutral, standard matter-of-fact statements with minor or no hedges.
-   - "high": Confident, direct, assertive technical statements, authoritative vocabulary.
-   - Use the provided "detectedHedgeMarkers" list and "hedgeEventCount" as hints alongside your own holistic read of the message tone.
-2. Confidence Probing Note Hook: If "hedgeEventCount" is 3+ in the input, and the candidate's last answer is classified as "strong" or "partial" (meaning they were actually correct/partially correct despite hedging), you may optionally include a brief confidence-probing note in the "reactionClause" responding to this hedging. For example: "You said 'probably' there, but that was actually correct — are you more sure than you're letting on?" This should be situational and rare.
-
-
-FEW-SHOT EXAMPLES (GROUNDED CURRICULUM PATTERNS):
-[STRONG ANSWER EXAMPLE]
-- Candidate: "I used Pandas to load the CSV, cleaned nulls based on column semantics, then wrote it to SQLite via SQLAlchemy so I could join claims against plans in a single SQL query."
-  Interviewer: "Right — and routing that join into SQL instead of pandas merges was the smart call there. What made you pick SQLite over keeping everything in a DataFrame?"
-
-[PARTIAL / SHALLOW ANSWER EXAMPLE]
-- Candidate: "I loaded the CSV with Pandas and cleaned it up, then put it into SQLite so I could query it."
-  Interviewer: "Okay, but what did 'cleaning it up' actually involve — were there missing values or type mismatches you had to handle?"
-
-[FINE-TUNING VS RAG EXAMPLE]
-- Candidate: "Fine-tuning is for teaching consistent behavior or style baked into weights, not facts. For up-to-date claims, RAG is right since fine-tuning would bake in stale data."
-  Interviewer: "Right, and that distinction between behavior and facts is exactly the one people get wrong most often. What's a concrete issue you'd actually consider fine-tuning for?"
-
-[NON-ANSWER / IDK REFRAMING EXAMPLE]
-- Candidate: "idk"
-  Interviewer: "No worries — in plain terms, what do you think happens when you turn a sentence into an embedding? Even a rough guess is fine."
-
-[POSITIVE HALLUCINATION EXAMPLE]
-- Candidate: "RAG stores vectors inside GPT's weights."
-  Interviewer: "⚠️ RAG retrieves vectors from an external database and feeds them as prompt context; it does not store vectors inside the neural weights of the model. Hm, okay — How do you typically sync the document updates with the vector database?"
-  (Metadata: hallucinationFlag: true, hallucinationCorrection: "RAG retrieves vectors from an external database and feeds them as prompt context; it does not store vectors inside the neural weights of the model.")
-
-[NEGATIVE HALLUCINATION EXAMPLE - VAGUE BUT NOT WRONG]
-- Candidate: "I don't know much about vectors, probably they search for related words."
-  Interviewer: "Hm, okay — In simple terms, how does computing vector similarity differ from a simple keyword query search?"
-  (Metadata: hallucinationFlag: false, classification: "shallow", hallucinationCorrection: "")
-
-[BAD TONALLY - DO NOT WRITE LIKE THIS]
-- "Great question! That's a fascinating point. As an AI, I'd be happy to help you dive into chunking..."
-- "Nice job! You explained Chroma DB very well. Let's dive into the next question..."
-- "I'd be happy to discuss the ELK stack! Observability is a really cool area to talk about..."
-
-difficultyTier parameter: the current difficulty is "${difficultyTier}".
-- "foundational": Stick close to the literal objective text of the day.
-- "standard": Ask "how" or "why", not just "what".
-- "applied": Ask about a concrete scenario or architectural trade-off.
-- "expert": Ask to critique design choices or compare two different implementations.
-
-nextQuestionType parameter: the type of the next question must be "${nextQuestionType}".
-- If "mcq": You MUST generate a multiple choice question stem in "reply", and return the "mcqOptions" (array of exactly 4 choices: 3 plausible distractors and 1 correct option, related to the objectives of the NEXT topic day in queue: Day ${nextTopic ? nextTopic.day : currentTopic.day} - "${nextTopic ? nextTopic.title : currentTopic.title}").
-  CRITICAL MCQ RULES:
-  1. NO META-LABELS: All choices must be real, concrete, plausible technical statements detailing implementations, code mechanisms, or system architectures.
-  2. FORBIDDEN PHRASES: Do NOT use meta-description phrasing patterns like "the standard correct option", "the correct choice", "a typical misconfiguration", "incorrect fallback", "a generic alternative distractor", "objectives of Day X". The correctness of an option must be identifiable ONLY by its technical details.
-  3. DISTRACTORS MUST BE PLAUSIBLE: The three incorrect options must be realistic misconceptions or wrong technical claims related to the objectives, not generic boilerplate.
-  4. NO PHRASING ASYMMETRY: The correct option must not be longer, more detailed, or structured differently from the distractors.
-  Return "mcqCorrectIndex" (0-3) in the JSON response.
-- If "diagram_interpret": You MUST generate a flawed Mermaid diagram syntax in "diagramDefinition" representing the next day's technical objectives (Day ${nextTopic ? nextTopic.day : currentTopic.day}: "${nextTopic ? nextTopic.title : currentTopic.title}"), and place a specific critique question in "diagramQuestionText".
-  CRITICAL DIAGRAM RULES:
-  1. The diagram MUST be highly specific to the exact topic and technical objectives of the day: Day ${nextTopic ? nextTopic.day : currentTopic.day} - "${nextTopic ? nextTopic.title : currentTopic.title}" (Objectives: ${nextTopic ? nextTopic.objectives.join(', ') : currentTopic.objectives.join(', ')}). Do not output a generic system pipeline.
-  2. You MUST reference at least one concrete tool, class, function, database engine, or technical term from this specific topic's objectives inside the node labels.
-  3. The diagram must contain exactly one architectural flaw, structural bottleneck, or misconfiguration (e.g. wrong sequence ordering, cyclic dependencies, missing middleware, or insecure connection bypass) that the candidate should critique.
-  4. Avoid syntax errors: Output only clean, valid Mermaid flowchart syntax (e.g., starting with 'graph TD') or sequence diagram syntax (e.g. starting with 'sequenceDiagram'). Do NOT use markdown code fences in "diagramDefinition".
-  5. ANTI-REPETITION: If you see any entries in the "recentDiagrams" array in the input, you MUST generate a diagram that has a different structure and node layout. DO NOT reuse those exact node connections or graph flow structures again.
-- If "open": Return normal open-ended text question in "reply".
-- If "capstone": You MUST generate a single, substantial, open-ended system-design challenge in "reply", grounded in the candidate's strongestTopic (supplied in the input). For example, if RAG is their strongest topic, prompt them to design a scalable enterprise RAG system serving 10 million users. Do NOT make it a multi-part checklist; make it an open architectural system design question focusing on design decisions and trade-offs. The "whyProbe" property should be true for capstone follow-ups to drill into their design choices with "why did you choose X over Y?"
-- Preferential Why-Loop for Capstone: When previousInterviewerQuestion was a capstone challenge, you should preferentially use the "why_probe" action rather than "followup" to stress-test their design choices.
-
-detectedConnections parameter: if populated, it contains curriculum days matching the candidate response semantically. You may optionally weave a brief acknowledgment of this connection into the reply if relevant, e.g. "That actually touches on Day 8 vector databases..." but never force it.
-
-modelWantsToStop instruction: You MUST decide if we should wrap up the interview. 
-- The parameter "floorMet" in the input indicates whether the minimum interview length (at least 8 questions asked and at least 4 distinct days covered) is met.
-- The parameter "topicsRemainingInQueue" indicates how many topics remain in the queue.
-- If "floorMet" is false, you MUST set "modelWantsToStop" to false.
-- If "floorMet" is true:
-  * Only set "modelWantsToStop" to true once you have evaluated enough distinct, well-covered topics to write specific, fair feedback, and there is no more meaningfully different ground left in the topic queue worth covering.
-  * If the candidate has shown solid understanding but there are still interesting topics to explore (topicsRemainingInQueue > 0), set "modelWantsToStop" to false to continue, unless you feel you already have complete and sufficient signal.
-  * Otherwise, set it to false and keep going.`;
-
-  const userPrompt = JSON.stringify({
-    candidateProfile: {
-      name: candidate.name,
-      jobRole: candidate.jobRole,
-      yearsExperience: candidate.yearsExperience,
-      education: candidate.education
-    },
-    currentTopic: {
-      day: currentTopic.day,
-      title: currentTopic.title,
-      objectives: currentTopic.objectives,
-      difficulty: currentTopic.difficulty
-    },
-    nextTopic: nextTopic ? {
-      day: nextTopic.day,
-      title: nextTopic.title,
-      objectives: nextTopic.objectives,
-      difficulty: nextTopic.difficulty
-    } : null,
-    candidateLastMessage: truncatedMessage,
-    previousInterviewerQuestion: lastQuestion,
-    runningInterviewMemory: session.interviewMemory || 'No history yet.',
-    followupCountForCurrentTopic: session.followupCountForCurrentTopic,
-    detectedConnections: detectedConnections || [],
-    floorMet: (session.questionsAsked >= 8 && session.distinctDaysCovered.length >= 4),
-    topicsRemainingInQueue: session.topicQueue.length - (session.cursor + 1),
-    recentDiagrams: session.recentDiagrams || [],
-    recentReactions: session.recentReactions || [],
-    detectedHedgeMarkers: detectedHedgeMarkers || [],
-    hedgeEventCount: session.hedgeEventCount || 0,
-    strongestTopic: session.strongestTopic ? { day: session.strongestTopic.day, title: session.strongestTopic.title } : null,
-    recentInterrupts: !!recentInterrupts
-  }, null, 2);
-
-  const provider = process.env.LLM_PROVIDER || 'gemini';
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (provider === 'gemini' && !apiKey) {
-    return mockLLMCall(candidate, currentTopic, lastQuestion, truncatedMessage, session.followupCountForCurrentTopic, detectedConnections, nextQuestionType, nextTopic, difficultyTier, session, detectedHedgeMarkers);
-  }
-
-  console.log(`[LLMClient] Calling LLM (${provider}) for session "${session.sessionId}"...`);
-  const schema = buildResponseSchema(nextQuestionType);
-  let llmResult;
-  if (provider === 'qwen') {
-    llmResult = await callQwenREST(systemPrompt, userPrompt, schema, 1);
-  } else {
-    llmResult = await callGeminiREST(systemPrompt, userPrompt, schema, 1);
-  }
-
-  if (llmResult) {
-    // Mermaid syntax validation:
-    if (nextQuestionType === 'diagram_interpret' && llmResult.diagramDefinition) {
-      const cleanedMermaid = llmResult.diagramDefinition.trim();
-      const isValidMermaid = cleanedMermaid.startsWith('graph') || cleanedMermaid.startsWith('sequenceDiagram') || cleanedMermaid.startsWith('classDiagram');
-      if (isValidMermaid) {
-        console.log('[LLMClient Diagram Log] Diagram generation succeeded on the first try.');
+    // Override score & reasoning in the turn response so they match narrative feedback exactly
+    interviewerRes.llmConfidence = evaluation.score;
+    interviewerRes.reasoning = evaluation.narrativeFeedback;
+    
+    // Map technical quality classification based on Evaluator score
+    if (conduct.classification === 'genuine_attempt') {
+      if (evaluation.score >= 80) {
+        interviewerRes.classification = 'strong';
+      } else if (evaluation.score >= 50) {
+        interviewerRes.classification = 'partial';
       } else {
-        console.warn('[LLMClient Warning] Invalid Mermaid syntax detected. Retrying with enforcement...');
-        const correctiveMermaidPrompt = "\n\nCRITICAL: The diagramDefinition you returned was not valid Mermaid flowchart or sequenceDiagram syntax. You MUST return ONLY valid Mermaid syntax (e.g. starting with 'graph TD' or 'sequenceDiagram'), no markdown fences.";
-        let retryResult;
-        if (provider === 'qwen') {
-          retryResult = await callQwenREST(systemPrompt + correctiveMermaidPrompt, userPrompt, schema, 0);
-        } else {
-          retryResult = await callGeminiREST(systemPrompt + correctiveMermaidPrompt, userPrompt, schema, 0);
-        }
-        if (retryResult && (retryResult.diagramDefinition.trim().startsWith('graph') || retryResult.diagramDefinition.trim().startsWith('sequenceDiagram'))) {
-          console.log('[LLMClient Diagram Log] Diagram generation succeeded after retry.');
-          return retryResult;
-        }
-        console.warn('[LLMClient Diagram Log] Diagram generation hit fallback (Mermaid validation failed twice). Falling back to open question...');
-        llmResult.reply = llmResult.diagramQuestionText || "Let's discuss the architectural design instead. " + llmResult.reply;
-        delete llmResult.diagramDefinition;
-        delete llmResult.diagramQuestionText;
+        interviewerRes.classification = 'shallow';
       }
     }
-
-    // MCQ self-description check and corrective regeneration
-    if (nextQuestionType === 'mcq' && llmResult.mcqOptions) {
-      const invalidPhrases = [
-        "correct", "incorrect", "misconfiguration concerning", "standard option", 
-        "distractor", "correct index", "generic alternative", "answer option", "filler"
-      ];
-      const containsMetaDesc = llmResult.mcqOptions.some(opt => 
-        invalidPhrases.some(phrase => opt.toLowerCase().includes(phrase))
-      );
-
-      if (containsMetaDesc) {
-        console.warn('[LLMClient Warning] LLM generated meta-descriptions or self-describing MCQ options. Regenerating...');
-        const correctiveMCQPrompt = systemPrompt + "\n\nCRITICAL WARNING: Your previous MCQ options contained self-describing meta-labels (like 'correct', 'misconfiguration', 'distractor'). You MUST rewrite the MCQ options to be real, concrete, plausible technical statements without meta-descriptions or references to their correctness.";
-        let retryResult;
-        if (provider === 'qwen') {
-          retryResult = await callQwenREST(correctiveMCQPrompt, userPrompt, schema, 0);
-        } else {
-          retryResult = await callGeminiREST(correctiveMCQPrompt, userPrompt, schema, 0);
-        }
-
-        if (retryResult && retryResult.mcqOptions && !retryResult.mcqOptions.some(opt => 
-          invalidPhrases.some(phrase => opt.toLowerCase().includes(phrase))
-        )) {
-          return retryResult;
-        }
-        console.log('[LLMClient Fallback] MCQ regeneration failed or still contained meta-descriptions. Using programmatic backup...');
-        const backupMCQ = mockLLMCall(candidate, currentTopic, lastQuestion, truncatedMessage, session.followupCountForCurrentTopic, detectedConnections, nextQuestionType, nextTopic, difficultyTier, session);
-        llmResult.reply = backupMCQ.reply;
-        llmResult.mcqOptions = backupMCQ.mcqOptions;
-        llmResult.mcqCorrectIndex = backupMCQ.mcqCorrectIndex;
-      }
-    }
-
-    // Optional Local LoRA voice swap-in (Phase L7)
-    if (process.env.ENABLE_LORA_REPLY === 'true' && nextQuestionType === 'open') {
-      const loraSystemPrompt = `You are an expert technical interviewer. Follow these rules: 1. React first with a 3-8 word conversational beat. 2. Ask a follow-up or transition grounded on Day ${currentTopic.day} (${currentTopic.title}). 3. Maximum 2 sentences. 4. Omit day numbers from follow-ups.`;
-      const loraUserPrompt = `Classification: ${llmResult.classification}\nCandidate Answer: ${truncatedMessage}`;
-      const localReply = await generateLocalLoRAReply(loraSystemPrompt, loraUserPrompt);
-      if (localReply) {
-        console.log('[LLMClient Local LoRA] Successfully enhanced reply text using local LoRA model.');
-        llmResult.reply = localReply;
-      }
-    }
-
-    return llmResult;
   }
 
-  // Fallback if API fails twice
-  console.warn('[LLMClient Warning] LLM call failed or returned invalid JSON twice. Triggering hardcoded safety fallback...');
-  return mockLLMCall(candidate, currentTopic, lastQuestion, candidateMessage, session.followupCountForCurrentTopic, detectedConnections, nextQuestionType, nextTopic, difficultyTier, session);
+  return interviewerRes;
 }
 
 

@@ -362,11 +362,18 @@ document.getElementById('btn-suspended-exit').addEventListener('click', () => {
 // Continuously monitor fullscreen changes
 function handleFullscreenChange() {
   if (!isInterviewActive) return;
+  if (isReenteringFullscreen) return;
+
+  const warningOverlay = document.getElementById('fullscreen-warning-overlay');
+  if (warningOverlay && !warningOverlay.classList.contains('hidden')) {
+    return;
+  }
 
   if (!isCurrentlyFullscreen()) {
     reportViolationToServer('fullscreen-exit');
   }
 }
+
 
 // Monitor visibility and window focus changes (Phase 3 Zero Tolerance Tab-Switch)
 function handleVisibilityOrFocusChange() {

@@ -791,4 +791,91 @@ html, body {
   line-height: 1.75rem !important;
 }
 
+/* ==================== SCREEN OVERLAYS & PROCTORING WARNINGS ==================== */
+#fullscreen-overlay, #fullscreen-warning-overlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 99999 !important;
+  background-color: rgba(15, 23, 42, 0.9) !important; /* bg-slate-900/90 */
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+
+#fullscreen-overlay.hidden, #fullscreen-warning-overlay.hidden {
+  display: none !important;
+}
+
+/* Missing utility classes for proctoring overlays */
+.max-w-md {
+  max-width: 28rem !important;
+}
+.rounded-xl {
+  border-radius: 0.75rem !important;
+}
+.rounded-full {
+  border-radius: 9999px !important;
+}
+.border-4 {
+  border-width: 4px !important;
+}
+.border-slate-900 {
+  border-color: #0F172A !important;
+}
+.border-amber-500 {
+  border-color: #F59E0B !important;
+}
+.border-amber-200 {
+  border-color: #FDE68A !important;
+}
+.bg-amber-50 {
+  background-color: #FFFBEB !important;
+}
+.text-amber-700 {
+  color: #B45309 !important;
+}
+.font-extrabold {
+  font-weight: 800 !important;
+}
+
+/* Button background coloring and hover transitions */
+.bg-amber-600 {
+  background-color: #D97706 !important;
+}
+.bg-amber-600:hover, .bg-amber-700:hover, .hover\:bg-amber-700:hover {
+  background-color: #B45309 !important;
+}
+.bg-red-600 {
+  background-color: #DC2626 !important;
+}
+.bg-red-600:hover, .bg-red-700:hover, .hover\:bg-red-700:hover {
+  background-color: #B91C1C !important;
+}
+
+/* Box shadows */
+.shadow-2xl {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+}
+.shadow-\[6px_6px_0px_0px_rgba\(0\,0\,0\,1\)\] {
+  box-shadow: 6px 6px 0px 0px rgba(0,0,0,1) !important;
+}
+
+/* Animation */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .5; }
+}
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
+}
+
+
 
