@@ -56,7 +56,7 @@ app.get('/api/session/:sessionId', async (req, res) => {
 
 // POST /api/interview
 app.post('/api/interview', async (req, res) => {
-  const { sessionId, candidate, message, violationType } = req.body;
+  const { sessionId, candidate, message, violationType, flagCurrentQuestion, flagReason } = req.body;
 
   if (!sessionId) {
     return res.status(400).json({ error: 'sessionId is required' });
@@ -74,7 +74,7 @@ app.post('/api/interview', async (req, res) => {
     }
 
     // 2. Session start: presence of candidate (no message, no violationType)
-    if (candidate && !message) {
+    if (candidate && message === undefined && !flagCurrentQuestion) {
       const candId = candidate.id || (candidate.member ? candidate.member.id : null);
       if (candId && cooldowns.has(candId)) {
         const suspendedAt = cooldowns.get(candId);
@@ -97,7 +97,16 @@ app.post('/api/interview', async (req, res) => {
       return res.json(result);
     }
 
-    // 3. Conversation turn: presence of message (no candidate, no violationType)
+    // 3. Flag question: presence of flagCurrentQuestion
+    if (flagCurrentQuestion) {
+      const result = await handleTurn(sessionId, '', null, true, flagReason);
+      if (result.error) {
+        return res.status(result.status || 400).json({ error: result.error });
+      }
+      return res.json(result);
+    }
+
+    // 4. Conversation turn: presence of message (no candidate, no violationType)
     if (message !== undefined) {
       const result = await handleTurn(sessionId, message);
       if (result.error) {
@@ -108,10 +117,42 @@ app.post('/api/interview', async (req, res) => {
 
     // Fallback for invalid shape
     return res.status(400).json({
-      error: 'Invalid request payload. Must specify candidate (for start), message (for turn), or violationType (for proctoring).'
+      error: 'Invalid request payload. Must specify candidate (for start), message (for turn), violationType (for proctoring), or flagCurrentQuestion.'
     });
   } catch (error) {
     console.error('[API Error] Exception during interview turn:', error);
+    return res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// POST /api/flag-question - Standing quality-review list for flagged questions / feedback
+app.post('/api/flag-question', async (req, res) => {
+  try {
+    const { sessionId, day, questionText, reason } = req.body;
+    if (!sessionId || day === undefined || !questionText) {
+      return res.status(400).json({ error: 'Missing required parameters (sessionId, day, questionText)' });
+    }
+    
+    const flaggedObj = {
+      sessionId,
+      day,
+      questionText,
+      reason: reason || 'No reason provided',
+      timestamp: new Date().toISOString()
+    };
+    
+    try {
+      await db.collection('flaggedQuestions').add(flaggedObj);
+      console.log(`[FlaggedQuestions] Persisted to Firestore: Session ${sessionId}, Day ${day}`);
+    } catch (e) {
+      console.warn('[FlaggedQuestions] Firestore write failed. Falling back to memory:', e.message);
+      if (!global.flaggedQuestionsFallback) global.flaggedQuestionsFallback = [];
+      global.flaggedQuestionsFallback.push(flaggedObj);
+    }
+    
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('[API Error] Exception during flag-question:', error);
     return res.status(500).json({ error: error.message || 'Internal server error' });
   }
 });

@@ -534,9 +534,7 @@ async function reportViolationToServer(type) {
     const data = await res.json();
     
     if (data.suspended) {
-      isInterviewActive = false;
-      stopSessionTimer();
-      showSuspensionScreen();
+      handleInterviewEndFlow(data);
     } else {
       if (type === 'copy-paste' || type === 'screenshot') {
         const pasteError = document.getElementById('paste-error');
@@ -833,8 +831,8 @@ async function handleSendMessage() {
     const data = await res.json();
 
     if (data.done) {
-      // Transition to feedback screen
-      transitionToFeedback(data.feedback, data.metrics, data.judgeVerdict, data.proctoringSummary);
+      // Transition to feedback screen (via Post-Interview Feedback Screen)
+      handleInterviewEndFlow(data);
     } else {
       // Check for topic transition (Emerald tag)
       if (data.action === 'advance') {
@@ -983,7 +981,7 @@ async function appendInterviewerMessage(text, connections = [], nextQuestionType
           const data = await res.json();
 
           if (data.done) {
-            transitionToFeedback(data.feedback, data.metrics, data.judgeVerdict, data.proctoringSummary);
+            handleInterviewEndFlow(data);
           } else {
             if (data.action === 'advance') {
               if (data.nextQuestionType === 'capstone') {
@@ -2108,6 +2106,244 @@ function showFlaggedForReviewNotice() {
   
   document.getElementById('btn-dismiss-flagged').addEventListener('click', () => {
     flaggedModal.remove();
+  });
+}
+
+// ==================== PART F & G: FLAG & FEEDBACK ESCAPE HATCH ====================
+window.finalInterviewData = null;
+
+// Flag Question Modal triggers
+const btnFlagQuestion = document.getElementById('btn-flag-question');
+const modalFlagQuestion = document.getElementById('modal-flag-question');
+const btnCloseFlagModal = document.getElementById('btn-close-flag-modal');
+const btnSkipFlag = document.getElementById('btn-skip-flag');
+const btnSubmitFlag = document.getElementById('btn-submit-flag');
+
+const flagReasonPreset = document.getElementById('flag-reason-preset');
+const flagReasonText = document.getElementById('flag-reason-text');
+
+if (btnFlagQuestion) {
+  btnFlagQuestion.addEventListener('click', () => {
+    if (!isInterviewActive) return;
+    modalFlagQuestion.classList.remove('hidden');
+    flagReasonPreset.value = '';
+    flagReasonText.value = '';
+  });
+}
+
+if (btnCloseFlagModal) {
+  btnCloseFlagModal.addEventListener('click', () => {
+    modalFlagQuestion.classList.add('hidden');
+  });
+}
+
+if (btnSkipFlag) {
+  btnSkipFlag.addEventListener('click', () => {
+    submitFlagCurrentQuestion('No reason provided');
+  });
+}
+
+if (btnSubmitFlag) {
+  btnSubmitFlag.addEventListener('click', () => {
+    const preset = flagReasonPreset.value;
+    const custom = flagReasonText.value.trim();
+    let reason = 'No reason provided';
+    if (preset && custom) {
+      reason = `${preset}: ${custom}`;
+    } else if (preset) {
+      reason = preset;
+    } else if (custom) {
+      reason = custom;
+    }
+    submitFlagCurrentQuestion(reason);
+  });
+}
+
+// Submit Flag to backend and advance
+async function submitFlagCurrentQuestion(reason) {
+  modalFlagQuestion.classList.add('hidden');
+  
+  const thinkingEl = appendThinkingIndicator();
+  scrollChatBottom(true);
+  
+  try {
+    const res = await fetch('/api/interview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: currentSessionId,
+        flagCurrentQuestion: true,
+        flagReason: reason
+      })
+    });
+    
+    thinkingEl.remove();
+    if (!res.ok) throw new Error('Failed to flag question');
+    const data = await res.json();
+    
+    if (data.done) {
+      handleInterviewEndFlow(data);
+    } else {
+      appendTopicTag('New Topic');
+      appendInterviewerMessage(data.reply, data.detectedConnections, data.nextQuestionType, data.mcqOptions, data.diagramDefinition, data.diagramQuestionText, null);
+      updateProgress(data.questionsAsked, data.distinctDaysCovered, data.difficultyTier);
+      
+      let nextActiveTopic = null;
+      const match = (data.reply || '').match(/Day\s+(\d+)[:\s]+"([^"]+)"/i);
+      if (match) {
+        nextActiveTopic = { day: parseInt(match[1]), title: match[2] };
+      }
+      updateSidebar(data.questionHistory, nextActiveTopic);
+    }
+  } catch (error) {
+    if (thinkingEl) thinkingEl.remove();
+    console.error('Error flagging question:', error);
+    appendInterviewerMessage('Error occurred while flagging the question. Moving on...');
+  } finally {
+    updateInputArea();
+  }
+}
+
+// Unified end-of-interview feedback flow router
+async function handleInterviewEndFlow(data) {
+  isInterviewActive = false;
+  stopSessionTimer();
+  
+  if (window.CameraManager) {
+    window.CameraManager.stop();
+  }
+  const cameraWidget = document.getElementById('camera-widget');
+  if (cameraWidget) cameraWidget.classList.add('hidden');
+
+  window.finalInterviewData = {
+    feedback: data.feedback,
+    metrics: data.metrics || {
+      overallAccuracy: 0,
+      perDay: [],
+      difficultyProgression: [],
+      questionTypeBreakdown: { open: 0, mcq: 0, diagram_interpret: 0 }
+    },
+    judgeVerdict: data.judgeVerdict,
+    proctoringSummary: data.proctoringSummary
+  };
+  
+  try {
+    const res = await fetch(`/api/session/${currentSessionId}`);
+    if (!res.ok) throw new Error('Failed to fetch session details');
+    const sessionDetails = await res.json();
+    
+    const askedQuestions = (sessionDetails.transcript || [])
+      .filter(entry => entry.role === 'interviewer' && entry.day !== undefined);
+      
+    renderPostInterviewFeedbackScreen(askedQuestions);
+  } catch (err) {
+    console.error('Error entering feedback flow, bypassing directly to summary:', err);
+    transitionToFeedback(
+      window.finalInterviewData.feedback,
+      window.finalInterviewData.metrics,
+      window.finalInterviewData.judgeVerdict,
+      window.finalInterviewData.proctoringSummary
+    );
+  }
+}
+
+function renderPostInterviewFeedbackScreen(questions) {
+  const container = document.getElementById('post-feedback-questions-list');
+  if (!container) return;
+  
+  container.innerHTML = '';
+  
+  if (questions.length === 0) {
+    container.innerHTML = `<div class="text-slate-400 text-sm text-center py-6">No questions asked during this session.</div>`;
+  } else {
+    questions.forEach((q, idx) => {
+      const row = document.createElement('div');
+      row.className = 'border-2 border-slate-900 rounded-lg p-4 bg-slate-50 flex flex-col gap-3';
+      row.innerHTML = `
+        <div class="flex justify-between items-start border-b border-slate-200 pb-2">
+          <span class="text-xs font-black text-blue-600 uppercase tracking-wider">Question ${idx + 1} (Day ${q.day})</span>
+        </div>
+        <p class="text-xs font-bold text-slate-800 leading-relaxed">${q.text}</p>
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[10px] font-black uppercase tracking-wider text-slate-500">Was this question unclear or wrong? (optional)</label>
+          <input type="text" data-question-text="${encodeURIComponent(q.text)}" data-day="${q.day}" class="post-feedback-comment-input w-full p-2 bg-white border border-slate-300 rounded outline-none text-xs font-semibold focus:border-slate-900" placeholder="e.g. The options did not match, wording was ambiguous" />
+        </div>
+      `;
+      container.appendChild(row);
+    });
+  }
+  
+  // Hide other screens
+  screenStart.classList.add('hidden');
+  screenChat.classList.add('hidden');
+  screenFeedback.classList.add('hidden');
+  const suspendedScreen = document.getElementById('screen-suspended');
+  if (suspendedScreen) suspendedScreen.classList.add('hidden');
+  
+  // Show feedback screen
+  document.getElementById('screen-post-interview-feedback').classList.remove('hidden');
+  
+  if (window.lucide) lucide.createIcons();
+}
+
+// Post-interview feedback actions
+const btnSkipPostFeedback = document.getElementById('btn-skip-post-feedback');
+const btnSubmitPostFeedback = document.getElementById('btn-submit-post-feedback');
+
+if (btnSkipPostFeedback) {
+  btnSkipPostFeedback.addEventListener('click', () => {
+    document.getElementById('screen-post-interview-feedback').classList.add('hidden');
+    transitionToFeedback(
+      window.finalInterviewData.feedback,
+      window.finalInterviewData.metrics,
+      window.finalInterviewData.judgeVerdict,
+      window.finalInterviewData.proctoringSummary
+    );
+  });
+}
+
+if (btnSubmitPostFeedback) {
+  btnSubmitPostFeedback.addEventListener('click', async () => {
+    const inputs = document.querySelectorAll('.post-feedback-comment-input');
+    const feedbackPromises = [];
+    
+    inputs.forEach(input => {
+      const text = input.value.trim();
+      if (text) {
+        const questionText = decodeURIComponent(input.getAttribute('data-question-text'));
+        const day = parseInt(input.getAttribute('data-day'));
+        
+        feedbackPromises.push(
+          fetch('/api/flag-question', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId: currentSessionId,
+              day,
+              questionText,
+              reason: text
+            })
+          }).catch(err => console.error('Failed to submit comment:', err))
+        );
+      }
+    });
+    
+    if (feedbackPromises.length > 0) {
+      try {
+        await Promise.all(feedbackPromises);
+        console.log('[Post-Feedback] All comments submitted successfully.');
+      } catch (e) {
+        console.error('Error submitting feedback comments:', e);
+      }
+    }
+    
+    document.getElementById('screen-post-interview-feedback').classList.add('hidden');
+    transitionToFeedback(
+      window.finalInterviewData.feedback,
+      window.finalInterviewData.metrics,
+      window.finalInterviewData.judgeVerdict,
+      window.finalInterviewData.proctoringSummary
+    );
   });
 }
 

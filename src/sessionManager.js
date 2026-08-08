@@ -1,7 +1,7 @@
 import { db } from './firebase.js';
 import { buildTopicQueue } from './topicSelector.js';
 import { findRelatedDays, computeSemanticScore } from './embeddingManager.js';
-import { evaluateTurnWithLLM, generateFeedbackReport } from './llmClient.js';
+import { evaluateTurnWithLLM, generateFeedbackReport, generateInterviewerResponseWithLLM, mockLLMCall } from './llmClient.js';
 
 
 // Explicit Session States
@@ -593,7 +593,7 @@ function getProctoringSummary(session) {
  * track violation/proctoring counters, adjust adaptive difficulty, and decide all state transitions.
  * This is the ONLY place in the system where early session termination / suspension is decided.
  */
-export async function handleTurn(sessionId, message) {
+export async function handleTurn(sessionId, message, violationType = null, flagCurrentQuestion = false, flagReason = null) {
   const session = await getSessionDoc(sessionId);
   if (!session) {
     throw new Error(`Session with id "${sessionId}" not found.`);
@@ -629,6 +629,193 @@ export async function handleTurn(sessionId, message) {
       judgeVerdict: session.judgeVerdict || null,
       proctoringSummary: getProctoringSummary(session)
     };
+  }
+
+  // PART F: Flag Current Question Escape Hatch
+  if (flagCurrentQuestion) {
+    const currentTopic = session.topicQueue[session.cursor];
+    console.log(`[SessionManager] Flagging current question for session "${sessionId}", Day ${currentTopic ? currentTopic.day : 'unknown'}`);
+    
+    // 1. Mark flagged in accuracyLog
+    if (!session.accuracyLog) session.accuracyLog = [];
+    const flaggedLogEntry = {
+      day: currentTopic ? currentTopic.day : null,
+      title: currentTopic ? currentTopic.title : 'Curriculum Topic',
+      questionType: session.pendingQuestionType || 'open',
+      difficultyTier: session.difficultyTier,
+      classification: 'flagged',
+      flagged: true,
+      flagReason: flagReason || 'No reason provided',
+      finalAccuracyScore: 50, // neutral score
+      llmConfidence: 50,
+      semanticScore: 0,
+      conceptScore: 0,
+      reasoning: `Candidate flagged the question: "${flagReason || 'No reason provided'}"`,
+      candidateAnswer: '[FLAGGED]',
+      questionSentAt: session.questionSentAt || new Date().toISOString(),
+      answerReceivedAt: new Date().toISOString(),
+      responseTimeSeconds: 0,
+      hallucinationFlag: false,
+      hallucinationCorrection: '',
+      hedgeMarkers: [],
+      whyProbe: false,
+      communicationConfidence: 'medium',
+      correctness: 50,
+      depth: 50,
+      reasoningScore: 50,
+      tradeoffs: 50,
+      clarity: 50
+    };
+    session.accuracyLog.push(flaggedLogEntry);
+
+    // 2. Persist to flaggedQuestions collection in Firestore / memory
+    const lastQuestionText = session.transcript.filter(e => e.role === 'interviewer').slice(-1)[0]?.text || '';
+    const flaggedDbObj = {
+      sessionId,
+      day: currentTopic ? currentTopic.day : null,
+      questionText: lastQuestionText,
+      reason: flagReason || 'No reason provided',
+      timestamp: new Date().toISOString()
+    };
+    try {
+      await db.collection('flaggedQuestions').add(flaggedDbObj);
+      console.log(`[FlaggedQuestions] Persisted to Firestore: Session ${sessionId}`);
+    } catch (e) {
+      console.warn('[FlaggedQuestions] Firestore write failed. Falling back to memory:', e.message);
+      if (!global.flaggedQuestionsFallback) global.flaggedQuestionsFallback = [];
+      global.flaggedQuestionsFallback.push(flaggedDbObj);
+    }
+
+    // 3. Mark current topic status and advance cursor
+    if (currentTopic) {
+      currentTopic.status = 'asked';
+      if (!session.distinctDaysCovered.includes(currentTopic.day)) {
+        session.distinctDaysCovered.push(currentTopic.day);
+      }
+      session.questionsAsked++;
+    }
+
+    // Phase 7: Update compactState deterministically
+    if (currentTopic) {
+      updateCompactState(session, currentTopic, 50, `Flagged: ${flagReason}`, {
+        correctness: 50,
+        depth: 50,
+        reasoning: 50,
+        tradeoffs: 50,
+        clarity: 50
+      });
+    }
+
+    session.followupCountForCurrentTopic = 0;
+    session.whyChainDepth = 0;
+    session.hallucinationCountForCurrentTopic = 0;
+
+    // Check stopping condition (SSOT)
+    const wrapUpTriggered = checkStoppingCondition(session, false);
+    if (wrapUpTriggered) {
+      session.state = SessionState.DONE;
+      session.interviewEndedAt = new Date().toISOString();
+      const report = await generateFeedbackReport(session);
+      session.feedback = report.feedback;
+      session.judgeVerdict = report.judgeVerdict;
+      await saveSessionDoc(sessionId, session);
+
+      return {
+        reply: 'Interview completed.',
+        done: true,
+        feedback: session.feedback,
+        metrics: computeMetrics(session),
+        judgeVerdict: session.judgeVerdict || null,
+        proctoringSummary: getProctoringSummary(session)
+      };
+    }
+
+    // Advance cursor
+    session.cursor++;
+    const nextTopic = session.topicQueue[session.cursor];
+
+    // Determine next question type and difficulty
+    session.nextQuestionType = 'open'; // default after flag
+    const difficultyTier = session.difficultyTier;
+
+    // Call Interviewer Brain / mock to generate the next question
+    let llmResponse = null;
+    const detectedConnections = [];
+    const nextTopicFuture = session.topicQueue[session.cursor + 1];
+
+    if (!process.env.GEMINI_API_KEY || process.env.SIMULATE_LLM_OUTAGE === 'true') {
+      llmResponse = mockLLMCall(
+        session.candidateSnapshot,
+        nextTopic,
+        '',
+        '',
+        0,
+        detectedConnections,
+        session.nextQuestionType,
+        nextTopicFuture,
+        difficultyTier,
+        session
+      );
+    } else {
+      llmResponse = await generateInterviewerResponseWithLLM(
+        session,
+        '',
+        'genuine_attempt',
+        detectedConnections,
+        [],
+        session.nextQuestionType,
+        nextTopicFuture,
+        difficultyTier
+      );
+    }
+
+    const replyText = llmResponse ? llmResponse.reply : `Got it. Let's move on. Can you tell me about your experience on Day ${nextTopic.day}: "${nextTopic.title}"?`;
+    
+    session.transcript.push({
+      role: 'interviewer',
+      day: nextTopic.day,
+      text: replyText,
+      turn: session.turnCount + 1
+    });
+
+    session.pendingQuestionType = session.nextQuestionType;
+    session.turnCount++;
+
+    const responsePayload = {
+      reply: replyText,
+      done: false,
+      questionsAsked: session.questionsAsked,
+      distinctDaysCovered: session.distinctDaysCovered.length,
+      detectedConnections: [],
+      action: 'advance',
+      nextQuestionType: session.nextQuestionType,
+      difficultyTier: session.difficultyTier,
+      conductViolations: session.conductViolations,
+      mcqOptions: llmResponse ? (llmResponse.mcqOptions || null) : null,
+      diagramDefinition: llmResponse ? (llmResponse.diagramDefinition || null) : null,
+      diagramQuestionText: llmResponse ? (llmResponse.diagramQuestionText || null) : null,
+      hallucinationFlag: false,
+      hallucinationCorrection: '',
+      questionHistory: (session.accuracyLog || []).map(log => ({
+        day: log.day,
+        title: log.title || 'Curriculum Topic',
+        difficultyTier: log.difficultyTier,
+        questionType: log.questionType,
+        classification: log.classification || 'unknown',
+        communicationConfidence: log.communicationConfidence || 'medium',
+        hallucinationFlag: !!log.hallucinationFlag,
+        whyProbe: !!log.whyProbe
+      }))
+    };
+
+    session.lastMessageHash = '';
+    session.lastMessageTime = new Date().toISOString();
+    session.lastResponse = responsePayload;
+    session.lastMCQOptions = responsePayload.mcqOptions || null;
+    session.questionSentAt = new Date().toISOString();
+    await saveSessionDoc(sessionId, session);
+
+    return responsePayload;
   }
 
   // 1. Backend Idempotency Check (Rapid duplicate submit prevention)
