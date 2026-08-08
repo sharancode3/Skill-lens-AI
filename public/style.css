@@ -773,4 +773,120 @@ html, body {
   }
 }
 
+/* ==================== SCREEN 2 REFINED SEMANTIC STYLES ==================== */
+.chat-header {
+  height: 64px !important;
+  background-color: #FFFFFF !important;
+  border-bottom: 2px solid #E2E8F0 !important;
+  padding: 0 1.5rem !important; /* Visual balance: left/right matching margins */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+  box-shadow: none !important;
+  z-index: 30 !important;
+  flex-shrink: 0 !important;
+}
+
+.chat-avatar {
+  width: 40px !important; /* Perfect h-10 w-10 circle badge */
+  height: 40px !important;
+  border-radius: 50% !important;
+  background-color: #2563EB !important;
+  color: #FFFFFF !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-weight: 700 !important;
+  font-size: 0.875rem !important;
+  flex-shrink: 0 !important;
+  user-select: none !important;
+}
+
+.chat-header-indicators {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important; /* Proper layout spacing spacing */
+}
+
+.chat-status-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 0.25rem 0.75rem !important;
+  background-color: #ECFDF5 !important;
+  color: #065F46 !important;
+  border: 1px solid #A7F3D0 !important;
+  border-radius: 9999px !important;
+  font-size: 0.75rem !important;
+  font-weight: 700 !important;
+}
+
+.chat-progress-pill {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important; /* Gap between icon, labels, numbers */
+  padding: 0.375rem 0.75rem !important;
+  border-radius: 9999px !important;
+  font-size: 0.75rem !important;
+  font-weight: 700 !important;
+}
+
+.chat-progress-pill.bg-blue {
+  background-color: #EFF6FF !important;
+  color: #1E40AF !important;
+  border: 1px solid #BFDBFE !important;
+}
+
+.chat-progress-pill.bg-purple {
+  background-color: #F5F3FF !important;
+  color: #5B21B6 !important;
+  border: 1px solid #DDD6FE !important;
+}
+
+.chat-progress-pill.bg-amber {
+  background-color: #FFFBEB !important;
+  color: #92400E !important;
+  border: 1px solid #FDE68A !important;
+}
+
+.chat-mobile-toggle {
+  height: 32px !important;
+  padding: 0 0.75rem !important;
+  background-color: #F1F5F9 !important;
+  color: #334155 !important;
+  border: 1px solid #CBD5E1 !important;
+  border-radius: 6px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  font-size: 0.75rem !important;
+  font-weight: 700 !important;
+}
+
+.chat-input-container {
+  max-width: 48rem !important; /* 3xl - 48rem */
+  width: 100% !important;
+  margin: 0 auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+}
+
+.chat-input-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important; /* Visible gap between input and send button */
+  width: 100% !important;
+  position: relative !important;
+}
+
+.chat-input-hint {
+  font-size: 0.75rem !important;
+  color: #64748B !important; /* Foreground color at reduced opacity */
+  font-weight: 500 !important;
+  text-align: left !important;
+  margin-top: 8px !important; /* Adequate top margin below input */
+}
+
 

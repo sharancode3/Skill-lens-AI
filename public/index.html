@@ -90,15 +90,15 @@
   <!-- ==================== SCREEN 2: CHAT INTERVIEW SCREEN ==================== -->
   <main id="screen-chat" class="view h-screen max-h-screen overflow-hidden flex flex-col bg-slate-100 hidden">
     <!-- Sleek Top Navbar -->
-    <header class="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0 z-30 shadow-sm">
+    <header class="chat-header">
       <!-- Left: Logo & Candidate Identity -->
       <div class="flex items-center gap-4">
         <div class="flex items-center gap-2 pr-4 border-r border-slate-200">
-          <div class="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center font-black text-sm shadow-sm">SL</div>
+          <div class="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center font-black text-sm">SL</div>
           <span class="font-extrabold text-slate-800 text-sm tracking-tight hidden sm:inline">SKILL LABS AI</span>
         </div>
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 bg-slate-900 text-white rounded-full flex items-center justify-center font-bold text-xs">
+          <div id="chat-avatar" class="chat-avatar">
             <span id="chat-avatar-initials">CD</span>
           </div>
           <div>
@@ -109,15 +109,15 @@
       </div>
 
       <!-- Right: Live Progress & Status Indicators -->
-      <div class="flex items-center gap-3">
+      <div class="chat-header-indicators">
         <!-- Live Proctoring Badge -->
-        <div class="hidden lg:flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-bold">
+        <div class="chat-status-badge hidden lg:flex">
           <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
           <span>Proctored Screen</span>
         </div>
 
         <!-- Questions Count Pill -->
-        <div class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-800 border border-blue-200 rounded-full text-xs font-bold shadow-sm">
+        <div class="chat-progress-pill bg-blue">
           <i data-lucide="help-circle" class="w-3.5 h-3.5 text-blue-600"></i>
           <span>Questions:</span>
           <span id="chat-progress-questions" class="font-extrabold text-blue-700">0</span>
@@ -125,20 +125,20 @@
         </div>
 
         <!-- Topics Count Pill -->
-        <div class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-800 border border-purple-200 rounded-full text-xs font-bold shadow-sm">
+        <div class="chat-progress-pill bg-purple hidden sm:flex">
           <i data-lucide="layers" class="w-3.5 h-3.5 text-purple-600"></i>
           <span>Topics:</span>
           <span id="chat-progress-topics" class="font-extrabold text-purple-700">0/4</span>
         </div>
 
         <!-- Difficulty Pill -->
-        <div class="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-full text-xs font-bold shadow-sm">
+        <div class="chat-progress-pill bg-amber hidden md:flex">
           <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-600"></i>
           <span id="chat-progress-difficulty" class="capitalize">Standard</span>
         </div>
 
         <!-- Mobile Drawer Toggle -->
-        <button id="btn-toggle-sidebar" class="h-8 px-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg border border-slate-300 md:hidden flex items-center gap-1 text-xs font-bold transition">
+        <button id="btn-toggle-sidebar" class="chat-mobile-toggle md:hidden">
           <i data-lucide="history" class="w-3.5 h-3.5"></i>
           <span>History</span>
         </button>
@@ -155,9 +155,9 @@
         </div>
 
         <!-- Pinned Bottom Typing Console -->
-        <footer class="chat-input-footer bg-white border-t border-slate-200 p-4 shrink-0 shadow-lg">
-          <div class="max-w-3xl mx-auto flex flex-col gap-1.5">
-            <div class="flex items-center gap-3 relative">
+        <footer class="chat-input-footer">
+          <div class="chat-input-container">
+            <div class="chat-input-row">
               <div id="paste-error" class="absolute -top-7 left-2 text-xs text-red-600 font-bold bg-red-50 border border-red-200 px-2 py-0.5 rounded shadow-sm hidden flex items-center gap-1">
                 <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
                 Pasting is blocked in exam mode
@@ -166,19 +166,14 @@
                 type="text" 
                 id="chat-input" 
                 placeholder="Type your technical response here..." 
-                class="flex-grow h-13 px-5 bg-slate-100 rounded-xl text-slate-900 font-medium text-sm border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all duration-150 shadow-inner"
               />
-              <button 
-                id="btn-send" 
-                class="h-13 px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl flex items-center justify-center gap-2 transition-all duration-150 transform active:scale-95 shadow-md shrink-0"
-              >
+              <button id="btn-send">
                 <span>Send</span>
                 <i data-lucide="send" class="w-4 h-4"></i>
               </button>
             </div>
-            <div class="flex justify-between items-center px-1 text-[11px] text-slate-400 font-medium">
-              <span>Respond with your own architectural reasoning</span>
-              <span>Press <kbd class="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded text-slate-600 font-mono text-[10px]">Enter ↵</kbd> to submit</span>
+            <div class="chat-input-hint">
+              Respond with your own architectural reasoning
             </div>
           </div>
         </footer>
