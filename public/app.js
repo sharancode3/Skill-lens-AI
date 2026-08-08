@@ -263,34 +263,44 @@ async function reportViolationToServer(type) {
       isInterviewActive = false;
       showSuspensionScreen();
     } else {
-      // Show warning overlay
-      const warningOverlay = document.getElementById('fullscreen-warning-overlay');
-      const countText = document.getElementById('fullscreen-violation-count');
-      const msgText = document.getElementById('fullscreen-violation-msg');
-      if (warningOverlay) warningOverlay.classList.remove('hidden');
-      
-      const exits = data.fullscreenExits || data.violationCount || 1;
-      const remaining = data.warningsRemaining !== undefined ? data.warningsRemaining : Math.max(0, 4 - exits);
+      if (type === 'copy-paste' || type === 'screenshot') {
+        const pasteError = document.getElementById('paste-error');
+        if (pasteError) {
+          pasteError.innerHTML = `<i data-lucide="shield-alert" class="w-3.5 h-3.5"></i> Warning 1 of 1: Copying, pasting, or screenshot attempts are prohibited. A 2nd attempt will suspend your interview.`;
+          pasteError.classList.remove('hidden');
+          if (window.lucide) lucide.createIcons();
+          setTimeout(() => { pasteError.classList.add('hidden'); }, 6000);
+        }
+      } else {
+        // Show fullscreen exit warning overlay
+        const warningOverlay = document.getElementById('fullscreen-warning-overlay');
+        const countText = document.getElementById('fullscreen-violation-count');
+        const msgText = document.getElementById('fullscreen-violation-msg');
+        if (warningOverlay) warningOverlay.classList.remove('hidden');
+        
+        const exits = data.fullscreenExits || data.violationCount || 1;
+        const remaining = data.warningsRemaining !== undefined ? data.warningsRemaining : Math.max(0, 4 - exits);
 
-      if (countText) {
-        countText.textContent = `Warning ${exits} of 3 — ${remaining} warning${remaining === 1 ? '' : 's'} remaining before automatic suspension.`;
-      }
-      if (msgText) {
-        msgText.textContent = type === 'fullscreen-exit' 
-          ? 'Exiting fullscreen mode is not permitted during proctored technical evaluations.'
-          : 'Switching away from this browser window or tab is not allowed during the interview.';
-      }
+        if (countText) {
+          countText.textContent = `Warning ${exits} of 3 — ${remaining} warning${remaining === 1 ? '' : 's'} remaining before automatic suspension.`;
+        }
+        if (msgText) {
+          msgText.textContent = type === 'fullscreen-exit' 
+            ? 'Exiting fullscreen mode is not permitted during proctored technical evaluations.'
+            : 'Switching away from this browser window or tab is not allowed during the interview.';
+        }
 
-      // Auto-recovery attempt: Try to re-enter fullscreen programmatically after 1.5s
-      if (type === 'fullscreen-exit') {
-        setTimeout(async () => {
-          if (isInterviewActive && !isCurrentlyFullscreen()) {
-            const reEntered = await enterFullscreen();
-            if (reEntered || isCurrentlyFullscreen()) {
-              if (warningOverlay) warningOverlay.classList.add('hidden');
+        // Auto-recovery attempt: Try to re-enter fullscreen programmatically after 1.5s
+        if (type === 'fullscreen-exit') {
+          setTimeout(async () => {
+            if (isInterviewActive && !isCurrentlyFullscreen()) {
+              const reEntered = await enterFullscreen();
+              if (reEntered || isCurrentlyFullscreen()) {
+                if (warningOverlay) warningOverlay.classList.add('hidden');
+              }
             }
-          }
-        }, 1500);
+          }, 1500);
+        }
       }
     }
   } catch (error) {
@@ -388,6 +398,48 @@ document.addEventListener('fullscreenchange', handleFullscreenChange);
 document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
 document.addEventListener('mozfullscreenchange', handleFullscreenChange);
 document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+// ==================== PHASE 4: CLIPBOARD & SCREENSHOT DETECTION ====================
+function handleClipboardOrShortcutViolation(e, type = 'copy-paste') {
+  if (!isInterviewActive) return;
+  if (e && e.preventDefault) {
+    e.preventDefault();
+  }
+  reportViolationToServer(type);
+}
+
+['copy', 'cut', 'paste'].forEach(eventType => {
+  document.addEventListener(eventType, (e) => {
+    if (isInterviewActive) {
+      handleClipboardOrShortcutViolation(e, 'copy-paste');
+    }
+  });
+});
+
+document.addEventListener('keydown', (e) => {
+  if (!isInterviewActive) return;
+
+  const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+  const key = e.key ? e.key.toLowerCase() : '';
+
+  // Intercept Copy/Paste/Cut/SelectAll shortcuts
+  if (isCtrlOrCmd && ['c', 'v', 'x', 'a'].includes(key)) {
+    handleClipboardOrShortcutViolation(e, 'copy-paste');
+    return;
+  }
+
+  // Intercept PrintScreen / Screenshot shortcuts
+  if (e.key === 'PrintScreen' || key === 'printscreen' || (e.shiftKey && isCtrlOrCmd && ['s', '3', '4'].includes(key))) {
+    handleClipboardOrShortcutViolation(e, 'screenshot');
+    return;
+  }
+
+  // Intercept Developer Inspection Tools (F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U)
+  if (e.key === 'F12' || (isCtrlOrCmd && e.shiftKey && ['i', 'j', 'c'].includes(key)) || (isCtrlOrCmd && key === 'u')) {
+    handleClipboardOrShortcutViolation(e, 'copy-paste');
+    return;
+  }
+});
 
 // ==================== SCREEN 2: CHAT ACTIONS ====================
 async function handleSendMessage() {

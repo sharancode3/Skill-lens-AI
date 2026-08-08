@@ -1089,6 +1089,7 @@ export async function reportViolation(sessionId, violationType) {
   
   if (!session.fullscreenExits) session.fullscreenExits = 0;
   if (!session.tabSwitches) session.tabSwitches = 0;
+  if (!session.clipboardViolations) session.clipboardViolations = 0;
   if (!session.violations) session.violations = [];
 
   if (session.state === SessionState.DONE) {
@@ -1098,6 +1099,7 @@ export async function reportViolation(sessionId, violationType) {
       suspended: isSuspended,
       fullscreenExits: session.fullscreenExits,
       tabSwitches: session.tabSwitches,
+      clipboardViolations: session.clipboardViolations,
       violationCount: session.violations.length,
       feedback: session.feedback,
       metrics: {
@@ -1115,6 +1117,8 @@ export async function reportViolation(sessionId, violationType) {
     session.fullscreenExits += 1;
   } else if (violationType === 'tab-switch') {
     session.tabSwitches += 1;
+  } else if (violationType === 'copy-paste' || violationType === 'screenshot') {
+    session.clipboardViolations += 1;
   }
   
   const violationCount = session.violations.length + 1;
@@ -1123,22 +1127,27 @@ export async function reportViolation(sessionId, violationType) {
     type: violationType,
     count: violationCount,
     fullscreenExits: session.fullscreenExits,
-    tabSwitches: session.tabSwitches
+    tabSwitches: session.tabSwitches,
+    clipboardViolations: session.clipboardViolations
   });
 
-  console.log(`[Proctoring Server] Logged violation ${violationCount} (fullscreenExits: ${session.fullscreenExits}, tabSwitches: ${session.tabSwitches}) for session "${sessionId}": ${violationType}`);
+  console.log(`[Proctoring Server] Logged violation ${violationCount} (fullscreenExits: ${session.fullscreenExits}, tabSwitches: ${session.tabSwitches}, clipboardViolations: ${session.clipboardViolations}) for session "${sessionId}": ${violationType}`);
 
   // Phase 2 Rule: 4th fullscreen exit causes immediate suspension
   const isFullscreenSuspension = (violationType === 'fullscreen-exit' && session.fullscreenExits >= 4);
   // Phase 3 Rule: 1st tab switch causes immediate suspension (zero tolerance)
   const isTabSwitchSuspension = (violationType === 'tab-switch' && session.tabSwitches >= 1);
+  // Phase 4 Rule: 2nd copy/paste or screenshot attempt causes immediate suspension
+  const isClipboardSuspension = ((violationType === 'copy-paste' || violationType === 'screenshot') && session.clipboardViolations >= 2);
   const isGeneralSuspension = violationCount >= 4;
 
-  if (isFullscreenSuspension || isTabSwitchSuspension || isGeneralSuspension) {
+  if (isFullscreenSuspension || isTabSwitchSuspension || isClipboardSuspension || isGeneralSuspension) {
     // Suspend candidate!
     session.state = SessionState.DONE;
     let summaryMsg = "Candidate was suspended for repeated proctoring violations.";
-    if (isTabSwitchSuspension) {
+    if (isClipboardSuspension) {
+      summaryMsg = "Candidate was suspended due to repeated copy/paste or screenshot attempts during an active proctored session.";
+    } else if (isTabSwitchSuspension) {
       summaryMsg = "Candidate was suspended immediately due to switching tabs/windows during an active proctored session.";
     } else if (isFullscreenSuspension) {
       summaryMsg = "Candidate was suspended due to repeated fullscreen violations (exited fullscreen 4 times).";
@@ -1172,6 +1181,7 @@ export async function reportViolation(sessionId, violationType) {
       suspended: true,
       fullscreenExits: session.fullscreenExits,
       tabSwitches: session.tabSwitches,
+      clipboardViolations: session.clipboardViolations,
       warningsRemaining: 0,
       violationCount,
       feedback: session.feedback,
@@ -1186,12 +1196,17 @@ export async function reportViolation(sessionId, violationType) {
   }
 
   await saveSessionDoc(sessionId, session);
+  const warningsRemaining = (violationType === 'copy-paste' || violationType === 'screenshot')
+    ? Math.max(0, 2 - session.clipboardViolations)
+    : Math.max(0, 4 - session.fullscreenExits);
+
   return {
     done: false,
     suspended: false,
     fullscreenExits: session.fullscreenExits,
     tabSwitches: session.tabSwitches,
-    warningsRemaining: Math.max(0, 4 - session.fullscreenExits),
+    clipboardViolations: session.clipboardViolations,
+    warningsRemaining,
     violationCount
   };
 }
