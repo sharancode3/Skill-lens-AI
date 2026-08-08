@@ -301,12 +301,27 @@ async function callQwenREST(systemPrompt, userPrompt, schema, retryCount = 1, te
 
     const parsed = JSON.parse(cleanJsonStr);
 
+    // Qwen 2.5:3b Normalization Layer
+    if (parsed.category && !parsed.classification) {
+      parsed.classification = parsed.category;
+    }
+    
     // Validate schema fields manually if schema is provided
     if (schema && schema.properties) {
       const keys = Object.keys(schema.properties);
       for (const key of keys) {
         if (!(key in parsed) && schema.required && schema.required.includes(key)) {
           console.warn(`[LLMClient ${modelName}] Missing required property: "${key}".`);
+          
+          // Safe defaults for small local models that only return "reply"
+          if (key === 'classification') parsed[key] = 'genuine_attempt';
+          if (key === 'action') parsed[key] = 'followup';
+          if (key === 'llmConfidence') parsed[key] = 50;
+          if (key === 'hallucinationFlag') parsed[key] = false;
+          if (key === 'communicationConfidence') parsed[key] = 'medium';
+          if (key === 'reasoning') parsed[key] = 'Fallback generated reasoning.';
+          if (key === 'reactionClause') parsed[key] = 'Okay.';
+          if (key === 'updatedMemory') parsed[key] = 'Candidate answered question.';
         }
       }
     }
@@ -1163,6 +1178,9 @@ CONSTRAINTS:
     followupCount: session.followupCountForCurrentTopic,
     detectedConnections: detectedConnections || []
   });
+
+
+  const schema = buildResponseSchema(nextQuestionType);
 
   return callBrainLLMWithFallback(
     'Interviewer',
