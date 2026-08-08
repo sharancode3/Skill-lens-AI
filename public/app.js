@@ -921,53 +921,130 @@ async function appendInterviewerMessage(text, connections = [], nextQuestionType
     }
   }
 
+  // Extract Mermaid diagram if present in cleanText or diagramDefinition
+  let extractedDiagram = diagramDefinition;
+  let displayStem = cleanText;
+
+  if (!extractedDiagram && cleanText) {
+    const mermaidFenceMatch = cleanText.match(/```(?:mermaid)?\s*([\s\S]*?)```/i);
+    if (mermaidFenceMatch && (
+      mermaidFenceMatch[1].includes('graph ') || 
+      mermaidFenceMatch[1].includes('flowchart ') || 
+      mermaidFenceMatch[1].includes('sequenceDiagram') || 
+      mermaidFenceMatch[1].includes('classDiagram') || 
+      mermaidFenceMatch[1].includes('stateDiagram') || 
+      mermaidFenceMatch[1].includes('erDiagram')
+    )) {
+      extractedDiagram = mermaidFenceMatch[1].trim();
+      displayStem = cleanText.replace(mermaidFenceMatch[0], '').trim();
+    } else if (
+      cleanText.includes('graph TD') || cleanText.includes('graph LR') ||
+      cleanText.includes('flowchart TD') || cleanText.includes('flowchart LR')
+    ) {
+      const lines = cleanText.split('\n');
+      const diagramLines = [];
+      const stemLines = [];
+      let inDiagram = false;
+      for (const line of lines) {
+        if (/^\s*(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram)\s+/i.test(line)) {
+          inDiagram = true;
+        }
+        if (inDiagram) {
+          diagramLines.push(line);
+        } else {
+          stemLines.push(line);
+        }
+      }
+      if (diagramLines.length > 0) {
+        extractedDiagram = diagramLines.join('\n').trim();
+        displayStem = stemLines.join('\n').trim();
+      }
+    }
+  }
+
+  // Strip fences from extracted diagram
+  if (extractedDiagram) {
+    extractedDiagram = extractedDiagram.replace(/^```(?:mermaid)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  }
+
   const stemEl = document.createElement('div');
-  stemEl.textContent = cleanText;
+  stemEl.textContent = displayStem || cleanText;
   wrapper.appendChild(stemEl);
 
-
   // Render diagram if present
-  if (diagramDefinition) {
+  if (extractedDiagram) {
     const diagWrapper = document.createElement('div');
-    diagWrapper.className = 'diagram-container';
+    diagWrapper.className = 'diagram-container bg-white dark:bg-slate-900 border-2 border-slate-900 rounded-xl p-4 my-3 overflow-x-auto text-center shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]';
     wrapper.appendChild(diagWrapper);
 
-    const uniqueId = 'mermaid-' + Math.floor(Math.random() * 100000);
+    const uniqueId = 'mermaid-' + Math.floor(Math.random() * 1000000);
     try {
-      const { svg } = await mermaid.render(uniqueId, diagramDefinition);
-      diagWrapper.innerHTML = svg;
+      if (window.mermaid) {
+        const { svg } = await window.mermaid.render(uniqueId, extractedDiagram);
+        diagWrapper.innerHTML = svg;
+      } else {
+        throw new Error('Mermaid library not available on window.');
+      }
     } catch (err) {
       console.error('Mermaid render error:', err);
       const badEl = document.getElementById(uniqueId);
       if (badEl) badEl.remove();
-      diagWrapper.innerHTML = `<pre style="font-size: 0.8rem; text-align: left; width:100%; color: #EF4444; margin: 0;">${diagramDefinition}</pre>`;
+      diagWrapper.innerHTML = `
+        <div class="text-left text-xs font-mono text-slate-700 dark:text-slate-300 whitespace-pre-wrap p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-700">
+          <span class="font-bold text-blue-600 block mb-1">Architecture Flow Diagram:</span>
+          ${extractedDiagram}
+        </div>
+      `;
     }
 
     if (diagramQuestionText) {
       const qText = document.createElement('div');
-      qText.style.marginTop = '0.75rem';
-      qText.style.fontWeight = '600';
+      qText.className = 'mt-3 font-semibold text-slate-900 dark:text-slate-100';
       qText.textContent = diagramQuestionText;
       wrapper.appendChild(qText);
     }
   }
 
+  // Sanitize MCQ options defensively
+  let sanitizedMCQOptions = [];
+  if (Array.isArray(mcqOptions)) {
+    sanitizedMCQOptions = mcqOptions.map(opt => {
+      if (typeof opt === 'string') {
+        const trimmed = opt.trim();
+        return (trimmed === '[object Object]' || trimmed === '') ? '' : trimmed;
+      }
+      if (opt && typeof opt === 'object') {
+        const val = opt.text || opt.label || opt.option || opt.choice || opt.title || opt.value || '';
+        const strVal = String(val).trim();
+        return strVal === '[object Object]' ? '' : strVal;
+      }
+      return '';
+    }).filter(Boolean);
+  }
+
+  // Defensive fallback if options are sparse or malformed
+  if (nextQuestionType === 'mcq' && sanitizedMCQOptions.length < 2) {
+    console.warn('[Frontend Safeguard] Malformed or sparse MCQ options detected. Falling back to free-text open mode.');
+    nextQuestionType = 'open';
+    sanitizedMCQOptions = null;
+  }
+
   // Set input states based on question type
   window.lastQuestionData = {
     nextQuestionType: nextQuestionType || 'open',
-    mcqOptions: mcqOptions || null
+    mcqOptions: sanitizedMCQOptions
   };
   updateInputArea();
 
   // Render MCQ choices if present
-  let shouldRenderMCQ = nextQuestionType === 'mcq' && mcqOptions && mcqOptions.length >= 2;
+  let shouldRenderMCQ = nextQuestionType === 'mcq' && sanitizedMCQOptions && sanitizedMCQOptions.length >= 2;
   if (shouldRenderMCQ) {
-    if (window._lastRenderedMCQText === text && window._lastRenderedMCQOptions && JSON.stringify(window._lastRenderedMCQOptions) === JSON.stringify(mcqOptions)) {
+    if (window._lastRenderedMCQText === text && window._lastRenderedMCQOptions && JSON.stringify(window._lastRenderedMCQOptions) === JSON.stringify(sanitizedMCQOptions)) {
       console.warn('[Frontend Safeguard] Duplicate MCQ question/options detected in UI stream. Suppressing duplicate rendering.');
       shouldRenderMCQ = false;
     } else {
       window._lastRenderedMCQText = text;
-      window._lastRenderedMCQOptions = [...mcqOptions];
+      window._lastRenderedMCQOptions = [...sanitizedMCQOptions];
     }
   }
 
@@ -975,10 +1052,10 @@ async function appendInterviewerMessage(text, connections = [], nextQuestionType
     const mcqContainer = document.createElement('div');
     mcqContainer.className = 'mcq-container';
 
-    mcqOptions.forEach((optText, idx) => {
+    sanitizedMCQOptions.forEach((optText, idx) => {
       const optBtn = document.createElement('button');
       optBtn.className = 'mcq-option-btn';
-      optBtn.textContent = `${idx + 1}. ${optText}`;
+      optBtn.innerHTML = `<span class="font-bold mr-1.5">${idx + 1}.</span><span>${optText}</span>`;
       optBtn.addEventListener('click', async () => {
         optBtn.classList.add('selected-choice');
         mcqContainer.querySelectorAll('button').forEach(b => {
@@ -2048,7 +2125,22 @@ function updateInputArea() {
   }
 
   const isMCQ = latestMsg.nextQuestionType === 'mcq';
-  const hasOptions = Array.isArray(latestMsg.mcqOptions) && latestMsg.mcqOptions.length >= 2;
+  let validOptions = [];
+  if (Array.isArray(latestMsg.mcqOptions)) {
+    validOptions = latestMsg.mcqOptions.map(opt => {
+      if (typeof opt === 'string') {
+        const trimmed = opt.trim();
+        return (trimmed === '[object Object]' || trimmed === '') ? '' : trimmed;
+      }
+      if (opt && typeof opt === 'object') {
+        const val = opt.text || opt.label || opt.option || opt.choice || opt.title || opt.value || '';
+        const strVal = String(val).trim();
+        return strVal === '[object Object]' ? '' : strVal;
+      }
+      return '';
+    }).filter(Boolean);
+  }
+  const hasOptions = validOptions.length >= 2;
 
   if (isMCQ && !hasOptions) {
     console.warn(`[Session: ${currentSessionId || 'none'}] Malformed MCQ choice data fallback: 'mcqOptions' is empty or missing. Falling back to free-text input.`);
