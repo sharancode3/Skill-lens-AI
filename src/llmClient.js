@@ -245,9 +245,10 @@ async function callGeminiREST(systemPrompt, userPrompt, schema, retryCount = 1, 
 /**
  * Call the OpenAI-compatible Qwen REST endpoint.
  */
-async function callQwenREST(systemPrompt, userPrompt, schema, retryCount = 1, temperature = 1.0) {
-  const baseURL = process.env.QWEN_API_URL || 'http://localhost:11434/v1';
-  const modelName = process.env.LOCAL_MODEL_NAME || process.env.QWEN_MODEL_NAME || 'gemma3:4b';
+async function callQwenREST(systemPrompt, userPrompt, schema, retryCount = 1, temperature = 0.7) {
+  const baseURL = process.env.OLLAMA_API_URL || process.env.LOCAL_API_URL || process.env.QWEN_API_URL || 'http://localhost:11434/v1';
+  const modelName = process.env.GEMMA_MODEL_NAME || process.env.LOCAL_MODEL_NAME || process.env.QWEN_MODEL_NAME || 'qwen2.5:3b';
+  const timeoutMs = parseInt(process.env.LOCAL_MODEL_TIMEOUT_MS || '15000', 10);
   
   const url = `${baseURL.replace(/\/$/, '')}/chat/completions`;
   
@@ -269,7 +270,7 @@ async function callQwenREST(systemPrompt, userPrompt, schema, retryCount = 1, te
 
   try {
     const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), 5000);
+    const id = setTimeout(() => controller.abort(), timeoutMs);
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -282,31 +283,39 @@ async function callQwenREST(systemPrompt, userPrompt, schema, retryCount = 1, te
 
     if (!response.ok) {
       const errText = await response.text();
-      throw new Error(`Qwen API HTTP Error ${response.status}: ${errText}`);
+      throw new Error(`Model API HTTP Error ${response.status}: ${errText}`);
     }
 
     const data = await response.json();
     const rawContent = data.choices?.[0]?.message?.content;
     if (!rawContent) {
-      throw new Error('Empty content from Qwen response.');
+      throw new Error('Empty content from model response.');
     }
 
-    console.log('[LLMClient] Raw response from Qwen:', rawContent);
-    const parsed = JSON.parse(rawContent.trim());
+    console.log(`[LLMClient ${modelName}] Raw response:`, rawContent);
+    // Sanitize markdown fences if generated
+    let cleanJsonStr = rawContent.trim();
+    if (cleanJsonStr.startsWith('```')) {
+      cleanJsonStr = cleanJsonStr.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    }
 
-    // Validate schema fields manually
-    const keys = Object.keys(schema.properties);
-    for (const key of keys) {
-      if (!(key in parsed)) {
-        throw new Error(`Missing expected property: "${key}" in Qwen response.`);
+    const parsed = JSON.parse(cleanJsonStr);
+
+    // Validate schema fields manually if schema is provided
+    if (schema && schema.properties) {
+      const keys = Object.keys(schema.properties);
+      for (const key of keys) {
+        if (!(key in parsed) && schema.required && schema.required.includes(key)) {
+          console.warn(`[LLMClient ${modelName}] Missing required property: "${key}".`);
+        }
       }
     }
 
     return parsed;
   } catch (error) {
-    console.error(`[LLMClient Qwen] Call failed (retries remaining: ${retryCount}):`, error.message);
+    console.error(`[LLMClient ${modelName}] Call failed (retries remaining: ${retryCount}):`, error.message);
     if (retryCount > 0) {
-      const correctiveInstructions = "\n\nCRITICAL: You failed to return valid JSON matching the schema. You MUST return ONLY valid JSON matching the schema. No markdown backticks, no markdown fencing, no leading/trailing commentary.";
+      const correctiveInstructions = "\n\nCRITICAL: Return ONLY raw valid JSON matching the requested schema. No markdown code blocks, no backticks, no commentary.";
       return callQwenREST(systemPrompt, userPrompt + correctiveInstructions, schema, retryCount - 1, temperature);
     }
     return null;
@@ -319,7 +328,7 @@ async function callQwenREST(systemPrompt, userPrompt, schema, retryCount = 1, te
  */
 export async function generateLocalLoRAReply(systemPrompt, userPrompt) {
   const apiUrl = process.env.QWEN_API_URL || 'http://localhost:11434/v1';
-  const modelName = process.env.LORA_MODEL_NAME || process.env.LOCAL_MODEL_NAME || process.env.QWEN_MODEL_NAME || 'gemma3:4b';
+  const modelName = process.env.LORA_MODEL_NAME || process.env.LOCAL_MODEL_NAME || process.env.QWEN_MODEL_NAME || 'qwen2.5:3b';
 
   const requestBody = {
     model: modelName,
@@ -454,37 +463,95 @@ export function mockLLMCall(candidate, topic, lastQuestion, message, followupCou
     } else if (cleanText.toLowerCase().includes('lock') || cleanText.toLowerCase().includes('error') || cleanText.toLowerCase().includes('fail')) {
       reply = `Database locks under concurrency are a classic bottleneck. Did you resolve that by enabling WAL mode, introducing retry loops, or tuning transaction boundaries?`;
     } else if (classification === 'shallow' || isGeneric) {
-      reply = `You mentioned "${cleanText}", but didn't specify the underlying implementation details. Were you handling missing values, reformatting data types, or enforcing schema constraints?`;
+      const shallowPrompts = [
+        `Could you walk me through the exact mechanism you implemented for ${topic.title}? Specifically, what edge cases or boundary conditions did you handle?`,
+        `That covers the high level for ${topic.title}. What were the concrete implementation trade-offs or constraints you had to solve?`,
+        `Let's dive a layer deeper into ${topic.title}. How did you configure schema validation and error recovery in that setup?`
+      ];
+      reply = shallowPrompts[(session ? session.turnCount : 0) % shallowPrompts.length];
     } else {
-      reply = `You noted using "${cleanText.split(' ').slice(0, 4).join(' ')}" for that component. What specific concurrency, memory, or scaling constraints did you keep in mind when setting that up?`;
+      if (session && session.isFinalQuestion) {
+        const finalFollowupPrompts = [
+          `To wrap things up with one last question on ${topic.title} — if write throughput scaled by an order of magnitude, where would the primary bottleneck emerge first?`,
+          `Let's finish our review with a final technical scenario on ${topic.title}: how did you ensure data consistency or partition tolerance under unexpected service failovers?`,
+          `For our concluding question today on ${topic.title} — how did you structure the latency budget and telemetry metrics for that specific component?`,
+          `To round out our technical discussion with a final question on ${topic.title}: what failure modes or bottleneck risks dictate your strategy?`
+        ];
+        reply = finalFollowupPrompts[(session ? session.turnCount : 0) % finalFollowupPrompts.length];
+      } else {
+        const appliedPrompts = [
+          `That's a solid architectural direction for ${topic.title}. If write throughput scaled by an order of magnitude, where would the primary bottleneck emerge first?`,
+          `Interesting trade-off choice for ${topic.title}. How did you ensure data consistency or partition tolerance under unexpected service failovers?`,
+          `Makes sense. How did you structure the latency budget and telemetry metrics for that specific component?`
+        ];
+        reply = appliedPrompts[(session ? session.turnCount : 0) % appliedPrompts.length];
+      }
     }
   } else {
     // Action is 'advance' or 'wrapup'
+    const isFinalQuestion = session && session.isFinalQuestion;
+    const targetTopic = nextTopic || topic;
+    const obj = (targetTopic && targetTopic.objectives && targetTopic.objectives[0]) ? targetTopic.objectives[0] : "understanding this day's concepts";
+    const turnSeed = session ? session.turnCount : 0;
+
     if (isConductViolation) {
       if (nextTopic && nextQuestionType === 'open') {
-        const tier = difficultyTier || 'standard';
-        const obj = nextTopic.objectives[0] || "understanding this day's concepts";
-        reply = `Let's keep our focus on the technical side. Moving on to the next topic. For Day ${nextTopic.day}: "${nextTopic.title}", how do you approach implementing this objective: ${obj}?`;
+        const stems = [
+          `Let's shift focus to ${nextTopic.title}. In production systems, what core strategies do you use when implementing ${obj}?`,
+          `Moving forward to ${nextTopic.title}: how do you handle ${obj} under real-world constraints?`,
+          `Let's look at ${nextTopic.title}. What architectural trade-offs or technical hurdles have you navigated when addressing ${obj}?`
+        ];
+        reply = stems[turnSeed % stems.length];
       } else {
         reply = `Let's keep our focus on the technical side. Moving on.`;
       }
+    } else if (isFinalQuestion && nextQuestionType === 'open') {
+      // Natural, varied closing signals generated naturally
+      const finalStems = [
+        `To wrap things up with one last question on ${targetTopic.title} — how do you structure your workflow and handle trade-offs for ${obj}?`,
+        `Let's finish our review with a final technical scenario on ${targetTopic.title}: what failure modes or scaling constraints do you watch for when solving for ${obj}?`,
+        `For our concluding question today, let's look at ${targetTopic.title} — what key architectural decisions guide your implementation of ${obj}?`,
+        `To round out our technical discussion with a final question on ${targetTopic.title}: how do you approach ${obj} in a production environment?`,
+        `Before we conclude today's session, let's explore one last topic in ${targetTopic.title} — what strategies ensure resilience for ${obj}?`
+      ];
+      reply = finalStems[turnSeed % finalStems.length];
     } else {
       if (nextTopic && nextQuestionType === 'open') {
         const tier = difficultyTier || 'standard';
-        const obj = nextTopic.objectives[0] || "understanding this day's concepts";
+        
         if (tier === 'foundational') {
-          reply = `For Day ${nextTopic.day}: "${nextTopic.title}", please define the basic terms and goals of this objective: ${obj}.`;
+          const foundationalStems = [
+            `Turning to ${nextTopic.title} — what is the fundamental architecture and core purpose behind ${obj}?`,
+            `Let's explore the foundations of ${nextTopic.title}. How would you define ${obj} and its primary role in a system?`,
+            `On ${nextTopic.title}, what are the essential building blocks needed to get ${obj} up and running?`
+          ];
+          reply = foundationalStems[turnSeed % foundationalStems.length];
         } else if (tier === 'standard') {
-          reply = `For Day ${nextTopic.day}: "${nextTopic.title}", how do you approach implementing this objective in a typical setup: ${obj}?`;
+          const standardStems = [
+            `Let's dive into ${nextTopic.title}. In a standard production setup, how do you typically approach implementing ${obj}?`,
+            `Moving on to ${nextTopic.title}: what best practices and architectural patterns guide your implementation of ${obj}?`,
+            `Looking at ${nextTopic.title}, how do you structure your workflow when solving for ${obj}?`
+          ];
+          reply = standardStems[turnSeed % standardStems.length];
         } else if (tier === 'applied') {
-          reply = `For Day ${nextTopic.day}: "${nextTopic.title}", describe a concrete architectural trade-off or scenario-based choice you faced when implementing: ${obj}.`;
+          const appliedStems = [
+            `For ${nextTopic.title}, describe a concrete architectural trade-off or high-traffic constraint you navigated when implementing ${obj}.`,
+            `Taking ${nextTopic.title} into real-world systems: what failure modes or bottleneck risks dictate your strategy for ${obj}?`,
+            `In ${nextTopic.title}, how do you balance latency, consistency, and resource overhead when deploying ${obj}?`
+          ];
+          reply = appliedStems[turnSeed % appliedStems.length];
         } else if (tier === 'expert') {
-          reply = `For Day ${nextTopic.day}: "${nextTopic.title}", critique the default design choices or compare alternative implementations for: ${obj}.`;
+          const expertStems = [
+            `Regarding ${nextTopic.title}, critique the conventional approaches and compare alternative low-level optimizations for ${obj}.`,
+            `In complex, distributed systems covering ${nextTopic.title}, what non-obvious edge cases make ${obj} difficult to scale?`,
+            `When architecting at scale for ${nextTopic.title}, how do you evaluate zero-downtime migrations or partition tolerances in ${obj}?`
+          ];
+          reply = expertStems[turnSeed % expertStems.length];
         } else {
-          reply = `Thank you for sharing your experience with "${topic.title}".${connectionText} Let's proceed.`;
+          reply = `Thank you for detailing your approach to ${topic.title}.${connectionText} Let's proceed.`;
         }
       } else {
-        reply = `Thank you for sharing your experience with "${topic.title}".${connectionText} Let's proceed.`;
+        reply = `Thank you for detailing your approach to ${topic.title}.${connectionText} Let's proceed.`;
       }
     }
   }
@@ -601,7 +668,12 @@ export function mockLLMCall(candidate, topic, lastQuestion, message, followupCou
   // Capstone question generation mock override
   if (nextQuestionType === 'capstone') {
     const strongest = (session && session.strongestTopic) || { day: 29, title: "Monitoring, Logging & Observability" };
-    mockReply = `🏆 Capstone Challenge: Design a highly scalable and fault-tolerant system for "${strongest.title}" serving 10 million daily active users. Walk me through your database choices, ingestion pipeline, data partition strategy, and key trade-offs.`;
+    const capstoneStems = [
+      `🏆 Capstone Challenge: To conclude our technical interview with one final system design challenge on "${strongest.title}" serving 10 million daily active users — walk me through your database choices, ingestion pipeline, data partition strategy, and key trade-offs.`,
+      `🏆 Capstone Challenge: As our final question to wrap up today's review — design an end-to-end distributed system for "${strongest.title}". How would you ensure sub-50ms latency, high availability, and graceful failure recovery?`,
+      `🏆 Capstone Challenge: Let's finish our session with a final architectural challenge on "${strongest.title}". Walk me through your caching topology, concurrency controls, and telemetry observability under peak traffic.`
+    ];
+    mockReply = capstoneStems[(session ? session.turnCount : 0) % capstoneStems.length];
     mockAction = 'followup';
   }
 
@@ -739,7 +811,17 @@ export function mockLLMCall(candidate, topic, lastQuestion, message, followupCou
     const targetTopic = nextTopic || topic;
     const title = targetTopic.title || 'System Architecture';
     const day = targetTopic.day || 0;
-    result.reply = `Please examine the diagram below for Day ${day}: "${title}".`;
+    const isFinalQuestion = session && session.isFinalQuestion;
+    if (isFinalQuestion) {
+      const closingDiagramStems = [
+        `To wrap things up with one last diagram analysis for Day ${day}: "${title}" — please examine the architecture below.`,
+        `Let's finish our review with a final diagram critique for Day ${day}: "${title}".`,
+        `For our concluding technical evaluation today on Day ${day}: "${title}" — analyze the system flow below.`
+      ];
+      result.reply = closingDiagramStems[(session ? session.turnCount : 0) % closingDiagramStems.length];
+    } else {
+      result.reply = `Please examine the diagram below for Day ${day}: "${title}".`;
+    }
     
     // Construct a topic-specific flawed diagram dynamically
     const cleanTitle = title.toLowerCase();
@@ -755,6 +837,15 @@ export function mockLLMCall(candidate, topic, lastQuestion, message, followupCou
     } else if (cleanTitle.includes('observability') || cleanTitle.includes('monitoring') || cleanTitle.includes('logging')) {
       flow = `graph TD\n  A[App Logs] -->|Write to Text File| B(Sync File Lock)\n  B -->|Block CPU| C[Logstash Parser]\n  C --> D[Elasticsearch]`;
       flawQuestion = `Explain the bottleneck/flaw in the logging pipeline for Day ${day} when using synchronous file locks.`;
+    } else if (cleanTitle.includes('cache') || cleanTitle.includes('redis')) {
+      flow = `graph TD\n  A[API Client] -->|GET /user| B(Redis Cache)\n  B -->|Cache Miss| C[Postgres DB]\n  D[Client POST /update] -->|Direct Write| C\n  C -.->|No Invalidation| B`;
+      flawQuestion = `Analyze this caching topology for Day ${day}. What race condition or data integrity bug occurs when mutations bypass cache invalidation?`;
+    } else if (cleanTitle.includes('concurrency') || cleanTitle.includes('threads') || cleanTitle.includes('async')) {
+      flow = `graph TD\n  A[Worker Thread 1] -->|Unsynchronized Read/Write| B(Global Shared Memory Dict)\n  C[Worker Thread 2] -->|Unsynchronized Read/Write| B\n  B --> D[Output File]`;
+      flawQuestion = `In this concurrent processing architecture for Day ${day}, identify the data corruption risk and how a mutex or channel would resolve it.`;
+    } else if (cleanTitle.includes('pipeline') || cleanTitle.includes('etl') || cleanTitle.includes('data')) {
+      flow = `graph TD\n  A[High-Velocity IoT Stream] -->|Direct Synchronous Batch Insert| B(OLAP Columnar Warehouse)\n  B -->|Locks Analytic Queries| C[Live Dashboard]`;
+      flawQuestion = `Critique this real-time data ingestion flow for Day ${day}. Why is inserting directly into an analytical warehouse problematic during peak traffic?`;
     } else if (cleanTitle.includes('docker') || cleanTitle.includes('kubernetes')) {
       flow = `graph TD\n  A[Pod Deployments] -->|Direct IP Routing| B(Dynamic Pod IPs)\n  B -->|No DNS/Service| C[API Gateway]`;
       flawQuestion = `For Day ${day} deployments, why is direct routing to dynamic pod IPs without a Service resource flawed?`;
@@ -774,24 +865,41 @@ export function mockLLMCall(candidate, topic, lastQuestion, message, followupCou
 }
 
 
+// ==================== MULTI-BRAIN ARCHITECTURE ====================
+
 /**
- * Conduct Analyst Role: given candidate's raw message and the question that was asked,
- * classifies message into attempt, refusal, off-topic, or disrespectful input.
+ * Single source of truth for Interviewer Persona (Brain 2).
+ * Reused identically in every Interviewer Brain call to guarantee voice consistency.
+ */
+export const INTERVIEWER_PERSONA = `You are a senior technical interviewer at a serious engineering organization conducting an architectural and coding review for Skill Labs Ai.
+- Role: An experienced, direct senior engineering lead who is genuinely curious about how the candidate thinks, not just whether they got the "right" answer.
+- Tone: Professional but conversational — never robotic, never over-familiar. Warm enough to keep a candidate talking, firm enough that vague or dismissive answers get pushed back on.
+- Values: Rewards specificity and real reasoning over buzzwords; genuinely curious about trade-offs and "why," not just "what"; treats every candidate with respect, but expects the same respect back and will say so plainly if it's not given.
+- Scope: You NEVER decide whether to suspend the session or whether the interview is over — you only ever produce conversational dialogue, follow-ups, and choice parameters for the live exchange.`;
+
+/**
+ * BRAIN 1: Conduct Brain (the "referee")
+ * Sole job: Read the candidate's raw message and classify it into attempt, refusal, off-topic, or disrespectful input.
+ * Given ONLY the exact question asked and the raw message text. Never asks questions or assigns numeric scores.
  */
 export async function analyzeConductWithLLM(candidateMessage, lastQuestion) {
   if (process.env.SIMULATE_LLM_OUTAGE === 'true') {
     return mockConductAnalysis(candidateMessage);
   }
 
-  const systemPrompt = `You are a highly precise Conduct Analyst for a technical software engineering interview.
-Your single job is to analyze the candidate's last raw message in response to the question asked and classify it into one of four mutually exclusive categories:
+  const systemPrompt = `You are the Conduct Brain (the "referee") for a technical software engineering interview.
+Your sole job is to read the candidate's raw message in response to the question asked and classify it into one of four mutually exclusive categories.
 
-1. "genuine_attempt": The candidate makes a genuine technical effort to answer the question, even if the answer is incorrect, partial, vague, shallow, or brief (e.g. "i used python for that").
-2. "non_answer": The candidate explicitly refuses to answer, admits they don't know, or requests to move on/skip (e.g. "idk", "i don't know", "skip", "next question", "pass", "no idea").
-3. "off_topic": The candidate's response is irrelevant to the technical question, contains random keyboard mashing/gibberish (e.g. "sdfds", "sdfsdf", "asdflkjh"), or is completely unrelated to software engineering.
+CATEGORIES:
+1. "genuine_attempt": The candidate makes a coherent technical effort to answer the question, whether strong, partial, or vague/shallow.
+2. "non_answer": The candidate explicitly refuses to answer, admits they don't know, or asks to pass/skip (e.g. "idk", "I don't know", "skip", "pass", "no idea").
+3. "off_topic": The candidate's response is completely unrelated to the technical question, contains keyboard-mashing/gibberish (e.g. "sdfds", "g4wfsgsg", "asdflkjh"), or is nonsensical copy-paste.
 4. "disrespectful": The candidate is dismissive, rude, hostile, or uses inappropriate language (e.g. "do as you like", "whatever", "this is stupid").
 
-You must genuinely analyze the semantics and structure of the input. Do NOT rely on simple keyword matching. For example, gibberish strings like "sdfds" or "sdfsdf" are off-topic/nonsensical, not genuine attempts.`;
+CRITICAL INSTRUCTIONS:
+- You cannot rely on recognizing specific known phrases. You MUST genuinely assess whether the text is a coherent, relevant attempt at answering the actual technical question asked, every single time.
+- Treat every message as new and unfamiliar rather than checking against pre-defined examples.
+- You never write text the candidate sees, never ask questions, and never assign numeric scores.`;
 
   const userPrompt = JSON.stringify({
     previousQuestion: lastQuestion,
@@ -881,8 +989,9 @@ function mockConductAnalysis(message) {
 }
 
 /**
- * Interviewer Role: given conduct classification, curriculum topic, and history,
- * generates the conversational dialogue, follow-ups, and choice parameters.
+ * BRAIN 2: Interviewer Brain (the "personality")
+ * Sole job: Generate what gets said to the candidate this turn.
+ * Uses the constant INTERVIEWER_PERSONA. Never decides suspension or interview wrap-up.
  */
 export async function generateInterviewerResponseWithLLM(
   session,
@@ -901,22 +1010,33 @@ export async function generateInterviewerResponseWithLLM(
   const currentTopic = session.topicQueue[session.cursor];
   const lastQuestion = session.transcript.filter(e => e.role === 'interviewer').slice(-1)[0]?.text || '';
 
-  const systemPrompt = `You are a professional, senior technical interviewer conducting a coding and architectural review for Skill Labs Ai.
-Your single job is to generate the next response (question, follow-up, or reaction) to the candidate.
+  const systemPrompt = `${INTERVIEWER_PERSONA}
+
+Your single job is to generate what gets said to the candidate this turn.
 
 INPUT METADATA:
-- Candidate conduct classification: "${conductClassification}" (Note: If this is not "genuine_attempt", you MUST output a natural, human-sounding reaction clause and transition or re-prompt).
-- Current topic: Day ${currentTopic.day} - "${currentTopic.title}"
-- Topic objectives: ${currentTopic.objectives.join(', ')}
-- Next question type requested: "${nextQuestionType}"
-- Difficulty tier: "${difficultyTier}"
+- Candidate Conduct Classification: "${conductClassification}"
+- Current Topic: Day ${currentTopic.day} - "${currentTopic.title}"
+- Topic Objectives: ${currentTopic.objectives.join(', ')}
+- Next Question Type Requested: "${nextQuestionType}"
+- Difficulty Tier: "${difficultyTier}"
+- Follow-up Count on Current Topic: ${session.followupCountForCurrentTopic || 0}
+${session && session.isFinalQuestion ? '- Final Question Signal: TRUE (This is the LAST question of the interview before concluding).' : ''}
+
+REACTION & BEHAVIOR RULES (Based on Conduct Classification):
+- If "genuine_attempt" (strong): Ask a real, specific follow-up probing deeper into an exact detail, mechanism, or trade-off the candidate mentioned, in your own natural phrasing — never the same fixed sentence shape twice.
+- If "genuine_attempt" (weak/vague): Push for the missing specificity, the way a real interviewer presses for concrete implementation detail.
+- If "non_answer": React honestly and directly in your own voice, naming that the response did not engage with the question, and re-prompt for a genuine attempt on the current topic.
+- If "off_topic" (gibberish/non-sequitur): React puzzled but firm, redirecting back to the actual technical question on the current topic.
+- If "disrespectful": React with calm professionalism and real directness, pushing back without breaking character or sounding like a robotic system warning.
 
 CONSTRAINTS:
 1. If nextQuestionType is "mcq": You MUST generate a multiple choice question stem in "reply", and return the "mcqOptions" (array of exactly 4 choices: 3 plausible distractors and 1 correct option, related to the objectives of the NEXT topic day: Day ${nextTopic ? nextTopic.day : currentTopic.day} - "${nextTopic ? nextTopic.title : currentTopic.title}").
 2. If nextQuestionType is "diagram_interpret": You MUST generate a flawed Mermaid diagram syntax in "diagramDefinition" representing the next day's objectives, and place a specific critique question in "diagramQuestionText".
-3. reactionClause: A short 3-8 word conversational reaction.
-4. Omit day numbers from follow-up questions within the same topic.
-5. REALISTIC BREVITY: Keep your reply to 1-3 sentences.`;
+3. If Final Question Signal is TRUE: Naturally incorporate a brief, varied closing acknowledgment into your phrasing (e.g. "To wrap things up with one last question," or "Let's finish our review with a final technical scenario:"). Vary your phrasing naturally—do NOT use a fixed template.
+4. reactionClause: A short 3-8 word conversational reaction.
+5. Omit day numbers from follow-up questions within the same topic.
+6. REALISTIC BREVITY: Keep your reply to 1-3 sentences.`;
 
   const userPrompt = JSON.stringify({
     candidateLastMessage: candidateMessage,
@@ -952,26 +1072,26 @@ CONSTRAINTS:
 }
 
 /**
- * Evaluator Role: runs only when scoring a completed topic (not every turn).
- * Given the full exchange for a day, produces numeric score and narrative feedback together.
+ * BRAIN 3: Evaluator Brain (the "grader")
+ * Sole job: Once a curriculum topic's exchange is complete, produce the numeric score and narrative feedback together.
+ * Generates score and narrative in the same reasoning pass so they can never contradict.
  */
 export async function evaluateTopicPerformanceWithLLM(currentTopic, exchangeHistory) {
   if (process.env.SIMULATE_LLM_OUTAGE === 'true') {
     return mockTopicEvaluation(currentTopic, exchangeHistory);
   }
 
-  const systemPrompt = `You are a professional technical Evaluator for a software engineering interview.
-Your single job is to analyze the full exchange history for a curriculum day and produce:
-1. A numeric technical depth score (0 to 100) reflecting the candidate's understanding of the objectives.
-2. A specific, factual narrative feedback (1-3 sentences) detailing their demonstrated strengths or gaps on this topic, referencing their actual claims or responses.
+  const systemPrompt = `You are the Evaluator Brain (the "grader") for a technical software engineering interview.
+Your sole job is to analyze the full exchange history for a completed curriculum topic and produce both the numeric technical score (0-100) and the narrative feedback together in one pass so they never contradict.
 
 CURRICULUM TOPIC: Day ${currentTopic.day} - "${currentTopic.title}"
 OBJECTIVES: ${currentTopic.objectives.join(', ')}
 
-Your score and narrative feedback must align:
-- High depth / specific details -> score 80-100, strength feedback.
-- Vague / shallow / incorrect details -> score 20-59, gap feedback.
-- Refusal / gibberish / nonsense -> score 10-20, gap feedback.`;
+ALIGNMENT RULES:
+- High depth / specific details -> score 80-100, strength feedback referencing concrete candidate statements.
+- Vague / shallow / incorrect details -> score 20-59, gap feedback specifying missing mechanisms.
+- Refusal / gibberish / nonsense -> score 10-20, gap feedback noting non-attempt.
+- You must NEVER praise a topic that scored below 70, and never generate generic boilerplate.`;
 
   const userPrompt = JSON.stringify({
     exchangeHistory: exchangeHistory.map(e => `${e.role.toUpperCase()}: ${e.text}`).join('\n')
@@ -1024,7 +1144,7 @@ function mockTopicEvaluation(currentTopic, exchangeHistory) {
 
   if (fullText.trim() === '' || fullText.includes('[empty response]')) {
     score = 10;
-    feedback = `Candidate skipped topic Day ${currentTopic.day} (${currentTopic.title}) due to consecutive blank answers.`;
+    feedback = `Candidate skipped topic Day ${currentTopic.day} (${currentTopic.title}) with no substantive technical reply.`;
   } else if (fullText.includes('idk') || fullText.includes("don't know") || fullText.includes('dont know')) {
     score = 20;
     feedback = `Candidate was unable to address the technical objectives of Day ${currentTopic.day} (${currentTopic.title}), stating they did not know.`;
@@ -1032,8 +1152,20 @@ function mockTopicEvaluation(currentTopic, exchangeHistory) {
     score = 20;
     feedback = `Candidate response for Day ${currentTopic.day} (${currentTopic.title}) was very short or nonsensical, showing gaps in understanding objectives.`;
   } else {
-    score = 85;
-    feedback = `Demonstrated solid understanding of objectives for Day ${currentTopic.day} (${currentTopic.title}).`;
+    // Check for technical keyword presence
+    const techTerms = ['pandas', 'sqlite', 'redis', 'postgres', 'lock', 'wal', 'schema', 'concurrency', 'latency', 'cache', 'prometheus', 'grafana', 'docker', 'pod', 'vector', 'hnsw', 'few-shot', 'zero-shot', 'pipeline', 'metric', 'queue'];
+    const matches = techTerms.filter(t => fullText.includes(t));
+
+    if (matches.length >= 2 || fullText.length > 80) {
+      score = 90;
+      feedback = `Demonstrated solid engineering depth for Day ${currentTopic.day} (${currentTopic.title}), clearly referencing ${matches.length > 0 ? matches.slice(0, 3).join(', ') : 'key mechanisms'}.`;
+    } else if (matches.length === 1 || fullText.length > 30) {
+      score = 65;
+      feedback = `Showed partial conceptual familiarity for Day ${currentTopic.day} (${currentTopic.title}), but lacked in-depth discussion of production failure modes or scaling trade-offs.`;
+    } else {
+      score = 45;
+      feedback = `Provided a high-level summary for Day ${currentTopic.day} (${currentTopic.title}) without specifying concrete implementation mechanisms.`;
+    }
   }
 
   return { score, narrativeFeedback: feedback };
@@ -1100,10 +1232,9 @@ export async function evaluateTurnWithLLM(session, candidateMessage, detectedCon
   const isAdvancing = interviewerRes.action === 'advance' || interviewerRes.action === 'wrapup' || isMCQ || isDiagram;
 
   if (isAdvancing && currentTopic) {
-    const dayExchangeHistory = [];
-    if (lastQuestion) {
-      dayExchangeHistory.push({ role: 'interviewer', text: lastQuestion });
-    }
+    const pastTurnsCount = (session.followupCountForCurrentTopic || 0) * 2;
+    const recentExchange = session.transcript.slice(-Math.max(1, pastTurnsCount + 1));
+    const dayExchangeHistory = recentExchange.map(e => ({ role: e.role, text: e.text }));
     dayExchangeHistory.push({ role: 'candidate', text: candidateMessage });
 
     const evaluation = await evaluateTopicPerformanceWithLLM(currentTopic, dayExchangeHistory);
@@ -1225,10 +1356,19 @@ export function postProcessFeedback(feedback, session) {
     }
   });
 
-  // 4. Ensure recommendations (next steps) have no duplicate days
+  // 4. Ensure recommendations (next steps) have no duplicate days and are always non-empty strings
   const finalNext = [];
   const nextDays = new Set();
-  (feedback.next || []).forEach(item => {
+
+  (feedback.next || []).forEach(rawItem => {
+    let item = '';
+    if (typeof rawItem === 'string') {
+      item = rawItem.trim();
+    } else if (rawItem && typeof rawItem === 'object') {
+      item = (rawItem.recommendation || rawItem.action || rawItem.step || rawItem.text || '').trim();
+    }
+    if (!item) return;
+
     const match = item.match(/Day\s+(\d+)/i);
     if (match) {
       const dayNum = parseInt(match[1]);
@@ -1241,10 +1381,35 @@ export function postProcessFeedback(feedback, session) {
     }
   });
 
-  // If next is empty, add standard fallback
-  if (finalNext.length === 0) {
-    finalNext.push('Review curriculum modules for deeper advanced system project designs.');
+  // If fewer than 3 recommendations, generate targeted next steps from identified gaps and unassessed queue topics
+  if (finalNext.length < 3) {
+    finalGaps.forEach(gap => {
+      if (finalNext.length >= 3) return;
+      const match = gap.match(/Day\s+(\d+)/i);
+      if (match) {
+        const dayNum = parseInt(match[1]);
+        if (!nextDays.has(dayNum)) {
+          const topic = session.topicQueue.find(t => t.day === dayNum);
+          const title = topic ? topic.title : 'Curriculum Module';
+          finalNext.push(`Revisit Day ${dayNum} (${title}): Review technical objectives, practice hands-on implementation, and study architectural failure modes.`);
+          nextDays.add(dayNum);
+        }
+      }
+    });
   }
+
+  // If still fewer than 3, add standard actionable curriculum recommendations
+  const generalCurriculumRecommendations = [
+    'Deepen production engineering fundamentals: Focus on concurrency limits, database connection pooling, and latency profiling.',
+    'Strengthen observability practices: Implement structured JSON logging, distributed tracing, and real-time alert thresholds.',
+    'Complete hands-on end-to-end integration projects: Build and benchmark asynchronous queue pipelines and caching layers.'
+  ];
+
+  generalCurriculumRecommendations.forEach(rec => {
+    if (finalNext.length < 3 && !finalNext.includes(rec)) {
+      finalNext.push(rec);
+    }
+  });
 
   return {
     summary: feedback.summary,

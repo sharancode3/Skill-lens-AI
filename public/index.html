@@ -237,47 +237,47 @@
       </div>
 
       <!-- Right: Live Progress & Status Indicators -->
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2.5 sm:gap-3">
         <!-- Live Proctoring Badge -->
-        <div class="hidden lg:flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-bold">
-          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <div class="header-badge hidden lg:flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-800 border-2 border-slate-900 rounded-full text-xs font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse border border-slate-900"></span>
           <span>Proctored Screen</span>
         </div>
 
         <!-- Questions Count Pill -->
-        <div class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-800 border border-blue-200 rounded-full text-xs font-bold shadow-sm">
+        <div class="header-badge flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-900 border-2 border-slate-900 rounded-full text-xs font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
           <i data-lucide="help-circle" class="w-3.5 h-3.5 text-blue-600"></i>
           <span>Questions:</span>
-          <span id="chat-progress-questions" class="font-extrabold text-blue-700">0</span>
-          <span class="text-[10px] font-normal text-blue-600 hidden sm:inline">(min. 8)</span>
+          <span id="chat-progress-questions" class="font-black text-blue-700">0</span>
+          <span class="text-[10px] font-bold text-blue-600 hidden sm:inline">(min. 8)</span>
         </div>
 
         <!-- Topics Count Pill -->
-        <div class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-800 border border-purple-200 rounded-full text-xs font-bold shadow-sm">
+        <div class="header-badge hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-900 border-2 border-slate-900 rounded-full text-xs font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
           <i data-lucide="layers" class="w-3.5 h-3.5 text-purple-600"></i>
           <span>Topics:</span>
-          <span id="chat-progress-topics" class="font-extrabold text-purple-700">0/4</span>
+          <span id="chat-progress-topics" class="font-black text-purple-700">0/4</span>
         </div>
 
         <!-- Difficulty Pill -->
-        <div class="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-full text-xs font-bold shadow-sm">
+        <div class="header-badge hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-900 border-2 border-slate-900 rounded-full text-xs font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
           <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-600"></i>
           <span id="chat-progress-difficulty" class="capitalize">Standard</span>
         </div>
 
         <!-- Session Timer Pill -->
-        <div id="header-timer" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white border-2 border-slate-900 rounded-full text-xs font-mono font-bold shadow-sm shrink-0">
+        <div id="header-timer" class="header-badge flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white border-2 border-slate-900 rounded-full text-xs font-mono font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] shrink-0">
           <i data-lucide="clock" class="w-3.5 h-3.5 text-emerald-400"></i>
           <span id="session-timer-val">00:00</span>
         </div>
 
         <!-- Mobile Drawer Toggle -->
-        <button id="btn-toggle-sidebar" class="h-8 px-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg border border-slate-300 md:hidden flex items-center gap-1 text-xs font-bold transition">
+        <button id="btn-toggle-sidebar" class="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl border-2 border-slate-900 md:hidden flex items-center gap-1.5 text-xs font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition">
           <i data-lucide="history" class="w-3.5 h-3.5"></i>
           <span>History</span>
         </button>
 
-        <!-- Phase 9: Settings Control Button & Popover Panel -->
+        <!-- Phase 9 & 10: Settings Control Button & Popover Panel -->
         <div class="relative">
           <button id="btn-toggle-settings" title="Display & Layout Settings" class="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-xl border-2 border-slate-900 flex items-center gap-1.5 text-xs font-black transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0">
             <i data-lucide="settings" class="w-4 h-4 text-slate-700"></i>
@@ -285,29 +285,60 @@
           </button>
 
           <!-- Settings Popover Dropdown Panel -->
-          <div id="settings-popover" class="absolute right-0 top-12 w-72 bg-white border-4 border-slate-900 rounded-xl p-4 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] z-50 hidden flex flex-col gap-4">
-            <div class="flex items-center justify-between border-b-2 border-slate-200 pb-2">
-              <span class="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-1.5">
+          <div id="settings-popover" class="absolute right-0 top-12 w-80 bg-white dark:bg-slate-900 border-4 border-slate-900 rounded-xl p-4 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] z-50 hidden flex flex-col gap-4">
+            <div class="flex items-center justify-between border-b-2 border-slate-200 dark:border-slate-800 pb-2">
+              <span class="text-xs font-black uppercase text-slate-800 dark:text-white tracking-wider flex items-center gap-1.5">
                 <i data-lucide="sliders" class="w-4 h-4 text-blue-600"></i>
-                Display Settings
+                Settings & Tools
               </span>
-              <button id="btn-close-settings" class="text-slate-400 hover:text-slate-900 font-black text-sm p-1">✕</button>
+              <button id="btn-close-settings" class="text-slate-400 hover:text-slate-900 dark:hover:text-white font-black text-sm p-1">✕</button>
+            </div>
+
+            <!-- Dark / Light Theme Toggle -->
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="text-xs font-extrabold text-slate-800 dark:text-white block">Theme Mode</span>
+                <span class="text-[10px] font-bold text-slate-500 block">Switch light or dark appearance</span>
+              </div>
+              <button id="btn-toggle-theme" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white text-xs font-extrabold rounded-lg border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center gap-1.5 transition">
+                <i data-lucide="moon" class="w-3.5 h-3.5 text-indigo-500 theme-icon-moon"></i>
+                <i data-lucide="sun" class="w-3.5 h-3.5 text-amber-500 theme-icon-sun hidden"></i>
+                <span id="theme-label-text">Dark Mode</span>
+              </button>
             </div>
 
             <!-- Font Size Selector -->
-            <div class="flex flex-col gap-2">
-              <label class="text-xs font-extrabold text-slate-700">Transcript Text Size</label>
-              <div class="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-lg border-2 border-slate-900">
-                <button data-size="sm" class="btn-font-size px-2 py-1.5 text-xs font-extrabold rounded-md transition-all text-slate-700 hover:bg-white">Small</button>
+            <div class="flex flex-col gap-2 pt-2 border-t-2 border-slate-100 dark:border-slate-800">
+              <div class="flex justify-between items-center">
+                <label class="text-xs font-extrabold text-slate-700 dark:text-slate-200">Text & Element Size</label>
+                <span id="font-size-indicator" class="text-[10px] font-bold text-blue-600 uppercase">Medium</span>
+              </div>
+              <div class="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg border-2 border-slate-900">
+                <button data-size="sm" class="btn-font-size px-2 py-1.5 text-xs font-extrabold rounded-md transition-all text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700">Small</button>
                 <button data-size="md" class="btn-font-size px-2 py-1.5 text-xs font-extrabold rounded-md transition-all bg-slate-900 text-white shadow-sm">Medium</button>
-                <button data-size="lg" class="btn-font-size px-2 py-1.5 text-xs font-extrabold rounded-md transition-all text-slate-700 hover:bg-white">Large</button>
+                <button data-size="lg" class="btn-font-size px-2 py-1.5 text-xs font-extrabold rounded-md transition-all text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700">Large</button>
+              </div>
+            </div>
+
+            <!-- Technical Tools (Calculator & Keyboard) -->
+            <div class="flex flex-col gap-2 pt-2 border-t-2 border-slate-100 dark:border-slate-800">
+              <span class="text-xs font-extrabold text-slate-800 dark:text-white block">Assessment Utilities</span>
+              <div class="grid grid-cols-2 gap-2">
+                <button id="btn-open-calculator" class="px-2.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 text-xs font-extrabold rounded-lg border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center gap-1.5 hover:-translate-y-0.5 active:translate-y-0 transition">
+                  <i data-lucide="calculator" class="w-3.5 h-3.5 text-emerald-700"></i>
+                  <span>Calculator</span>
+                </button>
+                <button id="btn-open-keyboard" class="px-2.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 text-xs font-extrabold rounded-lg border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center gap-1.5 hover:-translate-y-0.5 active:translate-y-0 transition">
+                  <i data-lucide="keyboard" class="w-3.5 h-3.5 text-indigo-700"></i>
+                  <span>Keyboard</span>
+                </button>
               </div>
             </div>
 
             <!-- History Sidebar Toggle Switch -->
-            <div class="flex items-center justify-between pt-2 border-t-2 border-slate-100">
+            <div class="flex items-center justify-between pt-2 border-t-2 border-slate-100 dark:border-slate-800">
               <div>
-                <span class="text-xs font-extrabold text-slate-800 block">Question History Panel</span>
+                <span class="text-xs font-extrabold text-slate-800 dark:text-white block">Question History Panel</span>
                 <span class="text-[10px] font-bold text-slate-500 block">Show or hide history sidebar</span>
               </div>
               <button id="btn-toggle-history-panel" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold rounded-lg border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0 transition shrink-0">
@@ -322,37 +353,40 @@
     <!-- Main Workspace: Split Chat Feed & Sidebar -->
     <div class="chat-workspace-container flex-grow flex overflow-hidden relative">
       <!-- Left Column: Chat Conversation Stream -->
-      <section class="chat-stream-column flex-grow flex flex-col overflow-hidden h-full bg-slate-50">
+      <section class="chat-stream-column flex-grow flex flex-col overflow-hidden h-full bg-slate-50 dark:bg-slate-900">
         <!-- Message Bubbles Scroll Area -->
         <div id="chat-messages" class="flex-grow overflow-y-auto p-6 md:p-8 flex flex-col gap-6 w-full">
           <!-- Chat messages dynamically rendered here -->
         </div>
 
         <!-- Pinned Bottom Typing Console -->
-        <footer class="chat-input-footer bg-white border-t border-slate-200 p-4 shrink-0 shadow-lg">
+        <footer class="chat-input-footer bg-white dark:bg-slate-950 border-t-2 border-slate-900 p-4 shrink-0 shadow-[0_-4px_0_0_rgba(0,0,0,0.05)]">
           <div class="max-w-3xl mx-auto flex flex-col gap-1.5">
-            <div class="flex items-center gap-3 relative">
-              <div id="paste-error" class="absolute -top-7 left-2 text-xs text-red-600 font-bold bg-red-50 border border-red-200 px-2 py-0.5 rounded shadow-sm hidden flex items-center gap-1">
-                <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
-                Pasting is blocked in exam mode
+            <div class="flex items-end gap-3 relative">
+              <div id="paste-error" class="absolute -top-10 left-2 text-xs text-red-800 font-extrabold bg-red-100 border-2 border-slate-900 px-3 py-1.5 rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] items-center gap-1.5 z-20 transition-all" style="display: none;">
+                <i data-lucide="shield-alert" class="w-3.5 h-3.5 text-red-700"></i>
+                <span>Pasting is prohibited in exam mode</span>
               </div>
-              <input 
-                type="text" 
-                id="chat-input" 
-                placeholder="Type your technical response here..." 
-                class="flex-grow h-13 px-5 bg-slate-100 rounded-xl text-slate-900 font-medium text-sm border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all duration-150 shadow-inner"
-              />
+              <div class="flex-grow relative flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] focus-within:border-blue-600 focus-within:bg-white dark:focus-within:bg-slate-900 transition-all">
+                <textarea 
+                  id="chat-input" 
+                  rows="1"
+                  placeholder="Type your technical response here (Shift+Enter for new line)..." 
+                  class="chat-input-textarea w-full py-3.5 px-4 bg-transparent text-slate-900 dark:text-white font-bold text-sm resize-none outline-none overflow-y-auto leading-relaxed"
+                  style="max-height: 180px; min-height: 50px;"
+                ></textarea>
+              </div>
               <button 
                 id="btn-send" 
-                class="h-13 px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl flex items-center justify-center gap-2 transition-all duration-150 transform active:scale-95 shadow-md shrink-0"
+                class="h-13 px-6 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm rounded-xl border-2 border-slate-900 flex items-center justify-center gap-2 transition-all duration-150 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0 shrink-0"
               >
                 <span>Send</span>
                 <i data-lucide="send" class="w-4 h-4"></i>
               </button>
             </div>
-            <div class="flex justify-between items-center px-1 text-[11px] text-slate-400 font-medium">
+            <div class="flex justify-between items-center px-1 text-[11px] text-slate-500 dark:text-slate-400 font-bold">
               <span>Respond with your own architectural reasoning</span>
-              <span>Press <kbd class="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded text-slate-600 font-mono text-[10px]">Enter ↵</kbd> to submit</span>
+              <span>Press <kbd class="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-700 border border-slate-400 rounded text-slate-800 dark:text-slate-200 font-mono text-[10px]">Enter ↵</kbd> to send, <kbd class="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-700 border border-slate-400 rounded text-slate-800 dark:text-slate-200 font-mono text-[10px]">Shift+Enter</kbd> for line</span>
             </div>
           </div>
         </footer>
@@ -475,21 +509,20 @@
             </div>
             <span class="text-xs font-bold text-slate-400">Adaptive scaling difficulty tier reached</span>
           </div>
-          </div>
 
           <!-- Question Types Breakdown -->
-          <div class="bg-white border-4 border-gray-900 rounded-lg p-6 flex flex-col justify-between">
-            <h3 class="text-sm font-bold uppercase tracking-wider text-gray-500 border-b border-gray-100 pb-2">Question Breakdown</h3>
+          <div class="bg-white border-4 border-slate-900 rounded-xl p-6 flex flex-col justify-between shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+            <h3 class="text-xs font-black uppercase tracking-wider text-slate-500 border-b-2 border-slate-100 pb-2">Question Breakdown</h3>
             <div id="metrics-breakdown" class="flex flex-col gap-2 my-4">
               <!-- Breakdown scores injected here -->
             </div>
-            <span class="text-xs text-gray-400">Distribution of question variety served</span>
+            <span class="text-xs font-bold text-slate-400">Distribution of question variety served</span>
           </div>
         </div>
 
         <!-- Per Day Detailed Row Cards -->
         <div class="flex flex-col gap-3">
-          <h3 class="text-xs font-bold uppercase tracking-wider text-gray-500">Curriculum Topic Scores</h3>
+          <h3 class="text-xs font-black uppercase tracking-wider text-slate-500">Curriculum Topic Scores</h3>
           <div id="metrics-perday-list" class="flex flex-col gap-2">
             <!-- Day rows injected here -->
           </div>
@@ -497,11 +530,11 @@
 
         <!-- Timing Analytics (Phase I6) -->
         <div class="flex flex-col gap-3">
-          <h3 class="text-xs font-bold uppercase tracking-wider text-gray-500 flex justify-between items-center">
+          <h3 class="text-xs font-black uppercase tracking-wider text-slate-500 flex justify-between items-center">
             <span>Response Time Analysis</span>
-            <span id="metrics-total-duration" class="font-mono text-sm text-gray-700 bg-slate-100 px-3 py-1 rounded border border-slate-200">Total Duration: 0:00</span>
+            <span id="metrics-total-duration" class="font-mono text-xs font-bold text-slate-800 bg-slate-100 px-3 py-1 rounded-lg border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">Total Duration: 0:00</span>
           </h3>
-          <div id="metrics-timing-list" class="flex flex-col gap-2 bg-white border-4 border-gray-900 rounded-lg p-6">
+          <div id="metrics-timing-list" class="flex flex-col gap-2 bg-white border-4 border-slate-900 rounded-xl p-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
             <!-- Timing rows injected here -->
           </div>
         </div>
@@ -509,8 +542,9 @@
 
       <!-- CTA Footer Button -->
       <div class="flex justify-center mt-6">
-        <button id="btn-restart" class="h-16 px-8 bg-transparent text-blue-600 border-4 border-blue-600 hover:bg-blue-600 hover:text-white font-bold rounded-md transition-all duration-200 transform hover:scale-105 active:scale-95 outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600">
-          Restart Review Portal
+        <button id="btn-restart" class="h-14 px-8 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm rounded-xl border-4 border-slate-900 transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0 flex items-center gap-2">
+          <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+          <span>Restart Review Portal</span>
         </button>
       </div>
     </section>
@@ -563,8 +597,8 @@
   </div>
 
   <!-- Re-enter Fullscreen Warning Banner Overlay -->
-  <div id="fullscreen-warning-overlay" class="fixed inset-0 bg-slate-900/90 z-50 flex flex-col items-center justify-center p-6 text-center hidden backdrop-blur-sm">
-    <div class="bg-white max-w-md w-full p-8 rounded-xl border-4 border-amber-500 flex flex-col items-center gap-6 shadow-2xl">
+  <div id="fullscreen-warning-overlay" class="fixed inset-0 bg-slate-950/90 z-50 flex flex-col items-center justify-center p-6 text-center hidden backdrop-blur-sm">
+    <div class="bg-white max-w-md w-full p-8 rounded-xl border-4 border-slate-900 flex flex-col items-center gap-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
       <div class="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center border-2 border-amber-300 animate-pulse">
         <i data-lucide="shield-alert" class="w-8 h-8"></i>
       </div>
@@ -574,11 +608,147 @@
           Exiting fullscreen mode is not permitted during proctored technical evaluations.
         </p>
       </div>
-      <button id="btn-fullscreen-resume" class="w-full h-14 bg-amber-600 hover:bg-amber-700 text-white font-extrabold rounded-xl transition-all flex items-center justify-center gap-2 text-sm shadow-md">
+      <button id="btn-fullscreen-resume" class="w-full h-14 bg-amber-600 hover:bg-amber-700 text-white font-extrabold rounded-xl border-2 border-slate-900 transition-all flex items-center justify-center gap-2 text-sm shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0">
         <i data-lucide="maximize-2" class="w-5 h-5"></i>
         <span>Re-enter Fullscreen & Resume Interview</span>
       </button>
-      <span class="text-xs font-bold text-amber-700 bg-amber-50 px-3 py-1 rounded-full border border-amber-200" id="fullscreen-violation-count">Warning 1 of 3 — 3 warnings remaining before automatic suspension</span>
+      <span class="text-xs font-bold text-amber-900 bg-amber-100 px-3 py-1 rounded-full border-2 border-amber-300" id="fullscreen-violation-count">Warning 1 of 3 — 3 warnings remaining before automatic suspension</span>
+    </div>
+  </div>
+
+  <!-- ==================== ASSESSMENT UTILITIES: CALCULATOR & KEYBOARD ==================== -->
+  <!-- 1. Scientific / Standard Calculator Modal -->
+  <div id="modal-calculator" class="fixed inset-0 bg-slate-950/70 z-50 flex items-center justify-center p-4 hidden backdrop-blur-xs">
+    <div class="bg-white dark:bg-slate-900 w-full max-w-sm p-6 rounded-2xl border-4 border-slate-900 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] flex flex-col gap-4">
+      <div class="flex items-center justify-between border-b-2 border-slate-900 pb-2">
+        <div class="flex items-center gap-2">
+          <i data-lucide="calculator" class="w-5 h-5 text-emerald-600"></i>
+          <h3 class="text-base font-black text-slate-900 dark:text-white uppercase tracking-wider">Assessment Calculator</h3>
+        </div>
+        <button id="btn-close-calculator" class="text-slate-400 hover:text-slate-900 dark:hover:text-white font-black text-lg p-1">✕</button>
+      </div>
+
+      <!-- Calculator Screen Display -->
+      <div class="bg-slate-100 dark:bg-slate-950 p-4 rounded-xl border-2 border-slate-900 text-right flex flex-col justify-center min-h-[70px]">
+        <div id="calc-history" class="text-xs font-mono font-bold text-slate-500 overflow-x-auto whitespace-nowrap"></div>
+        <div id="calc-display" class="text-3xl font-mono font-black text-slate-900 dark:text-white overflow-x-auto whitespace-nowrap">0</div>
+      </div>
+
+      <!-- Keypad Grid -->
+      <div class="grid grid-cols-4 gap-2">
+        <button class="calc-btn btn-calc-op bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 text-slate-800 dark:text-slate-200" data-val="C">C</button>
+        <button class="calc-btn btn-calc-op bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 text-slate-800 dark:text-slate-200" data-val="back">⌫</button>
+        <button class="calc-btn btn-calc-op bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 text-slate-800 dark:text-slate-200" data-val="%">%</button>
+        <button class="calc-btn btn-calc-op bg-amber-400 hover:bg-amber-500 text-slate-950 font-black" data-val="/">÷</button>
+
+        <button class="calc-btn btn-calc-num bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white" data-val="7">7</button>
+        <button class="calc-btn btn-calc-num bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white" data-val="8">8</button>
+        <button class="calc-btn btn-calc-num bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white" data-val="9">9</button>
+        <button class="calc-btn btn-calc-op bg-amber-400 hover:bg-amber-500 text-slate-950 font-black" data-val="*">×</button>
+
+        <button class="calc-btn btn-calc-num bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white" data-val="4">4</button>
+        <button class="calc-btn btn-calc-num bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white" data-val="5">5</button>
+        <button class="calc-btn btn-calc-num bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white" data-val="6">6</button>
+        <button class="calc-btn btn-calc-op bg-amber-400 hover:bg-amber-500 text-slate-950 font-black" data-val="-">-</button>
+
+        <button class="calc-btn btn-calc-num bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white" data-val="1">1</button>
+        <button class="calc-btn btn-calc-num bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white" data-val="2">2</button>
+        <button class="calc-btn btn-calc-num bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white" data-val="3">3</button>
+        <button class="calc-btn btn-calc-op bg-amber-400 hover:bg-amber-500 text-slate-950 font-black" data-val="+">+</button>
+
+        <button class="calc-btn btn-calc-num bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white" data-val="0">0</button>
+        <button class="calc-btn btn-calc-num bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white" data-val=".">.</button>
+        <button class="calc-btn btn-calc-op bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900 text-indigo-900 dark:text-indigo-200 font-bold" data-val="sqrt">√</button>
+        <button class="calc-btn btn-calc-op bg-blue-600 hover:bg-blue-700 text-white font-black" data-val="=">=</button>
+      </div>
+
+      <div class="flex gap-2 pt-1">
+        <button id="btn-calc-insert" class="flex-grow h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center gap-1.5 transition">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span>Insert Result Into Response</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. On-Screen Virtual Keyboard Drawer -->
+  <div id="modal-keyboard" class="fixed bottom-0 left-0 right-0 z-50 p-4 bg-white/95 dark:bg-slate-900/95 border-t-4 border-slate-900 shadow-[0_-8px_20px_rgba(0,0,0,0.15)] hidden backdrop-blur-md">
+    <div class="max-w-4xl mx-auto flex flex-col gap-2">
+      <div class="flex items-center justify-between pb-1 border-b-2 border-slate-200 dark:border-slate-800">
+        <div class="flex items-center gap-2">
+          <i data-lucide="keyboard" class="w-4 h-4 text-indigo-600"></i>
+          <span class="text-xs font-black uppercase text-slate-800 dark:text-white">On-Screen Virtual Keyboard</span>
+        </div>
+        <button id="btn-close-keyboard" class="text-slate-400 hover:text-slate-900 dark:hover:text-white font-black text-sm px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-300">Close Keyboard ✕</button>
+      </div>
+
+      <!-- Keyboard Keys Grid Rows -->
+      <div class="vkey-row flex gap-1 justify-center">
+        <button class="vkey-btn" data-key="1">1</button>
+        <button class="vkey-btn" data-key="2">2</button>
+        <button class="vkey-btn" data-key="3">3</button>
+        <button class="vkey-btn" data-key="4">4</button>
+        <button class="vkey-btn" data-key="5">5</button>
+        <button class="vkey-btn" data-key="6">6</button>
+        <button class="vkey-btn" data-key="7">7</button>
+        <button class="vkey-btn" data-key="8">8</button>
+        <button class="vkey-btn" data-key="9">9</button>
+        <button class="vkey-btn" data-key="0">0</button>
+        <button class="vkey-btn" data-key="-">-</button>
+        <button class="vkey-btn" data-key="=">=</button>
+        <button class="vkey-btn vkey-special bg-red-100 hover:bg-red-200 text-red-900 font-bold px-3" data-key="backspace">⌫ Back</button>
+      </div>
+
+      <div class="vkey-row flex gap-1 justify-center">
+        <button class="vkey-btn" data-key="q">q</button>
+        <button class="vkey-btn" data-key="w">w</button>
+        <button class="vkey-btn" data-key="e">e</button>
+        <button class="vkey-btn" data-key="r">r</button>
+        <button class="vkey-btn" data-key="t">t</button>
+        <button class="vkey-btn" data-key="y">y</button>
+        <button class="vkey-btn" data-key="u">u</button>
+        <button class="vkey-btn" data-key="i">i</button>
+        <button class="vkey-btn" data-key="o">o</button>
+        <button class="vkey-btn" data-key="p">p</button>
+        <button class="vkey-btn" data-key="[">[</button>
+        <button class="vkey-btn" data-key="]">]</button>
+      </div>
+
+      <div class="vkey-row flex gap-1 justify-center">
+        <button class="vkey-btn" data-key="a">a</button>
+        <button class="vkey-btn" data-key="s">s</button>
+        <button class="vkey-btn" data-key="d">d</button>
+        <button class="vkey-btn" data-key="f">f</button>
+        <button class="vkey-btn" data-key="g">g</button>
+        <button class="vkey-btn" data-key="h">h</button>
+        <button class="vkey-btn" data-key="j">j</button>
+        <button class="vkey-btn" data-key="k">k</button>
+        <button class="vkey-btn" data-key="l">l</button>
+        <button class="vkey-btn" data-key=";">;</button>
+        <button class="vkey-btn" data-key="'">'</button>
+        <button class="vkey-btn vkey-special bg-blue-600 hover:bg-blue-700 text-white font-bold px-4" data-key="enter">↵ Enter</button>
+      </div>
+
+      <div class="vkey-row flex gap-1 justify-center">
+        <button class="vkey-btn vkey-special" id="vkey-shift" data-key="shift">⇧ Shift</button>
+        <button class="vkey-btn" data-key="z">z</button>
+        <button class="vkey-btn" data-key="x">x</button>
+        <button class="vkey-btn" data-key="c">c</button>
+        <button class="vkey-btn" data-key="v">v</button>
+        <button class="vkey-btn" data-key="b">b</button>
+        <button class="vkey-btn" data-key="n">n</button>
+        <button class="vkey-btn" data-key="m">m</button>
+        <button class="vkey-btn" data-key=",">,</button>
+        <button class="vkey-btn" data-key=".">.</button>
+        <button class="vkey-btn" data-key="/">/</button>
+        <button class="vkey-btn" data-key="_">_</button>
+      </div>
+
+      <div class="vkey-row flex gap-1 justify-center">
+        <button class="vkey-btn vkey-special bg-slate-200 dark:bg-slate-800" data-key="clear">Clear All</button>
+        <button class="vkey-btn flex-grow max-w-md bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-white font-bold" data-key="space">Space</button>
+        <button class="vkey-btn vkey-special bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4" id="btn-vkey-done">Done</button>
+      </div>
     </div>
   </div>
 

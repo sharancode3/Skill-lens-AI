@@ -247,25 +247,57 @@ export function updateDifficulty(session, finalScore) {
     let currentIdx = tiers.indexOf(session.difficultyTier || 'standard');
     if (currentIdx === -1) currentIdx = 1;
 
-    if (s1 >= 85 && s2 >= 85) {
-      // Escalation
+    const cursor = typeof session.cursor === 'number' ? session.cursor : 0;
+    const nextTopic = (session.topicQueue && session.topicQueue[cursor + 1]) || null;
+    const isArchitecturalTopic = nextTopic && (
+      nextTopic.day === 2 || nextTopic.day === 7 || nextTopic.day === 15 || nextTopic.day === 23 || nextTopic.day === 29 ||
+      (nextTopic.title && (
+        nextTopic.title.toLowerCase().includes('architecture') ||
+        nextTopic.title.toLowerCase().includes('observability') ||
+        nextTopic.title.toLowerCase().includes('pipeline') ||
+        nextTopic.title.toLowerCase().includes('system') ||
+        nextTopic.title.toLowerCase().includes('concurrency')
+      ))
+    );
+
+    if (s1 >= 80 && s2 >= 80) {
+      // Escalation: 2 consecutive strong scores (>= 80) advance the difficulty tier
       const nextIdx = Math.min(currentIdx + 1, tiers.length - 1);
       session.difficultyTier = tiers[nextIdx];
       session.pendingQuestionType = 'diagram_interpret';
       console.log(`[Difficulty Engine] Escalating difficulty to: ${session.difficultyTier}. Next type: diagram_interpret`);
     } else if (s1 < 40 || s2 < 40) {
-      // De-escalation (either score < 40)
+      // De-escalation: weak performance (< 40) drops difficulty tier
       const nextIdx = Math.max(currentIdx - 1, 0);
       session.difficultyTier = tiers[nextIdx];
       session.pendingQuestionType = 'mcq';
       console.log(`[Difficulty Engine] De-escalating difficulty to: ${session.difficultyTier}. Next type: mcq`);
+    } else if (isArchitecturalTopic && currentIdx >= 1 && (!session.lastDiagramTurn || (session.questionsAsked - session.lastDiagramTurn) >= 2)) {
+      // Architectural systems topic diagram trigger
+      session.pendingQuestionType = 'diagram_interpret';
+      session.lastDiagramTurn = session.questionsAsked;
+      console.log(`[Difficulty Engine] Architectural systems topic detected (Day ${nextTopic.day}). Next type: diagram_interpret`);
     } else {
       console.log(`[Difficulty Engine] No difficulty change: ${session.difficultyTier}. Next type: open`);
     }
   } else {
     console.log(`[Difficulty Engine] Less than 2 scores. Next type: open`);
   }
-  console.log(`[Difficulty Engine Log] recentScores: [${session.recentScores.join(', ')}], pendingQuestionType: ${session.pendingQuestionType}, difficultyTier: ${session.difficultyTier}`);
+
+  // Record reached tiers cumulatively for performance analytics
+  if (!session.tiersReached) {
+    session.tiersReached = ['foundational', 'standard'];
+  }
+  const currentTier = session.difficultyTier || 'standard';
+  const tiers = ['foundational', 'standard', 'applied', 'expert'];
+  const maxIdx = tiers.indexOf(currentTier);
+  for (let i = 0; i <= maxIdx; i++) {
+    if (!session.tiersReached.includes(tiers[i])) {
+      session.tiersReached.push(tiers[i]);
+    }
+  }
+
+  console.log(`[Difficulty Engine Log] recentScores: [${session.recentScores.join(', ')}], pendingQuestionType: ${session.pendingQuestionType}, difficultyTier: ${session.difficultyTier}, tiersReached: [${session.tiersReached.join(', ')}]`);
 }
 
 /**
@@ -296,7 +328,7 @@ export function computeMetrics(session) {
     return {
       overallAccuracy: 0,
       perDay: [],
-      difficultyProgression: [],
+      difficultyProgression: session.tiersReached || ['foundational', 'standard'],
       questionTypeBreakdown: { open: 0, mcq: 0, diagram_interpret: 0 },
       totalInterviewDurationSeconds,
       perQuestionTimes: []
@@ -307,7 +339,9 @@ export function computeMetrics(session) {
     accuracyLog.reduce((sum, item) => sum + item.finalAccuracyScore, 0) / accuracyLog.length
   );
 
-  const difficultyProgression = accuracyLog.map(item => item.difficultyTier || 'standard');
+  const allTiersInLog = accuracyLog.map(item => item.difficultyTier || 'standard');
+  const tiersReached = session.tiersReached || ['foundational', 'standard'];
+  const difficultyProgression = Array.from(new Set([...tiersReached, ...allTiersInLog]));
 
   const questionTypeBreakdown = { open: 0, mcq: 0, diagram_interpret: 0 };
   accuracyLog.forEach(item => {
@@ -357,13 +391,16 @@ export function computeMetrics(session) {
  * @param {string} message 
  * @returns {Promise<Object>} Route response shape or error shape.
  */
+/**
+ * BRAIN 4: Combiner Brain / Progression Controller (Deterministic Orchestration)
+ * Sole job: Take outputs of Brain 1 (Conduct), Brain 2 (Interviewer), Brain 3 (Evaluator),
+ * track violation/proctoring counters, adjust adaptive difficulty, and decide all state transitions.
+ * This is the ONLY place in the system where early session termination / suspension is decided.
+ */
 export async function handleTurn(sessionId, message) {
   const session = await getSessionDoc(sessionId);
   if (!session) {
-    return {
-      status: 404,
-      error: `Session with ID "${sessionId}" was not found.`
-    };
+    throw new Error(`Session with id "${sessionId}" not found.`);
   }
 
   // Idempotency check: If session is already DONE, return cached feedback immediately
@@ -466,6 +503,15 @@ export async function handleTurn(sessionId, message) {
   // 3. Evaluate Turn with LLM (or bypass on blank forced advancement)
   const floorMetInput = (session.questionsAsked >= 8 && session.distinctDaysCovered.length >= 4);
   const nextQuestionTypeGenerated = session.pendingQuestionType || 'open';
+
+  // Progression Controller: Signal when the upcoming question is the final one for this session
+  const isFinalQuestion = !session.capstoneTriggered && (
+    session.pendingQuestionType === 'capstone' ||
+    (session.questionsAsked >= 7 && session.distinctDaysCovered.length >= 3) ||
+    session.turnCount >= 12
+  );
+  session.isFinalQuestion = isFinalQuestion;
+
   let llmResponse;
   let detectedConnections = [];
   let finalAccuracyScore = 50;
@@ -791,8 +837,8 @@ export async function handleTurn(sessionId, message) {
 
   const wasWhyProbing = (session.whyChainDepth || 0) > 0;
 
-  if (isMCQTurn) {
-    console.log(`[SessionManager Override] Overwriting action to "advance" because MCQ turns always transition to the next topic.`);
+  if (isMCQTurn || nextQuestionTypeGenerated === 'mcq') {
+    console.log(`[SessionManager Override] Overwriting action to "advance" because MCQ turns always transition to the target topic.`);
     action = 'advance';
   } else if (nextQuestionTypeGenerated === 'capstone') {
     console.log(`[SessionManager Override] Overwriting action to "advance" because Capstone is triggered.`);
@@ -986,6 +1032,19 @@ export async function handleTurn(sessionId, message) {
       turn: session.turnCount + 1
     });
 
+    // Safeguard: Check against immediately preceding question/options in the same session
+    if (session.nextQuestionType === 'mcq' && llmResponse && llmResponse.mcqOptions) {
+      const isDuplicateMCQ = session.lastMCQOptions && JSON.stringify(session.lastMCQOptions) === JSON.stringify(llmResponse.mcqOptions);
+      if (isDuplicateMCQ) {
+        console.warn(`[MCQ Safeguard] Detected duplicate MCQ options back-to-back for session "${sessionId}". Regenerating options for upcoming topic Day ${nextTopic ? nextTopic.day : 'next'}...`);
+        const freshTopic = nextTopic || session.topicQueue[session.cursor] || session.topicQueue[0];
+        const regenerated = mockLLMCall(session.candidateSnapshot, freshTopic, '', '', 0, [], 'mcq', session.topicQueue[session.cursor + 1], session.difficultyTier, session);
+        llmResponse.mcqOptions = regenerated.mcqOptions;
+        llmResponse.reply = regenerated.reply;
+        session.pendingMCQAnswer = regenerated.mcqCorrectIndex;
+      }
+    }
+
     session.questionSentAt = new Date().toISOString();
     await saveSessionDoc(sessionId, session);
 
@@ -1019,7 +1078,8 @@ export async function handleTurn(sessionId, message) {
     session.lastMessageHash = cleanMsg;
     session.lastMessageTime = new Date().toISOString();
     session.lastResponse = responsePayload;
-    session.lastMCQOptions = responsePayload.mcqOptions || null;
+    session.lastMCQOptions = responsePayload.mcqOptions ? [...responsePayload.mcqOptions] : null;
+    session.lastQuestionText = responsePayload.reply;
     session.questionSentAt = new Date().toISOString();
     await saveSessionDoc(sessionId, session);
 

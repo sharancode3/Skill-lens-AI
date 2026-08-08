@@ -304,10 +304,10 @@ async function reportViolationToServer(type) {
       if (type === 'copy-paste' || type === 'screenshot') {
         const pasteError = document.getElementById('paste-error');
         if (pasteError) {
-          pasteError.innerHTML = `<i data-lucide="shield-alert" class="w-3.5 h-3.5"></i> Warning 1 of 1: Copying, pasting, or screenshot attempts are prohibited. A 2nd attempt will suspend your interview.`;
-          pasteError.classList.remove('hidden');
+          pasteError.innerHTML = `<i data-lucide="shield-alert" class="w-3.5 h-3.5 text-red-700"></i> <span>Warning 1 of 1: Copying, pasting, or screenshot attempts are prohibited. A 2nd attempt will suspend your interview.</span>`;
+          pasteError.style.display = 'flex';
           if (window.lucide) lucide.createIcons();
-          setTimeout(() => { pasteError.classList.add('hidden'); }, 6000);
+          setTimeout(() => { pasteError.style.display = 'none'; }, 6000);
         }
       } else {
         const countText = document.getElementById('fullscreen-violation-count');
@@ -416,10 +416,6 @@ function handleVisibilityOrFocusChange() {
   if (!isInterviewActive) return;
   if (isReenteringFullscreen || isFullscreenTransitionActive) return;
 
-  const warningOverlay = document.getElementById('fullscreen-warning-overlay');
-  const isWarningOverlayActive = warningOverlay && !warningOverlay.classList.contains('hidden');
-  if (isWarningOverlayActive) return;
-
   // Zero-tolerance tab-switch or window focus loss
   const isHidden = document.hidden;
   const isFocused = document.hasFocus();
@@ -430,13 +426,15 @@ function handleVisibilityOrFocusChange() {
       const currentHidden = document.hidden;
       const currentFocused = document.hasFocus();
       if ((currentHidden || !currentFocused) && isInterviewActive && !isReenteringFullscreen && !isFullscreenTransitionActive) {
+        console.warn('[Proctor] Tab switch or window blur detected. Suspending session.');
         reportViolationToServer('tab-switch');
       }
-    }, 250);
+    }, 200);
   }
 }
 
 window.addEventListener('blur', handleVisibilityOrFocusChange);
+window.addEventListener('focusout', handleVisibilityOrFocusChange);
 window.addEventListener('focus', () => {
   if (blurTimeout) clearTimeout(blurTimeout);
 });
@@ -453,6 +451,9 @@ function handleClipboardOrShortcutViolation(e, type = 'copy-paste') {
   if (e && e.preventDefault) {
     e.preventDefault();
   }
+  if (e && e.stopPropagation) {
+    e.stopPropagation();
+  }
   reportViolationToServer(type);
 }
 
@@ -464,21 +465,28 @@ function handleClipboardOrShortcutViolation(e, type = 'copy-paste') {
   });
 });
 
-document.addEventListener('keydown', (e) => {
+// Comprehensive Screenshot & Hotkey Interceptors across Capture Phase
+function handleProctoredKeyEvents(e) {
   if (!isInterviewActive) return;
 
   const isCtrlOrCmd = e.ctrlKey || e.metaKey;
   const key = e.key ? e.key.toLowerCase() : '';
+  const code = e.code || '';
+  const keyCode = e.keyCode || e.which || 0;
+
+  // Intercept PrintScreen / Windows Snipping Tool (Win+PrtScn, PrtScn, Win+Shift+S, Alt+PrtScn)
+  const isPrintScreenKey = e.key === 'PrintScreen' || code === 'PrintScreen' || keyCode === 44 || key === 'printscreen';
+  const isWindowsSnipping = isCtrlOrCmd && e.shiftKey && (key === 's' || code === 'KeyS');
+  const isAltOrWinPrtScn = (isCtrlOrCmd || e.altKey) && isPrintScreenKey;
+
+  if (isPrintScreenKey || isWindowsSnipping || isAltOrWinPrtScn) {
+    handleClipboardOrShortcutViolation(e, 'screenshot');
+    return;
+  }
 
   // Intercept Copy/Paste/Cut/SelectAll shortcuts
   if (isCtrlOrCmd && ['c', 'v', 'x', 'a'].includes(key)) {
     handleClipboardOrShortcutViolation(e, 'copy-paste');
-    return;
-  }
-
-  // Intercept PrintScreen / Screenshot shortcuts
-  if (e.key === 'PrintScreen' || key === 'printscreen' || (e.shiftKey && isCtrlOrCmd && ['s', '3', '4'].includes(key))) {
-    handleClipboardOrShortcutViolation(e, 'screenshot');
     return;
   }
 
@@ -487,7 +495,16 @@ document.addEventListener('keydown', (e) => {
     handleClipboardOrShortcutViolation(e, 'copy-paste');
     return;
   }
-});
+}
+
+window.addEventListener('keydown', handleProctoredKeyEvents, true);
+window.addEventListener('keyup', (e) => {
+  if (!isInterviewActive) return;
+  const isPrintScreenKey = e.key === 'PrintScreen' || e.code === 'PrintScreen' || e.keyCode === 44;
+  if (isPrintScreenKey) {
+    handleClipboardOrShortcutViolation(e, 'screenshot');
+  }
+}, true);
 
 // ==================== SCREEN 2: CHAT ACTIONS ====================
 async function handleSendMessage() {
@@ -501,6 +518,7 @@ async function handleSendMessage() {
   // Append user bubble
   appendCandidateMessage(text);
   chatInput.value = '';
+  adjustTextareaHeight();
 
   // Show thinking state indicator
   const thinkingEl = appendThinkingIndicator();
@@ -554,15 +572,11 @@ async function handleSendMessage() {
     if (chatInput.placeholder !== 'Please select one of the choices below...') {
       chatInput.disabled = false;
       btnSend.disabled = false;
+      adjustTextareaHeight();
       chatInput.focus();
     }
   }
 }
-
-btnSend.addEventListener('click', handleSendMessage);
-chatInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') handleSendMessage();
-});
 
 // ==================== DOM GENERATORS & HELPERS ====================
 async function appendInterviewerMessage(text, connections = [], nextQuestionType = 'open', mcqOptions = null, diagramDefinition = null, diagramQuestionText = null, hallucinationCorrection = null) {
@@ -634,7 +648,18 @@ async function appendInterviewerMessage(text, connections = [], nextQuestionType
   }
 
   // Render MCQ choices if present
-  if (nextQuestionType === 'mcq' && mcqOptions && mcqOptions.length > 0) {
+  let shouldRenderMCQ = nextQuestionType === 'mcq' && mcqOptions && mcqOptions.length > 0;
+  if (shouldRenderMCQ) {
+    if (window._lastRenderedMCQText === text && window._lastRenderedMCQOptions && JSON.stringify(window._lastRenderedMCQOptions) === JSON.stringify(mcqOptions)) {
+      console.warn('[Frontend Safeguard] Duplicate MCQ question/options detected in UI stream. Suppressing duplicate rendering.');
+      shouldRenderMCQ = false;
+    } else {
+      window._lastRenderedMCQText = text;
+      window._lastRenderedMCQOptions = [...mcqOptions];
+    }
+  }
+
+  if (shouldRenderMCQ) {
     const mcqContainer = document.createElement('div');
     mcqContainer.className = 'mcq-container';
 
@@ -879,18 +904,25 @@ function transitionToFeedback(feedback, metrics, judgeVerdict) {
 
   // Populate Next Steps (numbered Outfit list)
   feedbackNext.innerHTML = '';
-  if (feedback.next && feedback.next.length > 0) {
-    feedback.next.forEach((item, index) => {
+  let validNextItems = [];
+  if (feedback.next && Array.isArray(feedback.next)) {
+    validNextItems = feedback.next
+      .map(item => typeof item === 'string' ? item.trim() : (item && (item.recommendation || item.action || item.step || item.text) ? String(item.recommendation || item.action || item.step || item.text).trim() : ''))
+      .filter(text => text.length > 0);
+  }
+
+  if (validNextItems.length > 0) {
+    validNextItems.forEach((text, index) => {
       const row = document.createElement('div');
-      row.className = 'flex gap-4 items-center bg-gray-800 p-4 rounded-md';
+      row.className = 'flex gap-4 items-start bg-slate-800 border-2 border-slate-700 p-4 rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]';
       row.innerHTML = `
-        <div class="num-circle bg-blue-600 text-white">${index + 1}</div>
-        <p class="text-sm font-semibold text-gray-100 flex-grow">${item}</p>
+        <div class="w-8 h-8 rounded-full bg-blue-600 text-white font-black text-xs flex items-center justify-center flex-shrink-0 border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">${index + 1}</div>
+        <p class="text-sm font-bold text-slate-100 flex-grow leading-relaxed pt-1">${text}</p>
       `;
       feedbackNext.appendChild(row);
     });
   } else {
-    feedbackNext.innerHTML = '<div class="text-gray-500 text-sm">No next steps compiled.</div>';
+    feedbackNext.innerHTML = '<div class="text-slate-400 text-sm font-semibold p-4">No next steps compiled.</div>';
   }
 
   // Render metrics dynamically & defensively
@@ -1032,25 +1064,56 @@ btnRestart.addEventListener('click', () => {
 function showPasteWarning() {
   const errorEl = document.getElementById('paste-error');
   if (errorEl) {
-    errorEl.classList.remove('hidden');
+    errorEl.innerHTML = `<i data-lucide="shield-alert" class="w-3.5 h-3.5 text-red-700"></i> <span>Pasting is prohibited in exam mode</span>`;
+    errorEl.style.display = 'flex';
+    if (window.lucide) lucide.createIcons();
     setTimeout(() => {
-      errorEl.classList.add('hidden');
-    }, 3000);
+      errorEl.style.display = 'none';
+    }, 4000);
   }
 }
 
-chatInput.addEventListener('paste', (e) => {
-  e.preventDefault();
-  showPasteWarning();
-});
+// ==================== AUTO-EXPANDING CHAT TEXTAREA RESIZE LOGIC ====================
+function adjustTextareaHeight() {
+  if (!chatInput) return;
+  chatInput.style.height = 'auto';
+  const newHeight = Math.min(Math.max(chatInput.scrollHeight, 50), 180);
+  chatInput.style.height = newHeight + 'px';
+}
 
-chatInput.addEventListener('copy', (e) => {
-  e.preventDefault();
-});
+if (chatInput) {
+  chatInput.addEventListener('input', adjustTextareaHeight);
+  chatInput.addEventListener('paste', (e) => {
+    e.preventDefault();
+    showPasteWarning();
+  });
+  chatInput.addEventListener('copy', (e) => {
+    e.preventDefault();
+  });
+  chatInput.addEventListener('cut', (e) => {
+    e.preventDefault();
+  });
 
-chatInput.addEventListener('cut', (e) => {
-  e.preventDefault();
-});
+  // Handle Enter (Send) vs Shift+Enter (Newline)
+  chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      if (e.shiftKey) {
+        // Allow newline and auto-expand height
+        setTimeout(adjustTextareaHeight, 10);
+      } else {
+        // Send message
+        e.preventDefault();
+        handleSendMessage();
+      }
+    }
+  });
+}
+
+if (btnSend) {
+  btnSend.addEventListener('click', () => {
+    handleSendMessage();
+  });
+}
 
 // Disable right-click context menu during active interview
 window.addEventListener('contextmenu', (e) => {
@@ -1300,17 +1363,22 @@ if (btnToggleSettings && settingsPopover) {
   });
 }
 
-// 2. Font Size Scaling Logic
+// 2. Comprehensive Font & Element Scaling Engine
+const fontSizeIndicator = document.getElementById('font-size-indicator');
+
 function applyFontSize(size) {
-  if (!chatMessages) return;
-  chatMessages.classList.remove('font-size-sm', 'font-size-md', 'font-size-lg');
-  chatMessages.classList.add(`font-size-${size}`);
+  document.body.classList.remove('font-size-sm', 'font-size-md', 'font-size-lg');
+  document.body.classList.add(`font-size-${size}`);
+
+  if (fontSizeIndicator) {
+    fontSizeIndicator.textContent = size === 'sm' ? 'Small' : size === 'lg' ? 'Large' : 'Medium';
+  }
 
   fontButtons.forEach(btn => {
     if (btn.dataset.size === size) {
-      btn.className = 'btn-font-size px-2 py-1.5 text-xs font-extrabold rounded-md transition-all bg-slate-900 text-white shadow-sm';
+      btn.className = 'btn-font-size px-2 py-1.5 text-xs font-extrabold rounded-md transition-all bg-slate-900 dark:bg-blue-600 text-white shadow-sm';
     } else {
-      btn.className = 'btn-font-size px-2 py-1.5 text-xs font-extrabold rounded-md transition-all text-slate-700 hover:bg-white';
+      btn.className = 'btn-font-size px-2 py-1.5 text-xs font-extrabold rounded-md transition-all text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700';
     }
   });
 
@@ -1329,7 +1397,207 @@ fontButtons.forEach(btn => {
 const savedFontSize = localStorage.getItem('interview_font_size') || 'md';
 applyFontSize(savedFontSize);
 
-// 3. History Panel Show / Hide Toggle Logic
+// 3. Theme Mode Switcher (Dark / Light Mode)
+const btnToggleTheme = document.getElementById('btn-toggle-theme');
+const themeLabelText = document.getElementById('theme-label-text');
+const themeIconMoon = document.querySelector('.theme-icon-moon');
+const themeIconSun = document.querySelector('.theme-icon-sun');
+
+function applyTheme(isDark) {
+  if (isDark) {
+    document.documentElement.classList.add('dark');
+    document.body.classList.add('dark');
+    if (themeLabelText) themeLabelText.textContent = 'Light Mode';
+    if (themeIconMoon) themeIconMoon.classList.add('hidden');
+    if (themeIconSun) themeIconSun.classList.remove('hidden');
+  } else {
+    document.documentElement.classList.remove('dark');
+    document.body.classList.remove('dark');
+    if (themeLabelText) themeLabelText.textContent = 'Dark Mode';
+    if (themeIconMoon) themeIconMoon.classList.remove('hidden');
+    if (themeIconSun) themeIconSun.classList.add('hidden');
+  }
+  try {
+    localStorage.setItem('interview_theme', isDark ? 'dark' : 'light');
+  } catch (e) {}
+  if (window.lucide) lucide.createIcons();
+}
+
+if (btnToggleTheme) {
+  btnToggleTheme.addEventListener('click', () => {
+    const isDark = document.documentElement.classList.contains('dark');
+    applyTheme(!isDark);
+  });
+}
+
+const savedTheme = localStorage.getItem('interview_theme');
+if (savedTheme === 'dark') {
+  applyTheme(true);
+}
+
+// 4. Assessment Utilities: Calculator Engine
+const modalCalc = document.getElementById('modal-calculator');
+const btnOpenCalc = document.getElementById('btn-open-calculator');
+const btnCloseCalc = document.getElementById('btn-close-calculator');
+const calcDisplay = document.getElementById('calc-display');
+const calcHistory = document.getElementById('calc-history');
+const btnCalcInsert = document.getElementById('btn-calc-insert');
+
+let calcCurrentVal = '0';
+let calcPrevVal = '';
+let calcOp = null;
+let calcJustEvaluated = false;
+
+function updateCalcDisplay() {
+  if (calcDisplay) calcDisplay.textContent = calcCurrentVal;
+  if (calcHistory) {
+    calcHistory.textContent = calcOp && calcPrevVal !== '' ? `${calcPrevVal} ${calcOp}` : '';
+  }
+}
+
+if (btnOpenCalc && modalCalc) {
+  btnOpenCalc.addEventListener('click', () => {
+    modalCalc.classList.remove('hidden');
+    if (settingsPopover) settingsPopover.classList.add('hidden');
+    if (window.lucide) lucide.createIcons();
+  });
+}
+
+if (btnCloseCalc && modalCalc) {
+  btnCloseCalc.addEventListener('click', () => {
+    modalCalc.classList.add('hidden');
+  });
+}
+
+document.querySelectorAll('.calc-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const val = btn.dataset.val;
+    if (!val) return;
+
+    if (val === 'C') {
+      calcCurrentVal = '0';
+      calcPrevVal = '';
+      calcOp = null;
+    } else if (val === 'back') {
+      if (calcCurrentVal.length > 1) {
+        calcCurrentVal = calcCurrentVal.slice(0, -1);
+      } else {
+        calcCurrentVal = '0';
+      }
+    } else if (val === '%') {
+      calcCurrentVal = String(parseFloat(calcCurrentVal) / 100);
+    } else if (val === 'sqrt') {
+      const num = parseFloat(calcCurrentVal);
+      calcCurrentVal = num >= 0 ? String(Math.round(Math.sqrt(num) * 10000) / 10000) : 'Error';
+    } else if (['+', '-', '*', '/'].includes(val)) {
+      calcPrevVal = calcCurrentVal;
+      calcOp = val;
+      calcCurrentVal = '0';
+    } else if (val === '=') {
+      if (calcOp && calcPrevVal !== '') {
+        const a = parseFloat(calcPrevVal);
+        const b = parseFloat(calcCurrentVal);
+        let res = 0;
+        if (calcOp === '+') res = a + b;
+        else if (calcOp === '-') res = a - b;
+        else if (calcOp === '*') res = a * b;
+        else if (calcOp === '/') res = b !== 0 ? Math.round((a / b) * 10000) / 10000 : 'Error';
+        calcCurrentVal = String(res);
+        calcPrevVal = '';
+        calcOp = null;
+        calcJustEvaluated = true;
+      }
+    } else {
+      // Numbers or dot
+      if (calcCurrentVal === '0' || calcJustEvaluated) {
+        calcCurrentVal = val === '.' ? '0.' : val;
+        calcJustEvaluated = false;
+      } else {
+        if (val === '.' && calcCurrentVal.includes('.')) return;
+        calcCurrentVal += val;
+      }
+    }
+    updateCalcDisplay();
+  });
+});
+
+if (btnCalcInsert && chatInput) {
+  btnCalcInsert.addEventListener('click', () => {
+    const textToInsert = calcDisplay ? calcDisplay.textContent : '';
+    if (textToInsert && textToInsert !== 'Error') {
+      chatInput.value += (chatInput.value ? ' ' : '') + textToInsert;
+      adjustTextareaHeight();
+      chatInput.focus();
+    }
+    if (modalCalc) modalCalc.classList.add('hidden');
+  });
+}
+
+// 5. Assessment Utilities: Virtual Keyboard Engine
+const modalKeyboard = document.getElementById('modal-keyboard');
+const btnOpenKeyboard = document.getElementById('btn-open-keyboard');
+const btnCloseKeyboard = document.getElementById('btn-close-keyboard');
+const btnVkeyDone = document.getElementById('btn-vkey-done');
+const vkeyShift = document.getElementById('vkey-shift');
+let isVkeyShiftActive = false;
+
+if (btnOpenKeyboard && modalKeyboard) {
+  btnOpenKeyboard.addEventListener('click', () => {
+    modalKeyboard.classList.remove('hidden');
+    if (settingsPopover) settingsPopover.classList.add('hidden');
+    if (window.lucide) lucide.createIcons();
+  });
+}
+
+if (btnCloseKeyboard && modalKeyboard) {
+  btnCloseKeyboard.addEventListener('click', () => {
+    modalKeyboard.classList.add('hidden');
+  });
+}
+
+if (btnVkeyDone && modalKeyboard) {
+  btnVkeyDone.addEventListener('click', () => {
+    modalKeyboard.classList.add('hidden');
+    if (chatInput) chatInput.focus();
+  });
+}
+
+document.querySelectorAll('.vkey-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const key = btn.dataset.key;
+    if (!key || !chatInput) return;
+
+    if (key === 'shift') {
+      isVkeyShiftActive = !isVkeyShiftActive;
+      btn.classList.toggle('bg-blue-600', isVkeyShiftActive);
+      btn.classList.toggle('text-white', isVkeyShiftActive);
+      document.querySelectorAll('.vkey-btn').forEach(kBtn => {
+        const k = kBtn.dataset.key;
+        if (k && k.length === 1 && /[a-zA-Z]/.test(k)) {
+          kBtn.textContent = isVkeyShiftActive ? k.toUpperCase() : k.toLowerCase();
+        }
+      });
+      return;
+    }
+
+    if (key === 'backspace') {
+      chatInput.value = chatInput.value.slice(0, -1);
+    } else if (key === 'clear') {
+      chatInput.value = '';
+    } else if (key === 'space') {
+      chatInput.value += ' ';
+    } else if (key === 'enter') {
+      handleSendMessage();
+    } else {
+      const charToAdd = isVkeyShiftActive ? key.toUpperCase() : key;
+      chatInput.value += charToAdd;
+    }
+    adjustTextareaHeight();
+    chatInput.focus();
+  });
+});
+
+// 6. History Panel Show / Hide Toggle Logic
 function updateHistoryPanelToggleUI(isPanelVisible) {
   if (!chatSidebar || !btnToggleHistoryPanel) return;
 
