@@ -2522,12 +2522,6 @@ function showFlaggedForReviewNotice() {
 // ==================== PART F & G: FLAG & FEEDBACK ESCAPE HATCH ====================
 window.finalInterviewData = null;
 
-// End Session Modal triggers
-const btnEndSession = document.getElementById('btn-end-session');
-const modalConfirmEndSession = document.getElementById('modal-confirm-end-session');
-const btnCancelEndSession = document.getElementById('btn-cancel-end-session');
-const btnConfirmEndSessionAction = document.getElementById('btn-confirm-end-session-action');
-
 // Flag Question Modal triggers
 const modalFlagQuestion = document.getElementById('modal-flag-question');
 const btnCloseFlagModal = document.getElementById('btn-close-flag-modal');
@@ -2536,80 +2530,6 @@ const btnSubmitFlag = document.getElementById('btn-submit-flag');
 
 const flagReasonPreset = document.getElementById('flag-reason-preset');
 const flagReasonText = document.getElementById('flag-reason-text');
-
-if (btnEndSession) {
-  btnEndSession.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (modalConfirmEndSession) {
-      modalConfirmEndSession.classList.remove('hidden');
-      if (window.lucide) lucide.createIcons();
-    } else {
-      executeEndSessionEarly();
-    }
-  });
-}
-
-if (btnCancelEndSession && modalConfirmEndSession) {
-  btnCancelEndSession.addEventListener('click', () => {
-    modalConfirmEndSession.classList.add('hidden');
-  });
-  
-  modalConfirmEndSession.addEventListener('click', (e) => {
-    if (e.target === modalConfirmEndSession) {
-      modalConfirmEndSession.classList.add('hidden');
-    }
-  });
-}
-
-if (btnConfirmEndSessionAction) {
-  btnConfirmEndSessionAction.addEventListener('click', () => {
-    if (modalConfirmEndSession) {
-      modalConfirmEndSession.classList.add('hidden');
-    }
-    executeEndSessionEarly();
-  });
-}
-
-async function executeEndSessionEarly() {
-  const thinkingEl = appendThinkingIndicator();
-  scrollChatBottom(true);
-  
-  try {
-    const res = await fetch('/api/interview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: currentSessionId,
-        endSessionEarly: true
-      })
-    });
-    
-    if (thinkingEl) thinkingEl.remove();
-    
-    if (!res.ok) throw new Error('Server returned error ending session.');
-    const data = await res.json();
-    await handleInterviewEndFlow(data);
-  } catch (err) {
-    if (thinkingEl) thinkingEl.remove();
-    console.error('[EndSession] Error ending session early:', err);
-    // Robust fallback to guarantee transition
-    await handleInterviewEndFlow({
-      done: true,
-      feedback: {
-        summary: "The candidate voluntarily ended the technical evaluation session early.",
-        strengths: ["Session initiated and recorded in proctored environment."],
-        gaps: ["Evaluation ended prior to completing all curriculum question targets."],
-        next: ["Review core curriculum modules and schedule a follow-up assessment."]
-      },
-      judgeVerdict: {
-        decision: 'borderline',
-        reasoning: 'Candidate voluntarily ended the session early.',
-        evidenceTrail: []
-      }
-    });
-  }
-}
 
 if (btnCloseFlagModal) {
   btnCloseFlagModal.addEventListener('click', () => {
