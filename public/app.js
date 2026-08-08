@@ -448,8 +448,10 @@ async function reportViolationToServer(type) {
         }
       }
     }
+    return data;
   } catch (error) {
     console.error('Error logging violation on server:', error);
+    return null;
   }
 }
 

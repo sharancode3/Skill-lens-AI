@@ -1209,7 +1209,8 @@ export async function reportViolation(sessionId, violationType) {
   const nonCameraViolationCount = (session.fullscreenExits || 0) + (session.tabSwitches || 0) + (session.clipboardViolations || 0);
   const isGeneralSuspension = nonCameraViolationCount >= 4;
 
-  const shouldSuspend = !isCameraViolation && (isFullscreenSuspension || isTabSwitchSuspension || isClipboardSuspension || isGeneralSuspension);
+  const isCameraSuspension = isCameraViolation && violationCount >= 4;
+  const shouldSuspend = isCameraSuspension || (!isCameraViolation && (isFullscreenSuspension || isTabSwitchSuspension || isClipboardSuspension || isGeneralSuspension));
 
   if (shouldSuspend) {
     // Suspend candidate!
@@ -1221,6 +1222,8 @@ export async function reportViolation(sessionId, violationType) {
       summaryMsg = "Candidate was suspended immediately due to switching tabs/windows during an active proctored session.";
     } else if (isFullscreenSuspension) {
       summaryMsg = "Candidate was suspended due to repeated fullscreen violations (exited fullscreen 3 times).";
+    } else if (isCameraSuspension) {
+      summaryMsg = "Candidate was suspended due to repeated proctoring anomalies (camera, face, or gaze deviations) detected during the session.";
     }
 
     session.feedback = {
@@ -1267,6 +1270,7 @@ export async function reportViolation(sessionId, violationType) {
       clipboardViolations: session.clipboardViolations,
       warningsRemaining: 0,
       violationCount,
+      flaggedForReview: !!session.flaggedForReview,
       feedback: session.feedback,
       metrics: {
         overallAccuracy: 0,

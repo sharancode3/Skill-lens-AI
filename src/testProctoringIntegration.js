@@ -60,7 +60,7 @@ async function runTests() {
   }
   console.log(' -> PASS: 3rd violation mapped to phone with high severity.');
 
-  // 5. Log 4th violation (Multi-face - High severity) - Trigger Flagged
+  // 5. Log 4th violation (Multi-face - High severity) - Trigger Suspension
   console.log('\n[Test 5] Reporting 4th violation (multi_face_violation)...');
   result = await reportViolation(sessionId, 'multi_face_violation');
   session = await getSessionDoc(sessionId);
@@ -69,31 +69,20 @@ async function runTests() {
     console.error('FAIL: flaggedForReview threshold not met at 4 violations.');
     process.exit(1);
   }
-  if (result.suspended || session.state === 'DONE') {
-    console.error('FAIL: camera violations caused automatic suspension at count 4.');
+  if (!result.suspended || session.state !== 'DONE') {
+    console.error('FAIL: camera violations did not cause automatic suspension at count 4.');
     process.exit(1);
   }
-  console.log(' -> PASS: flaggedForReview successfully set to true, candidate NOT suspended.');
+  console.log(' -> PASS: 4th camera violation correctly triggers 5-minute cooldown suspension.');
 
-  // 6. Log 5th violation (Camera lost fallback)
-  console.log('\n[Test 6] Reporting 5th violation (camera_lost)...');
-  result = await reportViolation(sessionId, 'camera_lost');
-  session = await getSessionDoc(sessionId);
-
-  if (result.violationCount !== 5 || session.proctoring.violations[4].type !== 'camera_lost') {
-    console.error('FAIL: camera_lost mapping mismatch.');
-    process.exit(1);
-  }
-  console.log(' -> PASS: camera_lost registered correctly.');
-
-  // 7. Verify Final proctoringSummary Breakdown values
-  console.log('\n[Test 7] Verifying final proctoringSummary breakdown payloads...');
+  // 6. Verify Final proctoringSummary Breakdown values on the suspended session
+  console.log('\n[Test 6] Verifying final proctoringSummary breakdown payloads...');
   if (!result.proctoringSummary) {
     console.error('FAIL: proctoringSummary payload not returned in response.');
     process.exit(1);
   }
   const summary = result.proctoringSummary;
-  const expectedBreakdown = { presence: 1, gaze: 1, phone: 1, multi_face: 1, camera_lost: 1 };
+  const expectedBreakdown = { presence: 1, gaze: 1, phone: 1, multi_face: 1 };
 
   for (const key in expectedBreakdown) {
     if (summary.breakdown[key] !== expectedBreakdown[key]) {
@@ -103,10 +92,12 @@ async function runTests() {
   }
   console.log(' -> PASS: proctoringSummary breakdown counts match logged violations.');
 
-  // 8. Verify Zero-tolerance Tab Switch suspension triggers
-  console.log('\n[Test 8] Reporting interface violation (tab-switch)...');
-  result = await reportViolation(sessionId, 'tab-switch');
-  session = await getSessionDoc(sessionId);
+  // 7. Verify Zero-tolerance Tab Switch suspension triggers on a fresh session
+  console.log('\n[Test 7] Reporting interface violation (tab-switch) on fresh session...');
+  const freshSessionId = 'test-tab-session-' + Date.now();
+  await createSession(freshSessionId, candidate);
+  result = await reportViolation(freshSessionId, 'tab-switch');
+  session = await getSessionDoc(freshSessionId);
 
   if (!result.suspended || session.state !== 'DONE') {
     console.error('FAIL: tab switch did not cause immediate suspension.');
