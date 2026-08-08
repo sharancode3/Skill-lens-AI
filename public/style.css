@@ -306,7 +306,10 @@ button:focus-visible {
 
 /* Desktop layout adjustment to prevent overlapping floating camera widget */
 @media (min-width: 768px) {
-  .chat-stream-column {
+  #chat-messages {
+    padding-left: 260px !important;
+  }
+  .chat-input-footer {
     padding-left: 260px !important;
   }
 }

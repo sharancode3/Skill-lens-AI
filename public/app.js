@@ -130,8 +130,12 @@ async function tryRestoreActiveSession() {
 
       // Start camera feed
       const videoActive = document.getElementById('video-active');
-      if (window.CameraManager && videoActive) {
-        window.CameraManager.startActive(videoActive);
+      try {
+        if (window.CameraManager && videoActive) {
+          window.CameraManager.startActive(videoActive);
+        }
+      } catch (err) {
+        console.error('Failed to start active camera stream on restore:', err);
       }
       const cameraWidget = document.getElementById('camera-widget');
       if (cameraWidget) cameraWidget.classList.remove('hidden');
@@ -533,7 +537,7 @@ async function reportViolationToServer(type) {
     if (!res.ok) throw new Error('Failed to report violation.');
     const data = await res.json();
     
-    if (data.suspended) {
+    if (data && data.suspended) {
       handleInterviewEndFlow(data);
     } else {
       if (type === 'copy-paste' || type === 'screenshot') {
@@ -548,8 +552,8 @@ async function reportViolationToServer(type) {
         const countText = document.getElementById('fullscreen-violation-count');
         const msgText = document.getElementById('fullscreen-violation-msg');
         
-        const exits = data.fullscreenExits || 1;
-        const remaining = data.warningsRemaining !== undefined ? data.warningsRemaining : Math.max(0, 3 - exits);
+        const exits = (data && data.fullscreenExits) || 1;
+        const remaining = (data && data.warningsRemaining !== undefined) ? data.warningsRemaining : Math.max(0, 3 - exits);
 
         if (countText) {
           countText.textContent = `Warning ${exits} of 2 — ${remaining} warning${remaining === 1 ? '' : 's'} remaining before automatic suspension.`;
@@ -646,8 +650,8 @@ function showFullscreenWarning(type, data) {
   
   if (!warningOverlay || !resumeBtn) return;
 
-  const exits = data.fullscreenExits || 1;
-  const remaining = data.warningsRemaining !== undefined ? data.warningsRemaining : Math.max(0, 3 - exits);
+  const exits = (data && data.fullscreenExits) || 1;
+  const remaining = (data && data.warningsRemaining !== undefined) ? data.warningsRemaining : Math.max(0, 3 - exits);
 
   if (countText) {
     countText.textContent = `Warning ${exits} of 3 — ${remaining} warning${remaining === 1 ? '' : 's'} remaining before automatic suspension.`;
