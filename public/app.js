@@ -2280,124 +2280,119 @@ async function handleInterviewEndFlow(data) {
     proctoringSummary: data.proctoringSummary
   };
   
+  let askedQuestions = [];
   try {
     const res = await fetch(`/api/session/${currentSessionId}`);
-    if (!res.ok) throw new Error('Failed to fetch session details');
-    const sessionDetails = await res.json();
-    
-    const askedQuestions = (sessionDetails.transcript || [])
-      .filter(entry => entry.role === 'interviewer' && entry.day !== undefined);
-      
-    renderPostInterviewFeedbackScreen(askedQuestions);
+    if (res.ok) {
+      const sessionDetails = await res.json();
+      askedQuestions = (sessionDetails.transcript || [])
+        .filter(entry => entry.role === 'interviewer' && entry.day !== undefined);
+    }
   } catch (err) {
-    console.error('Error entering feedback flow, bypassing directly to summary:', err);
-    transitionToFeedback(
-      window.finalInterviewData.feedback,
-      window.finalInterviewData.metrics,
-      window.finalInterviewData.judgeVerdict,
-      window.finalInterviewData.proctoringSummary
-    );
+    console.error('Error fetching session details for summary questions list:', err);
   }
+
+  // Render the questions list in the dedicated summary section
+  renderSummaryQuestionsFlagList(askedQuestions);
+
+  // Transition directly to the feedback report screen
+  transitionToFeedback(
+    window.finalInterviewData.feedback,
+    window.finalInterviewData.metrics,
+    window.finalInterviewData.judgeVerdict,
+    window.finalInterviewData.proctoringSummary
+  );
 }
 
-function renderPostInterviewFeedbackScreen(questions) {
-  const container = document.getElementById('post-feedback-questions-list');
+function renderSummaryQuestionsFlagList(questions) {
+  const container = document.getElementById('summary-questions-flag-list');
   if (!container) return;
-  
+
   container.innerHTML = '';
-  
+
   if (questions.length === 0) {
     container.innerHTML = `<div class="text-slate-400 text-sm text-center py-6">No questions asked during this session.</div>`;
-  } else {
-    questions.forEach((q, idx) => {
-      const row = document.createElement('div');
-      row.className = 'border-2 border-slate-900 rounded-lg p-4 bg-slate-50 flex flex-col gap-3';
-      row.innerHTML = `
-        <div class="flex justify-between items-start border-b border-slate-200 pb-2">
-          <span class="text-xs font-black text-blue-600 uppercase tracking-wider">Question ${idx + 1} (Day ${q.day})</span>
-        </div>
-        <p class="text-xs font-bold text-slate-800 leading-relaxed">${q.text}</p>
-        <div class="flex flex-col gap-1.5">
-          <label class="text-[10px] font-black uppercase tracking-wider text-slate-500">Was this question unclear or wrong? (optional)</label>
-          <input type="text" data-question-text="${encodeURIComponent(q.text)}" data-day="${q.day}" class="post-feedback-comment-input w-full p-2 bg-white border border-slate-300 rounded outline-none text-xs font-semibold focus:border-slate-900" placeholder="e.g. The options did not match, wording was ambiguous" />
-        </div>
-      `;
-      container.appendChild(row);
-    });
+    return;
   }
-  
-  // Hide other screens
-  screenStart.classList.add('hidden');
-  screenChat.classList.add('hidden');
-  screenFeedback.classList.add('hidden');
-  const suspendedScreen = document.getElementById('screen-suspended');
-  if (suspendedScreen) suspendedScreen.classList.add('hidden');
-  
-  // Show feedback screen
-  document.getElementById('screen-post-interview-feedback').classList.remove('hidden');
-  
-  if (window.lucide) lucide.createIcons();
-}
 
-// Post-interview feedback actions
-const btnSkipPostFeedback = document.getElementById('btn-skip-post-feedback');
-const btnSubmitPostFeedback = document.getElementById('btn-submit-post-feedback');
-
-if (btnSkipPostFeedback) {
-  btnSkipPostFeedback.addEventListener('click', () => {
-    document.getElementById('screen-post-interview-feedback').classList.add('hidden');
-    transitionToFeedback(
-      window.finalInterviewData.feedback,
-      window.finalInterviewData.metrics,
-      window.finalInterviewData.judgeVerdict,
-      window.finalInterviewData.proctoringSummary
-    );
+  questions.forEach((q, idx) => {
+    const row = document.createElement('div');
+    row.className = 'border-2 border-slate-200 rounded-lg p-4 bg-slate-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all duration-150 hover:border-slate-400';
+    row.innerHTML = `
+      <div class="flex-grow flex flex-col gap-1">
+        <span class="text-[10px] font-black text-blue-600 uppercase tracking-wider">Question ${idx + 1} (Day ${q.day})</span>
+        <p class="text-xs font-bold text-slate-800 leading-relaxed">${q.text}</p>
+      </div>
+      <button data-day="${q.day}" data-qtext="${encodeURIComponent(q.text)}" class="btn-flag-summary-question shrink-0 h-10 px-4 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg border border-amber-300 flex items-center justify-center gap-1.5 text-xs font-black transition-all">
+        <i data-lucide="flag" class="w-3.5 h-3.5"></i>
+        <span>Flag Question</span>
+      </button>
+    `;
+    container.appendChild(row);
   });
-}
 
-if (btnSubmitPostFeedback) {
-  btnSubmitPostFeedback.addEventListener('click', async () => {
-    const inputs = document.querySelectorAll('.post-feedback-comment-input');
-    const feedbackPromises = [];
-    
-    inputs.forEach(input => {
-      const text = input.value.trim();
-      if (text) {
-        const questionText = decodeURIComponent(input.getAttribute('data-question-text'));
-        const day = parseInt(input.getAttribute('data-day'));
+  // Wire up event listeners to open the flag modal
+  document.querySelectorAll('.btn-flag-summary-question').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const targetBtn = e.currentTarget;
+      const day = targetBtn.getAttribute('data-day');
+      const qtext = decodeURIComponent(targetBtn.getAttribute('data-qtext'));
+      
+      const modal = document.getElementById('modal-flag-question');
+      if (modal) {
+        modal.classList.remove('hidden');
         
-        feedbackPromises.push(
-          fetch('/api/flag-question', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sessionId: currentSessionId,
-              day,
-              questionText,
-              reason: text
-            })
-          }).catch(err => console.error('Failed to submit comment:', err))
-        );
+        const btnSubmit = document.getElementById('btn-submit-flag');
+        const btnSkip = document.getElementById('btn-skip-flag');
+        const presetReason = document.getElementById('flag-reason-preset');
+        const customReason = document.getElementById('flag-reason-text');
+
+        presetReason.value = '';
+        customReason.value = '';
+
+        const executeSubmit = async (reason) => {
+          modal.classList.add('hidden');
+          try {
+            const res = await fetch('/api/flag-question', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sessionId: currentSessionId,
+                day: parseInt(day),
+                questionText: qtext,
+                reason: reason
+              })
+            });
+            if (res.ok) {
+              targetBtn.disabled = true;
+              targetBtn.className = 'shrink-0 h-10 px-4 bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-300 flex items-center justify-center gap-1.5 text-xs font-black transition-all cursor-not-allowed';
+              targetBtn.innerHTML = `<i data-lucide="check" class="w-3.5 h-3.5"></i><span>Flagged</span>`;
+              if (window.lucide) lucide.createIcons();
+            }
+          } catch (err) {
+            console.error('Error submitting feedback comment:', err);
+          }
+        };
+
+        btnSkip.onclick = () => executeSubmit('No reason provided');
+        btnSubmit.onclick = () => {
+          const preset = presetReason.value;
+          const custom = customReason.value.trim();
+          let reason = 'No reason provided';
+          if (preset && custom) {
+            reason = `${preset}: ${custom}`;
+          } else if (preset) {
+            reason = preset;
+          } else if (custom) {
+            reason = custom;
+          }
+          executeSubmit(reason);
+        };
       }
     });
-    
-    if (feedbackPromises.length > 0) {
-      try {
-        await Promise.all(feedbackPromises);
-        console.log('[Post-Feedback] All comments submitted successfully.');
-      } catch (e) {
-        console.error('Error submitting feedback comments:', e);
-      }
-    }
-    
-    document.getElementById('screen-post-interview-feedback').classList.add('hidden');
-    transitionToFeedback(
-      window.finalInterviewData.feedback,
-      window.finalInterviewData.metrics,
-      window.finalInterviewData.judgeVerdict,
-      window.finalInterviewData.proctoringSummary
-    );
   });
+
+  if (window.lucide) lucide.createIcons();
 }
 
 
