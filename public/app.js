@@ -568,13 +568,7 @@ async function handleSendMessage() {
     console.error('Error sending message:', error);
     appendInterviewerMessage('Connection error. Failed to retrieve server response.');
   } finally {
-    // Re-enable controls if not MCQ
-    if (chatInput.placeholder !== 'Please select one of the choices below...') {
-      chatInput.disabled = false;
-      btnSend.disabled = false;
-      adjustTextareaHeight();
-      chatInput.focus();
-    }
+    updateInputArea();
   }
 }
 
@@ -636,16 +630,11 @@ async function appendInterviewerMessage(text, connections = [], nextQuestionType
   }
 
   // Set input states based on question type
-  if (nextQuestionType === 'mcq' && mcqOptions && mcqOptions.length > 0) {
-    chatInput.disabled = true;
-    btnSend.disabled = true;
-    chatInput.placeholder = 'Please select one of the choices below...';
-  } else {
-    chatInput.disabled = false;
-    btnSend.disabled = false;
-    chatInput.placeholder = 'Type your technical response here...';
-    chatInput.focus();
-  }
+  window.lastQuestionData = {
+    nextQuestionType: nextQuestionType || 'open',
+    mcqOptions: mcqOptions || null
+  };
+  updateInputArea();
 
   // Render MCQ choices if present
   let shouldRenderMCQ = nextQuestionType === 'mcq' && mcqOptions && mcqOptions.length > 0;
@@ -1628,5 +1617,49 @@ if (btnToggleHistoryPanel && chatSidebar) {
   } else {
     updateHistoryPanelToggleUI(true);
   }
+}
+
+// Derived state logic for input area response mode
+window.lastQuestionData = null;
+
+function updateInputArea() {
+  const latestMsg = window.lastQuestionData;
+  if (!latestMsg) {
+    chatInput.disabled = false;
+    btnSend.disabled = false;
+    chatInput.placeholder = 'Type your technical response here...';
+    return;
+  }
+
+  const isMCQ = latestMsg.nextQuestionType === 'mcq';
+  const hasOptions = Array.isArray(latestMsg.mcqOptions) && latestMsg.mcqOptions.length > 0;
+
+  if (isMCQ && !hasOptions) {
+    console.warn(`[Session: ${currentSessionId || 'none'}] Malformed MCQ choice data fallback: 'mcqOptions' is empty or missing. Falling back to free-text input.`);
+  }
+
+  if (isMCQ && hasOptions) {
+    chatInput.disabled = true;
+    btnSend.disabled = true;
+    chatInput.placeholder = 'Please select one of the choices below...';
+  } else {
+    chatInput.disabled = false;
+    btnSend.disabled = false;
+    chatInput.placeholder = 'Type your technical response here...';
+    adjustTextareaHeight();
+    const hasRules = screenRules && !screenRules.classList.contains('hidden');
+    const hasStart = screenStart && !screenStart.classList.contains('hidden');
+    if (!hasRules && !hasStart && isInterviewActive) {
+      chatInput.focus();
+    }
+  }
+}
+
+// Unconditional auto-scroll using MutationObserver
+if (chatMessages) {
+  const scrollObserver = new MutationObserver(() => {
+    scrollChatBottom();
+  });
+  scrollObserver.observe(chatMessages, { childList: true, subtree: true });
 }
 
