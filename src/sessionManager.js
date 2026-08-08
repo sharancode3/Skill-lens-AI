@@ -1130,14 +1130,19 @@ export async function reportViolation(sessionId, violationType) {
 
   // Phase 2 Rule: 4th fullscreen exit causes immediate suspension
   const isFullscreenSuspension = (violationType === 'fullscreen-exit' && session.fullscreenExits >= 4);
+  // Phase 3 Rule: 1st tab switch causes immediate suspension (zero tolerance)
+  const isTabSwitchSuspension = (violationType === 'tab-switch' && session.tabSwitches >= 1);
   const isGeneralSuspension = violationCount >= 4;
 
-  if (isFullscreenSuspension || isGeneralSuspension) {
+  if (isFullscreenSuspension || isTabSwitchSuspension || isGeneralSuspension) {
     // Suspend candidate!
     session.state = SessionState.DONE;
-    const summaryMsg = isFullscreenSuspension 
-      ? "Candidate was suspended due to repeated fullscreen violations (exited fullscreen 4 times)."
-      : "Candidate was suspended for repeated proctoring violations.";
+    let summaryMsg = "Candidate was suspended for repeated proctoring violations.";
+    if (isTabSwitchSuspension) {
+      summaryMsg = "Candidate was suspended immediately due to switching tabs/windows during an active proctored session.";
+    } else if (isFullscreenSuspension) {
+      summaryMsg = "Candidate was suspended due to repeated fullscreen violations (exited fullscreen 4 times).";
+    }
 
     session.feedback = {
       summary: summaryMsg,

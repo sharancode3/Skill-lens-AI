@@ -87,9 +87,13 @@ candidateSelect.addEventListener('change', () => {
   lucide.createIcons();
 });
 
-// ==================== INTERVIEW ROUTING & TRANSITIONS ====================
+let isReenteringFullscreen = false;
+
 async function enterFullscreen() {
   const docEl = document.documentElement;
+  isReenteringFullscreen = true;
+  setTimeout(() => { isReenteringFullscreen = false; }, 1200);
+
   try {
     if (docEl.requestFullscreen) {
       await docEl.requestFullscreen();
@@ -354,17 +358,23 @@ function handleFullscreenChange() {
   }
 }
 
-// Monitor visibility and window focus changes
+// Monitor visibility and window focus changes (Phase 3 Zero Tolerance Tab-Switch)
 function handleVisibilityOrFocusChange() {
   if (!isInterviewActive) return;
+  if (isReenteringFullscreen) return;
 
-  if (document.hidden || !document.hasFocus()) {
+  const warningOverlay = document.getElementById('fullscreen-warning-overlay');
+  const isWarningOverlayActive = warningOverlay && !warningOverlay.classList.contains('hidden');
+  if (isWarningOverlayActive) return;
+
+  // Zero-tolerance tab-switch: only fire if document is genuinely hidden (tab switched or minimized)
+  if (document.hidden) {
     if (blurTimeout) clearTimeout(blurTimeout);
     blurTimeout = setTimeout(() => {
-      if (document.hidden || !document.hasFocus()) {
+      if (document.hidden && isInterviewActive && !isReenteringFullscreen) {
         reportViolationToServer('tab-switch');
       }
-    }, 200);
+    }, 250);
   }
 }
 
