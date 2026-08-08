@@ -637,20 +637,62 @@ document.getElementById('btn-suspended-exit').addEventListener('click', () => {
 
 // Unified debounced exit-event proctoring pipeline
 let exitDebounceTimeout = null;
-let activeLockoutInterval = null;
 
-function startWarningLockoutCountdown(seconds) {
+function showFullscreenWarning(type, data) {
   const warningOverlay = document.getElementById('fullscreen-warning-overlay');
-  if (warningOverlay) {
-    warningOverlay.classList.remove('hidden');
+  const countText = document.getElementById('fullscreen-violation-count');
+  const msgText = document.getElementById('fullscreen-violation-msg');
+  const resumeBtn = document.getElementById('btn-fullscreen-resume');
+  
+  if (!warningOverlay || !resumeBtn) return;
+
+  const exits = data.fullscreenExits || 1;
+  const remaining = data.warningsRemaining !== undefined ? data.warningsRemaining : Math.max(0, 3 - exits);
+
+  if (countText) {
+    countText.textContent = `Warning ${exits} of 3 — ${remaining} warning${remaining === 1 ? '' : 's'} remaining before automatic suspension.`;
+  }
+  if (msgText) {
+    msgText.textContent = 'Exiting fullscreen mode or minimizing the window is not permitted during technical evaluations.';
   }
 
-  const resumeBtn = document.getElementById('btn-fullscreen-resume');
-  if (!resumeBtn) return;
-
-  // 10s lockout timer removed completely - button is immediately active
   resumeBtn.disabled = false;
-  resumeBtn.innerHTML = `<i data-lucide="maximize-2" class="w-5 h-5"></i> <span>Re-enter Fullscreen & Resume Interview</span>`;
+  resumeBtn.innerHTML = `<span>Understood & Continue</span>`;
+  resumeBtn.onclick = () => {
+    warningOverlay.classList.add('hidden');
+  };
+
+  warningOverlay.classList.remove('hidden');
+  if (window.lucide) lucide.createIcons();
+}
+
+function showReenterPrompt(onSuccess) {
+  const warningOverlay = document.getElementById('fullscreen-warning-overlay');
+  const countText = document.getElementById('fullscreen-violation-count');
+  const msgText = document.getElementById('fullscreen-violation-msg');
+  const resumeBtn = document.getElementById('btn-fullscreen-resume');
+
+  if (!warningOverlay || !resumeBtn) return;
+
+  if (countText) {
+    countText.textContent = 'Fullscreen is required to continue.';
+  }
+  if (msgText) {
+    msgText.textContent = 'Please click the button below to restore fullscreen mode and continue your proctored session.';
+  }
+
+  resumeBtn.disabled = false;
+  resumeBtn.innerHTML = `<i data-lucide="maximize-2" class="w-5 h-5"></i> <span>Re-enter Fullscreen</span>`;
+  resumeBtn.onclick = async () => {
+    const success = await enterFullscreen();
+    if (success) {
+      onSuccess();
+    } else {
+      console.warn('Failed to restore fullscreen on click.');
+    }
+  };
+
+  warningOverlay.classList.remove('hidden');
   if (window.lucide) lucide.createIcons();
 }
 
@@ -677,10 +719,11 @@ async function processLogicalExitEvent() {
   const isFocused = document.hasFocus();
   const isFS = isCurrentlyFullscreen();
 
+  // Route both fullscreen exit and minimizing/tab switching through same logic
   if (!isFS || isHidden || !isFocused) {
-    console.warn(`[Proctor] Logical exit event verified: FS=${isFS}, hidden=${isHidden}, focused=${isFocused}`);
+    console.warn(`[Proctor] Logical exit/minimize event verified: FS=${isFS}, hidden=${isHidden}, focused=${isFocused}`);
 
-    // Report violation to server immediately
+    // Report violation using shared fullscreen-exit counter
     const data = await reportViolationToServer('fullscreen-exit');
     if (data && data.suspended) {
       return;
@@ -691,12 +734,19 @@ async function processLogicalExitEvent() {
       const autoReenterSuccess = await enterFullscreen();
       if (autoReenterSuccess) {
         console.log('[Proctor] Successfully auto-reentered fullscreen on exit.');
+        showFullscreenWarning('fullscreen-exit', data);
         return;
       }
+    } else {
+      // Already fullscreen (focused returned or tab switched back), just show warning
+      showFullscreenWarning('fullscreen-exit', data);
+      return;
     }
 
-    // If auto-reenter was blocked or it was a focus/visibility loss, show warning overlay with active button
-    startWarningLockoutCountdown(0);
+    // Browser blocked auto-reenter, prompt candidate to click returning to fullscreen first
+    showReenterPrompt(() => {
+      showFullscreenWarning('fullscreen-exit', data);
+    });
   }
 }
 
