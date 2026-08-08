@@ -32,16 +32,30 @@ async function initFaceLandmarker() {
       "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.2/wasm"
     );
 
-    faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
-      baseOptions: {
-        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-        delegate: "GPU"
-      },
-      outputFaceBlendshapes: true,
-      outputFacialTransformationMatrixes: true,
-      runningMode: "VIDEO",
-      numFaces: 2
-    });
+    try {
+      faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
+        baseOptions: {
+          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+          delegate: "GPU"
+        },
+        outputFaceBlendshapes: true,
+        outputFacialTransformationMatrixes: true,
+        runningMode: "VIDEO",
+        numFaces: 2
+      });
+    } catch (gpuErr) {
+      console.warn('[CameraManager] FaceLandmarker GPU delegate failed, retrying on CPU...', gpuErr);
+      faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
+        baseOptions: {
+          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+          delegate: "CPU"
+        },
+        outputFaceBlendshapes: true,
+        outputFacialTransformationMatrixes: true,
+        runningMode: "VIDEO",
+        numFaces: 2
+      });
+    }
     console.log('[CameraManager] FaceLandmarker loaded successfully.');
   } catch (err) {
     console.error('[CameraManager] Failed to load FaceLandmarker:', err);
@@ -63,14 +77,26 @@ async function initObjectDetector() {
       "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.2/wasm"
     );
 
-    objectDetector = await ObjectDetector.createFromOptions(filesetResolver, {
-      baseOptions: {
-        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite",
-        delegate: "GPU"
-      },
-      runningMode: "VIDEO",
-      scoreThreshold: 0.4
-    });
+    try {
+      objectDetector = await ObjectDetector.createFromOptions(filesetResolver, {
+        baseOptions: {
+          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite",
+          delegate: "GPU"
+        },
+        runningMode: "VIDEO",
+        scoreThreshold: 0.4
+      });
+    } catch (gpuErr) {
+      console.warn('[CameraManager] ObjectDetector GPU delegate failed, retrying on CPU...', gpuErr);
+      objectDetector = await ObjectDetector.createFromOptions(filesetResolver, {
+        baseOptions: {
+          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite",
+          delegate: "CPU"
+        },
+        runningMode: "VIDEO",
+        scoreThreshold: 0.4
+      });
+    }
     console.log('[CameraManager] ObjectDetector loaded successfully.');
   } catch (err) {
     console.error('[CameraManager] Failed to load ObjectDetector:', err);
