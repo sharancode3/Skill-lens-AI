@@ -1741,6 +1741,25 @@ if (btnToggleSettings && settingsPopover) {
   });
 }
 
+// 1.5 Toggle History Panel (Show/Hide)
+if (btnToggleHistoryPanel) {
+  btnToggleHistoryPanel.addEventListener('click', () => {
+    const sidebar = document.getElementById('chat-sidebar');
+    if (!sidebar) return;
+    
+    const isHidden = sidebar.classList.contains('hidden');
+    if (isHidden) {
+      sidebar.classList.remove('hidden');
+      btnToggleHistoryPanel.textContent = 'Hide Panel';
+      btnToggleHistoryPanel.className = 'px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold rounded-lg border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0 transition shrink-0';
+    } else {
+      sidebar.classList.add('hidden');
+      btnToggleHistoryPanel.textContent = 'Show Panel';
+      btnToggleHistoryPanel.className = 'px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white text-xs font-extrabold rounded-lg border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0 transition shrink-0';
+    }
+  });
+}
+
 // 2. Comprehensive Font & Element Scaling Engine
 const fontSizeIndicator = document.getElementById('font-size-indicator');
 
