@@ -53,9 +53,13 @@ export function buildResponseSchema(nextQuestionType) {
       whyProbe: {
         type: 'BOOLEAN',
         description: 'True if the next question is a why-chain probe (asking candidate to justify a specific technical choice from their previous answer).'
+      },
+      communicationConfidence: {
+        type: 'STRING',
+        description: 'The candidate\'s verbal certainty and delivery confidence: low, medium, or high, independent of correctness.'
       }
     },
-    required: ['classification', 'reasoning', 'action', 'reactionClause', 'reply', 'updatedMemory', 'llmConfidence', 'modelWantsToStop', 'hallucinationFlag', 'hallucinationCorrection', 'whyProbe']
+    required: ['classification', 'reasoning', 'action', 'reactionClause', 'reply', 'updatedMemory', 'llmConfidence', 'modelWantsToStop', 'hallucinationFlag', 'hallucinationCorrection', 'whyProbe', 'communicationConfidence']
   };
 
   if (nextQuestionType === 'mcq') {
@@ -304,7 +308,7 @@ export async function generateLocalLoRAReply(systemPrompt, userPrompt) {
  * Deterministic offline mock LLM fallback.
  * Uses text characteristics and keywords to generate schema-adherent output.
  */
-function mockLLMCall(candidate, topic, lastQuestion, message, followupCount, connections, nextQuestionType, nextTopic, difficultyTier, session) {
+function mockLLMCall(candidate, topic, lastQuestion, message, followupCount, connections, nextQuestionType, nextTopic, difficultyTier, session, detectedHedgeMarkers = []) {
   console.log('[LLMClient] GEMINI_API_KEY not found or call failed. Using offline Mock LLM...');
 
   const cleanMsg = message.toLowerCase().trim();
@@ -422,11 +426,21 @@ function mockLLMCall(candidate, topic, lastQuestion, message, followupCount, con
 
   const finalClassification = isHallucination ? 'shallow' : classification;
   const finalAction = isHallucination ? (followupCount >= 1 ? 'advance' : 'followup') : action;
-  const finalReaction = isHallucination ? `⚠️ ${hallucinationCorrection}` : reactionClause;
+  const finalConfidence = isHallucination ? 20 : llmConfidence;
+
+  // Confidence Hook evaluation
+  const hasHedges = (detectedHedgeMarkers && detectedHedgeMarkers.length > 0) || cleanMsg.includes('i think') || cleanMsg.includes('maybe') || cleanMsg.includes('probably') || cleanMsg.includes('not sure');
+  const communicationConfidence = hasHedges ? 'low' : 'high';
+
+  let finalReaction = isHallucination ? `⚠️ ${hallucinationCorrection}` : reactionClause;
+  const sessionHedgesCount = (session && session.hedgeEventCount) || 0;
+  if (!isHallucination && sessionHedgesCount >= 3 && (finalClassification === 'strong' || finalClassification === 'partial') && hasHedges) {
+    finalReaction = `You said 'probably' there, but that was actually right — are you more sure than you're letting on? Hm, okay —`;
+  }
+
   const finalReply = isHallucination 
     ? (followupCount >= 1 ? "Let's move on to the next topic." : "Can you clarify how vectors are stored in a standard RAG pipeline?")
     : reply;
-  const finalConfidence = isHallucination ? 20 : llmConfidence;
 
   const result = {
     classification: finalClassification,
@@ -439,7 +453,8 @@ function mockLLMCall(candidate, topic, lastQuestion, message, followupCount, con
     modelWantsToStop,
     hallucinationFlag,
     hallucinationCorrection,
-    whyProbe: isHallucination ? false : (action === 'followup')
+    whyProbe: isHallucination ? false : (action === 'followup'),
+    communicationConfidence
   };
 
   // Add MCQ fields if requested
@@ -558,7 +573,7 @@ function mockLLMCall(candidate, topic, lastQuestion, message, followupCount, con
  * Main intelligence layer evaluation entrypoint.
  * Assembles prompts, manages Gemini REST vs offline fallback, and validates schemas.
  */
-export async function evaluateTurnWithLLM(session, candidateMessage, detectedConnections) {
+export async function evaluateTurnWithLLM(session, candidateMessage, detectedConnections, detectedHedgeMarkers = []) {
   const candidate = session.candidateSnapshot;
   const topicIndex = session.cursor;
   const currentTopic = session.topicQueue[topicIndex];
@@ -584,7 +599,7 @@ export async function evaluateTurnWithLLM(session, candidateMessage, detectedCon
   // Outage Simulation: bypass API calls if SIMULATE_LLM_OUTAGE is true
   if (process.env.SIMULATE_LLM_OUTAGE === 'true') {
     console.log('[LLMClient Outage Simulation] Simulating LLM outage in evaluateTurnWithLLM.');
-    return mockLLMCall(candidate, currentTopic, lastQuestion, truncatedMessage, session.followupCountForCurrentTopic, detectedConnections, nextQuestionType, nextTopic, difficultyTier, session);
+    return mockLLMCall(candidate, currentTopic, lastQuestion, truncatedMessage, session.followupCountForCurrentTopic, detectedConnections, nextQuestionType, nextTopic, difficultyTier, session, detectedHedgeMarkers);
   }
 
   const systemPrompt = `You are a professional, senior technical interviewer conducting a coding and architectural review for Skill Labs Ai.
@@ -630,6 +645,15 @@ HALLUCINATION & WHY-PROBE CONSTRAINTS:
 2. hallucinationCorrection (string): Required when hallucinationFlag is true. Provide a concise, factual, non-lecturing 1-sentence correction. If hallucinationFlag is false, set this to an empty string "".
 3. prefix reactionClause: If hallucinationFlag is true, you MUST prefix the reactionClause with "⚠️ " followed by the hallucinationCorrection, then proceed with the interviewer voice pattern. E.g. "⚠️ RAG retrieves vectors from an external index, it does not store vectors inside GPT weights. Hm, okay — ".
 4. whyProbe: Set this to true if the next question you are proposing (in "reply") is a why-chain probe asking the candidate to justify their technical decision or choice from their previous answer. Otherwise false.
+
+COMMUNICATION CONFIDENCE CONSTRAINTS:
+1. communicationConfidence (string): Classify as "low", "medium", or "high". This is about phrasing delivery and certainty, NOT correctness of content. Look at directness, hedging words, and self-deprecation.
+   - "low": Frequent hedging words like "I think", "maybe", "probably", "I guess", "not sure", or hesitant vocabulary.
+   - "medium": Neutral, standard matter-of-fact statements with minor or no hedges.
+   - "high": Confident, direct, assertive technical statements, authoritative vocabulary.
+   - Use the provided "detectedHedgeMarkers" list and "hedgeEventCount" as hints alongside your own holistic read of the message tone.
+2. Confidence Probing Note Hook: If "hedgeEventCount" is 3+ in the input, and the candidate's last answer is classified as "strong" or "partial" (meaning they were actually correct/partially correct despite hedging), you may optionally include a brief confidence-probing note in the "reactionClause" responding to this hedging. For example: "You said 'probably' there, but that was actually correct — are you more sure than you're letting on?" This should be situational and rare.
+
 
 FEW-SHOT EXAMPLES (GROUNDED CURRICULUM PATTERNS):
 [STRONG ANSWER EXAMPLE]
@@ -724,13 +748,15 @@ modelWantsToStop instruction: You MUST decide if we should wrap up the interview
     floorMet: (session.questionsAsked >= 8 && session.distinctDaysCovered.length >= 4),
     topicsRemainingInQueue: session.topicQueue.length - (session.cursor + 1),
     recentDiagrams: session.recentDiagrams || [],
-    recentReactions: session.recentReactions || []
+    recentReactions: session.recentReactions || [],
+    detectedHedgeMarkers: detectedHedgeMarkers || [],
+    hedgeEventCount: session.hedgeEventCount || 0
   }, null, 2);
 
   const provider = process.env.LLM_PROVIDER || 'gemini';
   const apiKey = process.env.GEMINI_API_KEY;
   if (provider === 'gemini' && !apiKey) {
-    return mockLLMCall(candidate, currentTopic, lastQuestion, truncatedMessage, session.followupCountForCurrentTopic, detectedConnections, nextQuestionType, nextTopic, difficultyTier, session);
+    return mockLLMCall(candidate, currentTopic, lastQuestion, truncatedMessage, session.followupCountForCurrentTopic, detectedConnections, nextQuestionType, nextTopic, difficultyTier, session, detectedHedgeMarkers);
   }
 
   console.log(`[LLMClient] Calling LLM (${provider}) for session "${session.sessionId}"...`);

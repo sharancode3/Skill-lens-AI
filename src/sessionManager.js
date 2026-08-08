@@ -564,7 +564,7 @@ export async function handleTurn(sessionId, message) {
       correct: isCorrect
     };
 
-    llmResponse = await evaluateTurnWithLLM(session, dummyMessage, []);
+    llmResponse = await evaluateTurnWithLLM(session, dummyMessage, [], []);
     delete session.mcqResult;
   } else if (forceAdvanceDueToBlankRetries) {
     llmResponse = {
@@ -573,7 +573,8 @@ export async function handleTurn(sessionId, message) {
       action: 'advance',
       reply: `Let's move on.`,
       updatedMemory: session.interviewMemory || 'Candidate skipped topic due to consecutive blank answers.',
-      llmConfidence: 10
+      llmConfidence: 10,
+      communicationConfidence: 'high'
     };
     finalAccuracyScore = 10;
     llmConfidence = 10;
@@ -585,7 +586,7 @@ export async function handleTurn(sessionId, message) {
     detectedConnections = await findRelatedDays(message, [currentTopicDay], 2);
 
     // 2. Structured LLM Call evaluation (Phase 4)
-    llmResponse = await evaluateTurnWithLLM(session, message, detectedConnections);
+    llmResponse = await evaluateTurnWithLLM(session, message, detectedConnections, hedgeMarkers);
 
     // 3. Compute 3 signals for open-ended turn:
     llmConfidence = llmResponse.llmConfidence || 50;
@@ -682,7 +683,8 @@ export async function handleTurn(sessionId, message) {
     hallucinationFlag,
     hallucinationCorrection: llmResponse ? (llmResponse.hallucinationCorrection || "") : "",
     hedgeMarkers,
-    whyProbe
+    whyProbe,
+    communicationConfidence: llmResponse ? (llmResponse.communicationConfidence || "medium") : "medium"
   });
 
   console.log(`\n--- [LLM Evaluation Log] Session "${sessionId}" Turn ${session.turnCount} ---`);
