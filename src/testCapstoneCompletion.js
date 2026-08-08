@@ -48,10 +48,10 @@ assert.strictEqual(shouldWrapUp(sessionRestricted, true), false, 'Candidate with
 console.log(' -> PASS: Candidate with zero applied/expert questions blocked from wrap up.');
 
 // SCENARIO 3: Weak Candidate (Safeguard turn hard cap)
-console.log('\n[Scenario 3] Simulating weak candidate hitting 14 turn cap...');
+console.log('\n[Scenario 3] Simulating weak candidate hitting 16 turn cap...');
 const sessionWeak = {
   difficultyTier: 'foundational',
-  turnCount: 14,
+  turnCount: 16,
   questionsAsked: 8,
   distinctDaysCovered: [1, 2, 3, 4],
   capstoneTriggered: false,
@@ -64,7 +64,7 @@ const sessionWeak = {
 };
 
 // shouldWrapUp must return true on hard cap regardless of other checks
-assert.strictEqual(shouldWrapUp(sessionWeak, false), true, 'Weak candidate must wrap up on hitting 14 turns hard cap');
+assert.strictEqual(shouldWrapUp(sessionWeak, false), true, 'Weak candidate must wrap up on hitting 16 turns hard cap');
 console.log(' -> PASS: Weak candidate wraps up due to hard cap safeguard.');
 
 console.log('\n========================================================');

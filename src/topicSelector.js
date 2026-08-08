@@ -52,13 +52,11 @@ export function buildTopicQueue(candidate) {
   while (true) {
     const distinctDays = new Set(queue.map(q => q.day));
 
-    // Stopping criteria:
-    // (a) Stop once the queue has between 5 and 7 entries, AND
-    // (b) those entries guarantee reachability of at least 4 distinct days.
-    if (queue.length >= 7) {
+    // Stopping criteria (Part E: Guarantee at least 8 topics in queue covering at least 4 distinct days):
+    if (queue.length >= 10) {
       break;
     }
-    if (queue.length >= 5 && distinctDays.size >= 4) {
+    if (queue.length >= 8 && distinctDays.size >= 4) {
       break;
     }
     if (remaining.length === 0) {

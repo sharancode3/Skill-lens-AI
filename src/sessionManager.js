@@ -127,13 +127,21 @@ export async function saveSessionDoc(sessionId, data) {
  * @param {Object} session - The interview session document data.
  * @returns {boolean} True if the interview stopping conditions are met.
  */
-export function shouldWrapUp(session, modelWantsToStop) {
-  const hitsHardCap = session.turnCount >= 14;
+export function checkStoppingCondition(session, modelWantsToStop) {
+  const hitsHardCap = session.turnCount >= 16;
   if (hitsHardCap) {
+    console.log(`[Stopping Condition] Hard cap hit at turnCount: ${session.turnCount}. Wrapping up.`);
     return true;
   }
 
-  const floorMet = session.questionsAsked >= 8 && session.distinctDaysCovered.length >= 4;
+  const floorMet = (session.questionsAsked || 0) >= 8 && (session.distinctDaysCovered?.length || 0) >= 4;
+  
+  const isOutOfTopics = session.topicQueue && (session.cursor >= session.topicQueue.length);
+  if (isOutOfTopics) {
+    console.log(`[Stopping Condition] Out of topics in queue (${session.cursor}/${session.topicQueue.length}). Wrapping up.`);
+    return true;
+  }
+
   if (!floorMet) {
     return false;
   }
@@ -146,12 +154,22 @@ export function shouldWrapUp(session, modelWantsToStop) {
   }
   
   // If Capstone is triggered but has not been evaluated in accuracyLog, force modelWantsToStop to false
-  const hasAnsweredCapstone = log.some(log => log.questionType === 'capstone');
+  const hasAnsweredCapstone = log.some(l => l.questionType === 'capstone');
   if (session.capstoneTriggered && !hasAnsweredCapstone) {
     return false;
   }
 
+  const isNextTopicOutOfQueue = session.topicQueue && (session.cursor + 1 >= session.topicQueue.length);
+  if (isNextTopicOutOfQueue) {
+    console.log(`[Stopping Condition] Next topic would exceed queue bounds. Wrapping up.`);
+    return true;
+  }
+
   return !!modelWantsToStop;
+}
+
+export function shouldWrapUp(session, modelWantsToStop) {
+  return checkStoppingCondition(session, modelWantsToStop);
 }
 
 /**
@@ -594,6 +612,25 @@ export async function handleTurn(sessionId, message) {
     };
   }
 
+  // Consolidate wrap-up check at the top of every turn (Part E SSOT stopping gate)
+  if (checkStoppingCondition(session, false)) {
+    session.state = SessionState.DONE;
+    session.interviewEndedAt = new Date().toISOString();
+    const report = await generateFeedbackReport(session);
+    session.feedback = report.feedback;
+    session.judgeVerdict = report.judgeVerdict;
+    await saveSessionDoc(sessionId, session);
+    
+    return {
+      reply: 'Interview completed.',
+      done: true,
+      feedback: session.feedback,
+      metrics: computeMetrics(session),
+      judgeVerdict: session.judgeVerdict || null,
+      proctoringSummary: getProctoringSummary(session)
+    };
+  }
+
   // 1. Backend Idempotency Check (Rapid duplicate submit prevention)
   const cleanMsg = (message || '').trim().toLowerCase();
   const now = Date.now();
@@ -685,11 +722,10 @@ export async function handleTurn(sessionId, message) {
   const nextQuestionTypeGenerated = session.pendingQuestionType || 'open';
 
   // Progression Controller: Signal when the upcoming question is the final one for this session
-  const isFinalQuestion = !session.capstoneTriggered && (
+  const isFinalQuestion = 
     session.pendingQuestionType === 'capstone' ||
     (session.questionsAsked >= 7 && session.distinctDaysCovered.length >= 3) ||
-    session.turnCount >= 12
-  );
+    session.turnCount >= 14;
   session.isFinalQuestion = isFinalQuestion;
 
   let llmResponse;
@@ -1205,8 +1241,7 @@ export async function handleTurn(sessionId, message) {
     session.whyChainDepth = 0;
     session.hallucinationCountForCurrentTopic = 0;
 
-    const isOutOfTopics = session.cursor + 1 >= session.topicQueue.length;
-    const wrapUpTriggered = shouldWrapUp(session, llmResponse ? llmResponse.modelWantsToStop : false) || isOutOfTopics;
+    const wrapUpTriggered = checkStoppingCondition(session, llmResponse ? llmResponse.modelWantsToStop : false);
 
     if (wrapUpTriggered) {
       session.state = SessionState.DONE;

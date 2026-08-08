@@ -18,8 +18,8 @@ async function testPhase8() {
     console.log(`--- Starting Run ${run} for ${candidate.member?.name || 'Candidate'} ---`);
     let lastInterviewerQuestion = '';
 
-    // Conduct turns until wrap-up
-    for (let turn = 1; turn <= 10; turn++) {
+    // Conduct turns until wrap-up (increase to 20 to support the new 8-topic minimum queue length)
+    for (let turn = 1; turn <= 20; turn++) {
       const res = await handleTurn(sessionId, "I configured postgres connection pools, wal mode, and prometheus metrics.");
       if (res.done) {
         console.log(`Run ${run} completed on turn ${turn}.`);
