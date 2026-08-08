@@ -1833,7 +1833,7 @@ function updateInputArea() {
   if (!latestMsg) {
     chatInput.disabled = false;
     btnSend.disabled = false;
-    chatInput.placeholder = 'Type your technical response here...';
+    chatInput.placeholder = 'Type your answer here...';
     return;
   }
 
@@ -1851,7 +1851,7 @@ function updateInputArea() {
   } else {
     chatInput.disabled = false;
     btnSend.disabled = false;
-    chatInput.placeholder = 'Type your technical response here...';
+    chatInput.placeholder = 'Type your answer here...';
     adjustTextareaHeight();
     const hasRules = screenRules && !screenRules.classList.contains('hidden');
     const hasStart = screenStart && !screenStart.classList.contains('hidden');
