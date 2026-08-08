@@ -901,11 +901,11 @@ export async function handleTurn(sessionId, message, violationType = null, flagC
   const isDiagramTurn = answeredQuestionType === 'diagram_interpret';
 
   // 3. Evaluate Turn with LLM (or bypass on blank forced advancement)
-  const floorMetInput = (session.questionsAsked >= 8 && session.distinctDaysCovered.length >= 4);
+  const target = session.targetQuestionCount || 8;
+  const floorMetInput = (session.questionsAsked >= target && session.distinctDaysCovered.length >= 4);
   const nextQuestionTypeGenerated = session.pendingQuestionType || 'open';
 
   // Progression Controller: Signal when the upcoming question is the final one for this session
-  const target = session.targetQuestionCount || 8;
   const isFinalQuestion = 
     session.pendingQuestionType === 'capstone' ||
     (session.questionsAsked >= target - 1 && session.distinctDaysCovered.length >= 3) ||
@@ -1144,7 +1144,8 @@ export async function handleTurn(sessionId, message, violationType = null, flagC
 
   // Capstone Trigger Check (Phase I4)
   if (!session.capstoneTriggered) {
-    const floorMetAtEnd = (session.questionsAsked >= 8 && session.distinctDaysCovered.length >= 4);
+    const target = session.targetQuestionCount || 8;
+    const floorMetAtEnd = (session.questionsAsked >= target && session.distinctDaysCovered.length >= 4);
     const logLength = session.accuracyLog.length;
     const appliedExpertCount = session.accuracyLog.filter(entry => entry.difficultyTier === 'applied' || entry.difficultyTier === 'expert').length;
     if (floorMetAtEnd && logLength >= 4 && appliedExpertCount >= 2) {
