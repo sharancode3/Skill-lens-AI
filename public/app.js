@@ -1230,42 +1230,42 @@ function transitionToFeedback(feedback, metrics, judgeVerdict, proctoringSummary
 
   // Populate Strengths
   feedbackStrengths.innerHTML = '';
-  if (feedback.strengths && feedback.strengths.length > 0) {
+  if (feedback.strengths && Array.isArray(feedback.strengths) && feedback.strengths.length > 0) {
     feedback.strengths.forEach(str => {
       const card = document.createElement('div');
-      card.className = 'feedback-card strength flex gap-4 items-start';
+      card.className = 'feedback-card strength flex gap-4 items-start bg-emerald-50 dark:bg-slate-800/90 border-2 border-slate-900 rounded-xl p-5 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]';
       card.innerHTML = `
-        <div class="icon-circle text-emerald-600 border border-emerald-200">
-          <i data-lucide="check-circle" class="w-6 h-6"></i>
+        <div class="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 border-2 border-slate-900 flex items-center justify-center flex-shrink-0 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
+          <i data-lucide="check-circle" class="w-4 h-4 text-emerald-700"></i>
         </div>
         <div>
-          <p class="text-sm font-semibold text-gray-900">${str}</p>
+          <p class="text-sm font-bold text-slate-900 dark:text-slate-100 leading-relaxed">${str}</p>
         </div>
       `;
       feedbackStrengths.appendChild(card);
     });
   } else {
-    feedbackStrengths.innerHTML = '<div class="text-gray-500 text-sm">No specific strengths recorded.</div>';
+    feedbackStrengths.innerHTML = '<div class="col-span-full p-4 bg-emerald-50/50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold text-sm rounded-xl border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">None recorded.</div>';
   }
 
   // Populate Gaps
   feedbackGaps.innerHTML = '';
-  if (feedback.gaps && feedback.gaps.length > 0) {
+  if (feedback.gaps && Array.isArray(feedback.gaps) && feedback.gaps.length > 0) {
     feedback.gaps.forEach(gap => {
       const card = document.createElement('div');
-      card.className = 'feedback-card gap flex gap-4 items-start';
+      card.className = 'feedback-card gap flex gap-4 items-start bg-amber-50 dark:bg-slate-800/90 border-2 border-slate-900 rounded-xl p-5 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]';
       card.innerHTML = `
-        <div class="icon-circle text-amber-600 border border-amber-200">
-          <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+        <div class="w-7 h-7 rounded-full bg-amber-100 text-amber-700 border-2 border-slate-900 flex items-center justify-center flex-shrink-0 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
+          <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-700"></i>
         </div>
         <div>
-          <p class="text-sm font-semibold text-gray-900">${gap}</p>
+          <p class="text-sm font-bold text-slate-900 dark:text-slate-100 leading-relaxed">${gap}</p>
         </div>
       `;
       feedbackGaps.appendChild(card);
     });
   } else {
-    feedbackGaps.innerHTML = '<div class="text-gray-500 text-sm">No specific gaps reported.</div>';
+    feedbackGaps.innerHTML = '<div class="col-span-full p-4 bg-amber-50/50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold text-sm rounded-xl border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">None recorded.</div>';
   }
 
   // Populate Next Steps (numbered Outfit list)
@@ -1288,7 +1288,7 @@ function transitionToFeedback(feedback, metrics, judgeVerdict, proctoringSummary
       feedbackNext.appendChild(row);
     });
   } else {
-    feedbackNext.innerHTML = '<div class="text-slate-400 text-sm font-semibold p-4">No next steps compiled.</div>';
+    feedbackNext.innerHTML = '<div class="p-4 bg-slate-800 text-slate-400 font-bold text-sm rounded-xl border-2 border-slate-700 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">None recorded.</div>';
   }
 
   // Render metrics dynamically & defensively

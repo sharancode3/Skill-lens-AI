@@ -1546,27 +1546,30 @@ export async function endSessionEarly(sessionId) {
   session.state = SessionState.DONE;
   session.interviewEndedAt = new Date().toISOString();
 
-  let feedback = null;
+  let report = null;
   try {
-    feedback = await generateFeedbackReport(session);
+    report = await generateFeedbackReport(session);
   } catch (e) {
     console.error('Failed to generate LLM feedback report for early exit, using mechanical fallback:', e);
-    feedback = generateMechanicalFeedback(session);
+    report = generateMechanicalFeedback(session);
   }
 
+  const feedbackObj = (report && report.feedback) ? report.feedback : { summary: "", strengths: [], gaps: [], next: [] };
   // Explicitly note that the candidate voluntarily ended early
-  feedback.summary = "The candidate voluntarily ended the interview session early. " + (feedback.summary || "");
+  feedbackObj.summary = "The candidate voluntarily ended the interview session early. " + (feedbackObj.summary || "");
   
   // Custom borderline/early verdict
-  session.judgeVerdict = {
+  session.judgeVerdict = (report && report.judgeVerdict) ? report.judgeVerdict : {
     decision: 'borderline',
-    reasoning: 'Candidate voluntarily ended the session early. Assessment completed with partial performance data.'
+    reasoning: 'Candidate voluntarily ended the session early. Assessment completed with partial performance data.',
+    evidenceTrail: []
   };
 
-  session.feedback = feedback;
+  session.feedback = feedbackObj;
   await saveSessionDoc(sessionId, session);
 
   return {
+    reply: 'Interview completed.',
     done: true,
     feedback: session.feedback,
     metrics: computeMetrics(session),

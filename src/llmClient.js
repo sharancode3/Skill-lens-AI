@@ -305,6 +305,14 @@ async function callQwenREST(systemPrompt, userPrompt, schema, retryCount = 1, te
     if (parsed.category && !parsed.classification) {
       parsed.classification = parsed.category;
     }
+    if (!parsed.feedback && (parsed.summary || parsed.strengths || parsed.gaps || parsed.next)) {
+      parsed.feedback = {
+        summary: parsed.summary || "",
+        strengths: parsed.strengths || [],
+        gaps: parsed.gaps || [],
+        next: parsed.next || []
+      };
+    }
     
     // Validate schema fields manually if schema is provided
     if (schema && schema.properties) {
@@ -1533,8 +1541,12 @@ export function postProcessFeedback(feedback, session) {
   const strengthsDays = new Set();
   const gapsDays = new Set();
 
+  const rawStrengths = (Array.isArray(feedback.strengths) ? feedback.strengths.flat(Infinity) : []).map(s => typeof s === 'string' ? s.trim() : String(s || '').trim()).filter(Boolean);
+  const rawGaps = (Array.isArray(feedback.gaps) ? feedback.gaps.flat(Infinity) : []).map(g => typeof g === 'string' ? g.trim() : String(g || '').trim()).filter(Boolean);
+  const rawNext = Array.isArray(feedback.next) ? feedback.next.flat(Infinity) : [];
+
   // 1. Process strengths: must have score >= 60 to remain a strength
-  (feedback.strengths || []).forEach(str => {
+  rawStrengths.forEach(str => {
     const match = str.match(/Day\s+(\d+)/i);
     if (match) {
       const dayNum = parseInt(match[1]);
@@ -1566,7 +1578,7 @@ export function postProcessFeedback(feedback, session) {
   });
 
   // 2. Process gaps: score >= 60 cannot be a gap; score < 40 must be a gap
-  (feedback.gaps || []).forEach(gap => {
+  rawGaps.forEach(gap => {
     const match = gap.match(/Day\s+(\d+)/i);
     if (match) {
       const dayNum = parseInt(match[1]);
@@ -1605,7 +1617,7 @@ export function postProcessFeedback(feedback, session) {
   const finalNext = [];
   const nextDays = new Set();
 
-  (feedback.next || []).forEach(rawItem => {
+  rawNext.forEach(rawItem => {
     let item = '';
     if (typeof rawItem === 'string') {
       item = rawItem.trim();
@@ -2049,58 +2061,68 @@ You MUST return ONLY valid JSON matching the schema. Do not output markdown code
     result = await callGeminiREST(systemPrompt, userPrompt, feedbackSchema, 1, 0.1);
   }
 
-  if (result) {
-    // Post-LLM validation: If gaps is empty AND candidate had fewer than 4 "strong" answers, treat as suspicious and regenerate once with a strict warning
-    const countStrong = transcriptWithDays.filter(t => t.role === 'candidate' && t.classification === 'strong').length;
-    const hasManyWeakAnswers = countStrong < 4;
+  function isFeedbackShapeValid(fb) {
+    if (!fb || typeof fb !== 'object') return false;
+    if (typeof fb.summary !== 'string' || fb.summary.trim().length === 0) return false;
+    if (!Array.isArray(fb.strengths) || !Array.isArray(fb.gaps) || !Array.isArray(fb.next)) return false;
+    if (fb.next.length === 0) return false;
+    return true;
+  }
 
-    const feedbackObj = result.feedback || { summary: "", strengths: [], gaps: [], next: [] };
-    const gapsList = feedbackObj.gaps || [];
+  const countStrong = transcriptWithDays.filter(t => t.role === 'candidate' && t.classification === 'strong').length;
+  const hasManyWeakAnswers = countStrong < 4;
+  const initialFeedback = result ? result.feedback : null;
+  const needsGapsRegen = initialFeedback && Array.isArray(initialFeedback.gaps) && initialFeedback.gaps.length === 0 && hasManyWeakAnswers;
+  const isInvalid = !result || !isFeedbackShapeValid(initialFeedback);
 
-    if (gapsList.length === 0 && hasManyWeakAnswers) {
-      console.warn('[LLMClient Warning] Gaps array was empty despite multiple weak/partial responses. Regenerating with stricter prompts...');
-      const stricterSystemPrompt = systemPrompt + "\n\nCRITICAL WARNING: Your previous response contained zero gaps. This is unacceptable given the candidate's poor/partial performance. You MUST identify at least one real technical gap or weakness from the transcript.";
-      if (provider === 'qwen') {
-        result = await callQwenREST(stricterSystemPrompt, userPrompt, feedbackSchema, 0, 0.1);
-      } else {
-        result = await callGeminiREST(stricterSystemPrompt, userPrompt, feedbackSchema, 0, 0.1);
-      }
+  if (isInvalid || needsGapsRegen) {
+    console.warn('[LLMClient Warning] Feedback object was incomplete, missing fields, or had empty gaps. Regenerating once with stricter prompts...');
+    let reason = "Your previous response was missing required fields or contained empty lists.";
+    if (needsGapsRegen) {
+      reason = "Your previous response contained zero gaps. This is unacceptable given the candidate's poor/partial performance.";
     }
-
-    if (result) {
-      const finalFeedbackObj = result.feedback || { summary: "", strengths: [], gaps: [], next: [] };
-      const processedFeedback = postProcessFeedback(finalFeedbackObj, session);
-
-      // Compute aggregate dimensions from accuracyLog
-      const ratedLogs = (session.accuracyLog || []).filter(item => item.correctness !== undefined);
-      let correctness = 50, depth = 50, reasoning = 50, tradeoffs = 50, clarity = 50;
-
-      if (ratedLogs.length > 0) {
-        correctness = Math.round(ratedLogs.reduce((sum, item) => sum + item.correctness, 0) / ratedLogs.length);
-        depth = Math.round(ratedLogs.reduce((sum, item) => sum + item.depth, 0) / ratedLogs.length);
-        reasoning = Math.round(ratedLogs.reduce((sum, item) => sum + item.reasoningScore, 0) / ratedLogs.length);
-        tradeoffs = Math.round(ratedLogs.reduce((sum, item) => sum + item.tradeoffs, 0) / ratedLogs.length);
-        clarity = Math.round(ratedLogs.reduce((sum, item) => sum + item.clarity, 0) / ratedLogs.length);
-      } else {
-        // Fallback
-        const totalScore = (session.accuracyLog || []).reduce((sum, item) => sum + item.finalAccuracyScore, 0);
-        const avgVal = (session.accuracyLog || []).length > 0 ? Math.round(totalScore / session.accuracyLog.length) : 50;
-        correctness = avgVal;
-        depth = avgVal;
-        reasoning = avgVal;
-        tradeoffs = avgVal;
-        clarity = avgVal;
-      }
-
-      processedFeedback.dimensions = { correctness, depth, reasoning, tradeoffs, clarity };
-
-      return {
-        feedback: processedFeedback,
-        judgeVerdict: result.judgeVerdict || { decision: "borderline", reasoning: "No details provided.", evidenceTrail: [] }
-      };
+    const stricterSystemPrompt = systemPrompt + `\n\nCRITICAL VALIDATION REQUIREMENT: ${reason} You MUST return a complete JSON object containing: "summary" (non-empty string), "strengths" (array of strings), "gaps" (array of strings), and "next" (array of actionable recommendations tied to Day numbers). None of these fields may be missing or empty.`;
+    
+    if (provider === 'qwen') {
+      result = await callQwenREST(stricterSystemPrompt, userPrompt, feedbackSchema, 0, 0.1);
+    } else {
+      result = await callGeminiREST(stricterSystemPrompt, userPrompt, feedbackSchema, 0, 0.1);
     }
   }
 
-  console.warn('[LLMClient Warning] Feedback Composer call failed or returned invalid JSON twice. Triggering mechanical fallback...');
+  if (result && isFeedbackShapeValid(result.feedback)) {
+    const finalFeedbackObj = result.feedback;
+    const processedFeedback = postProcessFeedback(finalFeedbackObj, session);
+
+    // Compute aggregate dimensions from accuracyLog
+    const ratedLogs = (session.accuracyLog || []).filter(item => item.correctness !== undefined);
+    let correctness = 50, depth = 50, reasoning = 50, tradeoffs = 50, clarity = 50;
+
+    if (ratedLogs.length > 0) {
+      correctness = Math.round(ratedLogs.reduce((sum, item) => sum + item.correctness, 0) / ratedLogs.length);
+      depth = Math.round(ratedLogs.reduce((sum, item) => sum + item.depth, 0) / ratedLogs.length);
+      reasoning = Math.round(ratedLogs.reduce((sum, item) => sum + item.reasoningScore, 0) / ratedLogs.length);
+      tradeoffs = Math.round(ratedLogs.reduce((sum, item) => sum + item.tradeoffs, 0) / ratedLogs.length);
+      clarity = Math.round(ratedLogs.reduce((sum, item) => sum + item.clarity, 0) / ratedLogs.length);
+    } else {
+      // Fallback
+      const totalScore = (session.accuracyLog || []).reduce((sum, item) => sum + item.finalAccuracyScore, 0);
+      const avgVal = (session.accuracyLog || []).length > 0 ? Math.round(totalScore / session.accuracyLog.length) : 50;
+      correctness = avgVal;
+      depth = avgVal;
+      reasoning = avgVal;
+      tradeoffs = avgVal;
+      clarity = avgVal;
+    }
+
+    processedFeedback.dimensions = { correctness, depth, reasoning, tradeoffs, clarity };
+
+    return {
+      feedback: processedFeedback,
+      judgeVerdict: result.judgeVerdict || { decision: "borderline", reasoning: "No details provided.", evidenceTrail: [] }
+    };
+  }
+
+  console.warn('[LLMClient Warning] Feedback Composer call failed or returned invalid feedback object after retry. Triggering mechanical fallback...');
   return generateMechanicalFeedback(session);
 }
