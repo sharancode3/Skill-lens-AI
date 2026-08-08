@@ -44,7 +44,118 @@ const feedbackGaps = document.getElementById('feedback-gaps');
 const feedbackNext = document.getElementById('feedback-next');
 const btnRestart = document.getElementById('btn-restart');
 
-// ==================== INITIALIZATION ====================
+// ==================== INITIALIZATION & RESTORATION ====================
+async function tryRestoreActiveSession() {
+  const savedSessionId = localStorage.getItem('currentSessionId');
+  if (!savedSessionId) return;
+
+  try {
+    const res = await fetch(`/api/session/${savedSessionId}`);
+    if (!res.ok) {
+      localStorage.removeItem('currentSessionId');
+      return;
+    }
+    const data = await res.json();
+    
+    if (data.suspended) {
+      isInterviewActive = false;
+      localStorage.removeItem('currentSessionId');
+      showSuspensionScreen();
+      return;
+    }
+
+    if (data.state === 'active') {
+      currentSessionId = savedSessionId;
+      selectedCandidate = data.candidate;
+      
+      // Update UI elements
+      screenStart.classList.add('hidden');
+      screenChat.classList.remove('hidden');
+
+      chatCandName.textContent = selectedCandidate.member.name;
+      chatCandRole.textContent = selectedCandidate.member.jobRole;
+      const initialsEl = document.getElementById('chat-avatar-initials');
+      if (initialsEl && selectedCandidate.member.name) {
+        const parts = selectedCandidate.member.name.trim().split(/\s+/);
+        initialsEl.textContent = parts.map(p => p[0]).join('').substring(0, 2).toUpperCase();
+      }
+
+      // Re-populate transcript
+      chatMessages.innerHTML = '';
+      const transcript = data.transcript || [];
+      
+      // Separate history from active question
+      for (let i = 0; i < transcript.length; i++) {
+        const msg = transcript[i];
+        const isLast = (i === transcript.length - 1);
+        
+        if (msg.role === 'interviewer') {
+          if (isLast && data.lastResponse) {
+            await appendInterviewerMessage(
+              msg.text, 
+              msg.connections || [], 
+              data.lastResponse.nextQuestionType || 'open',
+              data.lastResponse.mcqOptions,
+              data.lastResponse.diagramDefinition,
+              data.lastResponse.diagramQuestionText,
+              data.lastResponse.hallucinationCorrection
+            );
+          } else {
+            await appendInterviewerMessage(msg.text, msg.connections || [], 'open', null, null, null, null);
+          }
+        } else if (msg.role === 'candidate') {
+          appendCandidateMessage(msg.text);
+        }
+      }
+
+      // Setup counters
+      chatProgressQuestions.textContent = data.lastResponse ? (data.lastResponse.metrics?.questionTypeBreakdown?.open || 0) + (data.lastResponse.metrics?.questionTypeBreakdown?.mcq || 0) + (data.lastResponse.metrics?.questionTypeBreakdown?.diagram_interpret || 0) : '0';
+      
+      const days = data.lastResponse?.metrics?.perDay || [];
+      const covered = days.filter(d => d.score !== undefined).length;
+      chatProgressTopics.textContent = `${covered}/4`;
+      
+      if (chatProgressDifficulty && data.lastResponse) {
+        const diff = data.lastResponse.difficultyTier || 'Standard';
+        chatProgressDifficulty.textContent = diff.charAt(0).toUpperCase() + diff.slice(1);
+      }
+
+      // Sync warning counts text
+      const exits = data.fullscreenExits || 0;
+      const remaining = Math.max(0, 3 - exits);
+      const countText = document.getElementById('fullscreen-violation-count');
+      if (countText) {
+        countText.textContent = `Warning ${exits} of 2 — ${remaining} warning${remaining === 1 ? '' : 's'} remaining before automatic suspension.`;
+      }
+
+      // Start camera feed
+      const videoActive = document.getElementById('video-active');
+      if (window.CameraManager && videoActive) {
+        window.CameraManager.startActive(videoActive);
+      }
+      const cameraWidget = document.getElementById('camera-widget');
+      if (cameraWidget) cameraWidget.classList.remove('hidden');
+
+      isInterviewActive = true;
+      startSessionTimer();
+
+      // Check for warning lockout countdown
+      if (data.warningLockoutUntil) {
+        const remainingMs = new Date(data.warningLockoutUntil).getTime() - Date.now();
+        if (remainingMs > 0) {
+          startWarningLockoutCountdown(Math.ceil(remainingMs / 1000));
+        } else {
+          document.getElementById('fullscreen-overlay').classList.remove('hidden');
+        }
+      } else {
+        document.getElementById('fullscreen-overlay').classList.remove('hidden');
+      }
+    }
+  } catch (err) {
+    console.error('[Restore Error] Failed to restore active session:', err);
+  }
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
   try {
     const res = await fetch('/api/candidates');
@@ -61,6 +172,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
 
     lucide.createIcons();
+    
+    // Auto-restore session if active
+    await tryRestoreActiveSession();
   } catch (error) {
     console.error('Initialization error:', error);
     candidateSelect.innerHTML = '<option value="" disabled>Error loading candidates.</option>';
@@ -155,6 +269,7 @@ function stopSessionTimer() {
 async function startInterviewSession() {
   // Generate session ID
   currentSessionId = `session-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  localStorage.setItem('currentSessionId', currentSessionId);
   
   // Set UI state
   chatCandName.textContent = selectedCandidate.member.name;
@@ -509,6 +624,7 @@ document.getElementById('btn-suspended-exit').addEventListener('click', () => {
   candidateCard.classList.add('hidden');
   selectedCandidate = null;
   currentSessionId = null;
+  localStorage.removeItem('currentSessionId');
   isInterviewActive = false;
   violationCount = 0;
   firedFlaggedNotice = false;
@@ -521,68 +637,103 @@ document.getElementById('btn-suspended-exit').addEventListener('click', () => {
   if (cameraWidget) cameraWidget.classList.add('hidden');
 });
 
-// Continuously monitor fullscreen changes
-async function handleFullscreenChange() {
-  if (!isInterviewActive) return;
-  triggerFullscreenTransitionActive();
-  if (isReenteringFullscreen) return;
+// Unified debounced exit-event proctoring pipeline
+let exitDebounceTimeout = null;
+let activeLockoutInterval = null;
 
+function startWarningLockoutCountdown(seconds) {
   const warningOverlay = document.getElementById('fullscreen-warning-overlay');
-
-  if (!isCurrentlyFullscreen()) {
-    // 1. Immediately show the warning overlay
-    if (warningOverlay) {
-      warningOverlay.classList.remove('hidden');
-    }
-
-    // 2. Immediately try to programmatically re-enter fullscreen
-    const reEntered = await enterFullscreen();
-    if (reEntered || isCurrentlyFullscreen()) {
-      if (warningOverlay) {
-        warningOverlay.classList.add('hidden');
-      }
-    }
-
-    // 3. Report the violation to the server
-    await reportViolationToServer('fullscreen-exit');
+  if (warningOverlay) {
+    warningOverlay.classList.remove('hidden');
   }
+
+  const resumeBtn = document.getElementById('btn-fullscreen-resume');
+  if (!resumeBtn) return;
+
+  resumeBtn.disabled = true;
+
+  if (activeLockoutInterval) clearInterval(activeLockoutInterval);
+
+  let currentSec = seconds;
+  const originalText = 'Re-enter Fullscreen & Resume Interview';
+  
+  const updateBtnText = () => {
+    if (currentSec > 0) {
+      resumeBtn.innerHTML = `<i data-lucide="lock" class="w-5 h-5"></i> <span>Wait ${currentSec}s to Resume</span>`;
+    } else {
+      resumeBtn.innerHTML = `<i data-lucide="maximize-2" class="w-5 h-5"></i> <span>${originalText}</span>`;
+      resumeBtn.disabled = false;
+    }
+    if (window.lucide) lucide.createIcons();
+  };
+
+  updateBtnText();
+
+  activeLockoutInterval = setInterval(() => {
+    currentSec--;
+    updateBtnText();
+    if (currentSec <= 0) {
+      clearInterval(activeLockoutInterval);
+      activeLockoutInterval = null;
+    }
+  }, 1000);
 }
 
+function registerPotentialExit(signalType) {
+  if (!isInterviewActive) return;
+  if (isReenteringFullscreen || isFullscreenTransitionActive) {
+    console.log(`[Proctor] Bypassing raw signal ${signalType} during active transition/re-entry.`);
+    return;
+  }
 
+  console.log(`[Proctor] Raw signal registered: ${signalType}`);
 
-// Monitor visibility and window focus changes (Phase 3 Zero Tolerance Tab-Switch)
-function handleVisibilityOrFocusChange() {
+  if (exitDebounceTimeout) clearTimeout(exitDebounceTimeout);
+  exitDebounceTimeout = setTimeout(() => {
+    processLogicalExitEvent();
+  }, 500);
+}
+
+async function processLogicalExitEvent() {
   if (!isInterviewActive) return;
   if (isReenteringFullscreen || isFullscreenTransitionActive) return;
 
-  // Zero-tolerance tab-switch or window focus loss
   const isHidden = document.hidden;
   const isFocused = document.hasFocus();
+  const isFS = isCurrentlyFullscreen();
 
-  if (isHidden || !isFocused) {
-    if (blurTimeout) clearTimeout(blurTimeout);
-    blurTimeout = setTimeout(() => {
-      const currentHidden = document.hidden;
-      const currentFocused = document.hasFocus();
-      if ((currentHidden || !currentFocused) && isInterviewActive && !isReenteringFullscreen && !isFullscreenTransitionActive) {
-        console.warn('[Proctor] Tab switch or window blur detected. Suspending session.');
-        reportViolationToServer('tab-switch');
+  if (!isFS || isHidden || !isFocused) {
+    console.warn(`[Proctor] Logical exit event verified: FS=${isFS}, hidden=${isHidden}, focused=${isFocused}`);
+
+    // Show warning overlay and start 10s lockout immediately
+    startWarningLockoutCountdown(10);
+
+    // Report violation to server
+    const data = await reportViolationToServer('fullscreen-exit');
+    if (data) {
+      if (data.suspended) {
+        return;
       }
-    }, 200);
+      if (data.warningLockoutUntil) {
+        const remainingMs = new Date(data.warningLockoutUntil).getTime() - Date.now();
+        const remainingSecs = Math.max(1, Math.ceil(remainingMs / 1000));
+        startWarningLockoutCountdown(remainingSecs);
+      }
+    }
   }
 }
 
-window.addEventListener('blur', handleVisibilityOrFocusChange);
-window.addEventListener('focusout', handleVisibilityOrFocusChange);
+window.addEventListener('blur', () => registerPotentialExit('window-blur'));
+window.addEventListener('focusout', () => registerPotentialExit('window-focusout'));
 window.addEventListener('focus', () => {
   if (blurTimeout) clearTimeout(blurTimeout);
 });
-document.addEventListener('visibilitychange', handleVisibilityOrFocusChange);
+document.addEventListener('visibilitychange', () => registerPotentialExit('visibilitychange'));
 
-document.addEventListener('fullscreenchange', handleFullscreenChange);
-document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-document.addEventListener('mozfullscreenchange', handleFullscreenChange);
-document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+document.addEventListener('fullscreenchange', () => registerPotentialExit('fullscreenchange'));
+document.addEventListener('webkitfullscreenchange', () => registerPotentialExit('fullscreenchange'));
+document.addEventListener('mozfullscreenchange', () => registerPotentialExit('fullscreenchange'));
+document.addEventListener('MSFullscreenChange', () => registerPotentialExit('fullscreenchange'));
 
 // ==================== PHASE 4: CLIPBOARD & SCREENSHOT DETECTION ====================
 function handleClipboardOrShortcutViolation(e, type = 'copy-paste') {
@@ -619,7 +770,9 @@ function handleProctoredKeyEvents(e) {
   const isAltOrWinPrtScn = (isCtrlOrCmd || e.altKey) && isPrintScreenKey;
 
   if (isPrintScreenKey || isWindowsSnipping || isAltOrWinPrtScn) {
-    handleClipboardOrShortcutViolation(e, 'screenshot');
+    if (e.preventDefault) e.preventDefault();
+    if (e.stopPropagation) e.stopPropagation();
+    console.log('[Proctor] Blocked screenshot shortcut keystroke. Separate proctor violation reporting bypassed.');
     return;
   }
 
@@ -1240,6 +1393,7 @@ btnRestart.addEventListener('click', () => {
   candidateCard.classList.add('hidden');
   selectedCandidate = null;
   currentSessionId = null;
+  localStorage.removeItem('currentSessionId');
   isInterviewActive = false;
   violationCount = 0;
   firedFlaggedNotice = false;

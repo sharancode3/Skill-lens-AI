@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import { initFirebase, runStartupHealthCheck } from './firebase.js';
 import { initializeData, getEnrichedCandidate, candidatesById, precomputeConceptTerms } from './dataManager.js';
 import { generateEmbeddings } from './embeddingManager.js';
-import { createSession, handleTurn, reportViolation, cooldowns } from './sessionManager.js';
+import { createSession, handleTurn, reportViolation, cooldowns, getSessionDoc } from './sessionManager.js';
 
 dotenv.config();
 
@@ -26,6 +26,30 @@ app.get('/api/candidates', (req, res) => {
     res.json(list);
   } catch (error) {
     res.status(500).json({ error: 'Failed to retrieve candidates list.' });
+  }
+});
+
+// GET /api/session/:sessionId
+app.get('/api/session/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const session = await getSessionDoc(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    return res.json({
+      sessionId: session.sessionId,
+      state: session.state,
+      fullscreenExits: session.fullscreenExits || 0,
+      warningLockoutUntil: session.warningLockoutUntil || null,
+      suspended: session.state === 'done' && session.feedback && session.feedback.summary.includes('suspended'),
+      violations: session.violations || [],
+      candidate: session.candidateSnapshot || null,
+      transcript: session.transcript || [],
+      lastResponse: session.lastResponse || null
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
   }
 });
 

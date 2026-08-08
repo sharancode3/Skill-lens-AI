@@ -220,10 +220,12 @@ export async function createSession(sessionId, candidate) {
     tabSwitches: 0,
     clipboardViolations: 0,
     flaggedForReview: false,
+    warningLockoutUntil: null,
     proctoring: {
       violations: [],
       flaggedForReview: false,
-      totalViolationCount: 0
+      totalViolationCount: 0,
+      warningLockoutUntil: null
     }
   };
 
@@ -1371,7 +1373,7 @@ export async function reportViolation(sessionId, violationType) {
   }
 
   // Phase 2 Rule: 3rd fullscreen exit causes immediate suspension
-  const isFullscreenSuspension = (violationType === 'fullscreen-exit' && session.fullscreenExits >= 3);
+  const isFullscreenSuspension = (session.fullscreenExits >= 3);
   // Phase 3 Rule: 1st tab switch causes immediate suspension (zero tolerance)
   const isTabSwitchSuspension = (violationType === 'tab-switch' && session.tabSwitches >= 1);
   // Phase 4 Rule: 2nd copy/paste or screenshot attempt causes immediate suspension
@@ -1383,6 +1385,13 @@ export async function reportViolation(sessionId, violationType) {
 
   const isCameraSuspension = isCameraViolation && violationCount >= 4;
   const shouldSuspend = isCameraSuspension || (!isCameraViolation && (isFullscreenSuspension || isTabSwitchSuspension || isClipboardSuspension || isGeneralSuspension));
+
+  if (!shouldSuspend && (violationType === 'fullscreen-exit' || violationType === 'tab-switch')) {
+    const lockoutMs = 10000; // 10 second warning lockout countdown
+    session.warningLockoutUntil = new Date(Date.now() + lockoutMs).toISOString();
+  } else {
+    session.warningLockoutUntil = null;
+  }
 
   if (shouldSuspend) {
     // Suspend candidate!
@@ -1429,7 +1438,8 @@ export async function reportViolation(sessionId, violationType) {
         severity: v.severity || 'medium'
       })),
       flaggedForReview: session.flaggedForReview || false,
-      totalViolationCount: session.violations.length
+      totalViolationCount: session.violations.length,
+      warningLockoutUntil: session.warningLockoutUntil || null
     };
 
     await saveSessionDoc(sessionId, session);
@@ -1443,6 +1453,7 @@ export async function reportViolation(sessionId, violationType) {
       warningsRemaining: 0,
       violationCount,
       flaggedForReview: !!session.flaggedForReview,
+      warningLockoutUntil: session.warningLockoutUntil || null,
       feedback: session.feedback,
       metrics: {
         overallAccuracy: 0,
@@ -1463,7 +1474,8 @@ export async function reportViolation(sessionId, violationType) {
       severity: v.severity || 'medium'
     })),
     flaggedForReview: session.flaggedForReview || false,
-    totalViolationCount: session.violations.length
+    totalViolationCount: session.violations.length,
+    warningLockoutUntil: session.warningLockoutUntil || null
   };
 
   await saveSessionDoc(sessionId, session);
@@ -1480,6 +1492,7 @@ export async function reportViolation(sessionId, violationType) {
     warningsRemaining,
     violationCount,
     flaggedForReview: session.flaggedForReview || false,
+    warningLockoutUntil: session.warningLockoutUntil || null,
     proctoringSummary: getProctoringSummary(session)
   };
 }
