@@ -255,8 +255,6 @@ async function reportViolationToServer(type) {
     if (!res.ok) throw new Error('Failed to report violation.');
     const data = await res.json();
     
-    violationCount = data.violationCount;
-    
     if (data.suspended) {
       isInterviewActive = false;
       showSuspensionScreen();
@@ -266,11 +264,29 @@ async function reportViolationToServer(type) {
       const countText = document.getElementById('fullscreen-violation-count');
       const msgText = document.getElementById('fullscreen-violation-msg');
       if (warningOverlay) warningOverlay.classList.remove('hidden');
-      if (countText) countText.textContent = `Violation ${violationCount} of 3 — further attempts will end your interview.`;
+      
+      const exits = data.fullscreenExits || data.violationCount || 1;
+      const remaining = data.warningsRemaining !== undefined ? data.warningsRemaining : Math.max(0, 4 - exits);
+
+      if (countText) {
+        countText.textContent = `Warning ${exits} of 3 — ${remaining} warning${remaining === 1 ? '' : 's'} remaining before automatic suspension.`;
+      }
       if (msgText) {
         msgText.textContent = type === 'fullscreen-exit' 
-          ? 'Exiting fullscreen is not allowed during the interview.'
-          : 'Switching tabs or windows is not allowed during the interview.';
+          ? 'Exiting fullscreen mode is not permitted during proctored technical evaluations.'
+          : 'Switching away from this browser window or tab is not allowed during the interview.';
+      }
+
+      // Auto-recovery attempt: Try to re-enter fullscreen programmatically after 1.5s
+      if (type === 'fullscreen-exit') {
+        setTimeout(async () => {
+          if (isInterviewActive && !isCurrentlyFullscreen()) {
+            const reEntered = await enterFullscreen();
+            if (reEntered || isCurrentlyFullscreen()) {
+              if (warningOverlay) warningOverlay.classList.add('hidden');
+            }
+          }
+        }, 1500);
       }
     }
   } catch (error) {

@@ -1087,13 +1087,18 @@ export async function reportViolation(sessionId, violationType) {
     return { error: 'Session not found', status: 404 };
   }
   
+  if (!session.fullscreenExits) session.fullscreenExits = 0;
+  if (!session.tabSwitches) session.tabSwitches = 0;
+  if (!session.violations) session.violations = [];
+
   if (session.state === SessionState.DONE) {
-    // If it's already done (could be suspended or regular end), just return status
     const isSuspended = session.feedback && session.feedback.summary.includes('suspended');
     return {
       done: true,
       suspended: isSuspended,
-      violationCount: session.violations ? session.violations.length : 0,
+      fullscreenExits: session.fullscreenExits,
+      tabSwitches: session.tabSwitches,
+      violationCount: session.violations.length,
       feedback: session.feedback,
       metrics: {
         overallAccuracy: 0,
@@ -1105,36 +1110,49 @@ export async function reportViolation(sessionId, violationType) {
     };
   }
 
-  if (!session.violations) {
-    session.violations = [];
+  // Increment dedicated counts
+  if (violationType === 'fullscreen-exit') {
+    session.fullscreenExits += 1;
+  } else if (violationType === 'tab-switch') {
+    session.tabSwitches += 1;
   }
   
   const violationCount = session.violations.length + 1;
   session.violations.push({
     timestamp: new Date().toISOString(),
     type: violationType,
-    count: violationCount
+    count: violationCount,
+    fullscreenExits: session.fullscreenExits,
+    tabSwitches: session.tabSwitches
   });
 
-  console.log(`[Proctoring Server] Logged violation ${violationCount} for session "${sessionId}": ${violationType}`);
+  console.log(`[Proctoring Server] Logged violation ${violationCount} (fullscreenExits: ${session.fullscreenExits}, tabSwitches: ${session.tabSwitches}) for session "${sessionId}": ${violationType}`);
 
-  if (violationCount >= 4) {
+  // Phase 2 Rule: 4th fullscreen exit causes immediate suspension
+  const isFullscreenSuspension = (violationType === 'fullscreen-exit' && session.fullscreenExits >= 4);
+  const isGeneralSuspension = violationCount >= 4;
+
+  if (isFullscreenSuspension || isGeneralSuspension) {
     // Suspend candidate!
     session.state = SessionState.DONE;
+    const summaryMsg = isFullscreenSuspension 
+      ? "Candidate was suspended due to repeated fullscreen violations (exited fullscreen 4 times)."
+      : "Candidate was suspended for repeated proctoring violations.";
+
     session.feedback = {
-      summary: "Candidate was suspended for repeated proctoring violations.",
+      summary: summaryMsg,
       strengths: [],
       gaps: [],
       next: []
     };
     session.judgeVerdict = {
       decision: "would_reject",
-      reasoning: "Candidate was suspended for repeated proctoring violations.",
+      reasoning: summaryMsg,
       evidenceTrail: []
     };
-    session.accuracyLog = []; // zero out/empty scores
+    session.accuracyLog = []; // zero out scores
     
-    // Register cooldown
+    // Register 5-minute cooldown
     const candSnapshot = session.candidateSnapshot;
     const candId = candSnapshot.id || (candSnapshot.member ? candSnapshot.member.id : null);
     if (candId) {
@@ -1147,6 +1165,9 @@ export async function reportViolation(sessionId, violationType) {
     return {
       done: true,
       suspended: true,
+      fullscreenExits: session.fullscreenExits,
+      tabSwitches: session.tabSwitches,
+      warningsRemaining: 0,
       violationCount,
       feedback: session.feedback,
       metrics: {
@@ -1163,6 +1184,9 @@ export async function reportViolation(sessionId, violationType) {
   return {
     done: false,
     suspended: false,
+    fullscreenExits: session.fullscreenExits,
+    tabSwitches: session.tabSwitches,
+    warningsRemaining: Math.max(0, 4 - session.fullscreenExits),
     violationCount
   };
 }
