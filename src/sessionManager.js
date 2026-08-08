@@ -873,6 +873,23 @@ export async function handleTurn(sessionId, message) {
   // Set the next question type to the type of the question that was generated on this turn
   session.nextQuestionType = nextQuestionTypeGenerated;
 
+  // MCQ Hard Validation Safeguard (Part C Backend Guarantee)
+  if (session.nextQuestionType === 'mcq') {
+    const choices = llmResponse && llmResponse.mcqOptions;
+    if (!choices || !Array.isArray(choices) || choices.length < 2) {
+      console.warn(`[MCQ Validation Override] Question was flagged as MCQ but choices are missing, empty, or sparse (${choices ? choices.length : 0} options). Falling back to open.`);
+      session.nextQuestionType = 'open';
+      if (session.pendingQuestionType === 'mcq') {
+        session.pendingQuestionType = 'open';
+      }
+      if (llmResponse) {
+        llmResponse.mcqOptions = null;
+        llmResponse.mcqCorrectIndex = undefined;
+      }
+      session.pendingMCQAnswer = null;
+    }
+  }
+
   // Append to accuracyLog
   if (!session.accuracyLog) session.accuracyLog = [];
   session.accuracyLog.push({

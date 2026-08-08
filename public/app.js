@@ -929,7 +929,7 @@ async function appendInterviewerMessage(text, connections = [], nextQuestionType
   updateInputArea();
 
   // Render MCQ choices if present
-  let shouldRenderMCQ = nextQuestionType === 'mcq' && mcqOptions && mcqOptions.length > 0;
+  let shouldRenderMCQ = nextQuestionType === 'mcq' && mcqOptions && mcqOptions.length >= 2;
   if (shouldRenderMCQ) {
     if (window._lastRenderedMCQText === text && window._lastRenderedMCQOptions && JSON.stringify(window._lastRenderedMCQOptions) === JSON.stringify(mcqOptions)) {
       console.warn('[Frontend Safeguard] Duplicate MCQ question/options detected in UI stream. Suppressing duplicate rendering.');
@@ -1994,7 +1994,7 @@ function updateInputArea() {
   }
 
   const isMCQ = latestMsg.nextQuestionType === 'mcq';
-  const hasOptions = Array.isArray(latestMsg.mcqOptions) && latestMsg.mcqOptions.length > 0;
+  const hasOptions = Array.isArray(latestMsg.mcqOptions) && latestMsg.mcqOptions.length >= 2;
 
   if (isMCQ && !hasOptions) {
     console.warn(`[Session: ${currentSessionId || 'none'}] Malformed MCQ choice data fallback: 'mcqOptions' is empty or missing. Falling back to free-text input.`);

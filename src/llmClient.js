@@ -717,8 +717,24 @@ export function mockLLMCall(candidate, topic, lastQuestion, message, followupCou
 
   // Add MCQ fields if requested
   if (nextQuestionType === 'mcq') {
+    const candidateName = (session && session.candidateSnapshot && session.candidateSnapshot.member && session.candidateSnapshot.member.name) || '';
+    if (candidateName.includes('MockMalformedMCQ')) {
+      return {
+        ...result,
+        mcqOptions: [],
+        mcqCorrectIndex: 0
+      };
+    }
+    if (candidateName.includes('MockSingleMCQ')) {
+      return {
+        ...result,
+        mcqOptions: ['Single Choice'],
+        mcqCorrectIndex: 0
+      };
+    }
+
     const targetTopic = nextTopic || topic;
-    let reply = `Based on Day ${targetTopic.day}: "${targetTopic.title}", which of the following choices represents the correct technical detail?`;
+    let reply = `Suppose you are reviewing the deployment strategy for a highly available web service. Which of the following choices represents the most standard architectural approach for containerized load balancing and stateless failover?`;
     let mcqOptions = [
       `Deploy a fallback server using a secondary container engine.`,
       `Implement rate-limiting and connection pooling directly.`,
@@ -729,7 +745,7 @@ export function mockLLMCall(candidate, topic, lastQuestion, message, followupCou
 
     const cleanTitle = targetTopic.title.toLowerCase();
     if (cleanTitle.includes('python') || cleanTitle.includes('pipeline') || cleanTitle.includes('dataframe')) {
-      reply = `For Day ${targetTopic.day}: "${targetTopic.title}", how does Pandas optimize vectorization across DataFrame columns?`;
+      reply = `Suppose you are optimizing data ingestion pipelines using Pandas and need to clean millions of rows. How does Pandas optimize element-wise vectorization calculations across DataFrame columns to bypass Python's standard loop overhead?`;
       mcqOptions = [
         `By compiling Python loops directly into WebAssembly modules.`,
         `By delegating element-wise calculations to underlying C/NumPy contiguous memory arrays.`,
@@ -738,7 +754,7 @@ export function mockLLMCall(candidate, topic, lastQuestion, message, followupCou
       ];
       mcqCorrectIndex = 1;
     } else if (cleanTitle.includes('sql') || cleanTitle.includes('database') || cleanTitle.includes('relational')) {
-      reply = `When configuring indexing for Day ${targetTopic.day}: "${targetTopic.title}", what index structure accelerates B-Tree search queries?`;
+      reply = `Suppose you are troubleshooting query latency on a relational database containing hundreds of millions of records. Which indexing strategy would you reach for to accelerate read-heavy B-Tree search queries?`;
       mcqOptions = [
         `Creating covering indexes on high-cardinality search columns.`,
         `Storing all table rows as unindexed JSON blobs.`,
@@ -747,7 +763,7 @@ export function mockLLMCall(candidate, topic, lastQuestion, message, followupCou
       ];
       mcqCorrectIndex = 0;
     } else if (cleanTitle.includes('async') || cleanTitle.includes('event loop') || cleanTitle.includes('concurrency')) {
-      reply = `In asynchronous Python environments for Day ${targetTopic.day}, what occurs when a blocking IO operation runs on the main thread?`;
+      reply = `Suppose you're writing a concurrent API server using Python's asyncio module, and a third-party library performs a blocking synchronous network request on the main thread. What occurs to the event loop and any other active tasks during this blocking operation?`;
       mcqOptions = [
         `The event loop spawns a background worker process automatically.`,
         `The event loop stalls entirely, blocking all pending concurrent tasks.`,
@@ -756,7 +772,7 @@ export function mockLLMCall(candidate, topic, lastQuestion, message, followupCou
       ];
       mcqCorrectIndex = 1;
     } else if (cleanTitle.includes('embedding')) {
-      reply = `For Day ${targetTopic.day}: "${targetTopic.title}", how is a text chunk converted into a vector representation in standard production setups?`;
+      reply = `Suppose you are architecting a search system and need to convert raw document paragraphs into vector representations for semantic search. How does a production-grade embedding model convert text chunks into numeric vectors?`;
       mcqOptions = [
         `By mapping keywords directly to a sparse matrix of TF-IDF frequencies.`,
         `By computing the cosine distance of the tokens relative to the dictionary size.`,
@@ -890,7 +906,12 @@ export const INTERVIEWER_PERSONA = `You are a senior technical interviewer at a 
 - Role: An experienced, direct senior engineering lead who is genuinely curious about how the candidate thinks, not just whether they got the "right" answer.
 - Tone: Professional but conversational — never robotic, never over-familiar. Warm enough to keep a candidate talking, firm enough that vague or dismissive answers get pushed back on.
 - Values: Rewards specificity and real reasoning over buzzwords; genuinely curious about trade-offs and "why," not just "what"; treats every candidate with respect, but expects the same respect back and will say so plainly if it's not given.
-- Scope: You NEVER decide whether to suspend the session or whether the interview is over — you only ever produce conversational dialogue, follow-ups, and choice parameters for the live exchange.`;
+- Scope: You NEVER decide whether to suspend the session or whether the interview is over — you only ever produce conversational dialogue, follow-ups, and choice parameters for the live exchange.
+- Question Phrasing Guidelines:
+  1. Every question must be a complete, natural, spoken-style interview question — the kind a human technical interviewer would say out loud. Never write fragmented sentences or shorthand stems.
+  2. Never assume the candidate can infer missing context from a topic label. Do not say "When configuring X for Day 8, what happens?". Instead, spell out the full technical scenario in the question stem.
+  3. Avoid dangling or ambiguous constructions like "When configuring X, what does it mean?". Instead, describe the scenario the candidate must reason about (e.g. "Suppose you're setting up indexing for a vector database and read-heavy B-Tree lookups are slow — what indexing structure would you reach for, and why?").
+  4. For multiple-choice questions specifically, the question stem itself must still be a complete, self-contained question. The choices must be genuinely plausible engineering alternatives, avoiding obviously absurd distractors.`;
 
 export function checkDeterministicConduct(message) {
   const clean = (message || '').trim().toLowerCase();
@@ -1123,6 +1144,59 @@ function mockConductAnalysis(message) {
  * Sole job: Generate what gets said to the candidate this turn.
  * Uses the constant INTERVIEWER_PERSONA. Never decides suspension or interview wrap-up.
  */
+/**
+ * Verification helper for Technical Question Understandability (Part D)
+ * Ensures technical stems do not leak topic day references and are self-contained.
+ */
+export async function checkQuestionUnderstandability(questionText) {
+  if (process.env.SIMULATE_LLM_OUTAGE === 'true') {
+    return true; // Online fallback simulation
+  }
+
+  const systemPrompt = `You are an AI quality assurance assistant. Your task is to verify if a technical interview question is understandable in isolation, without any topic labels or curriculum metadata.
+A question is unacceptable if:
+- It is a fragmented or terse sentence.
+- It assumes the candidate knows what "Day X" or a topic day refers to.
+- It contains ambiguous references like "When configuring indexing for Day 8..." or "For this day's topic, what is...".
+- It uses dangling constructions like "When configuring X, what does it mean?" without explaining the scenario.
+
+Respond in JSON format with exactly:
+{
+  "understandable": true/false,
+  "feedback": "Reasoning why it is or is not understandable"
+}`;
+
+  const userPrompt = `Interview Question to check: "${questionText}"`;
+  
+  const schema = {
+    type: 'object',
+    properties: {
+      understandable: { type: 'boolean' },
+      feedback: { type: 'string' }
+    },
+    required: ['understandable', 'feedback']
+  };
+
+  try {
+    const res = await callBrainLLMWithFallback(
+      'QuestionQA',
+      systemPrompt,
+      userPrompt,
+      schema,
+      () => ({ understandable: true, feedback: 'Offline fallback assumed understandable' })
+    );
+    return res.understandable;
+  } catch (error) {
+    console.error('[QA Check Error] Failed to evaluate question:', error);
+    return true;
+  }
+}
+
+/**
+ * BRAIN 2: Interviewer Brain (the "personality")
+ * Sole job: Generate what gets said to the candidate this turn.
+ * Uses the constant INTERVIEWER_PERSONA. Never decides suspension or interview wrap-up.
+ */
 export async function generateInterviewerResponseWithLLM(
   session,
   candidateMessage,
@@ -1179,16 +1253,34 @@ CONSTRAINTS:
     detectedConnections: detectedConnections || []
   });
 
-
   const schema = buildResponseSchema(nextQuestionType);
 
-  return callBrainLLMWithFallback(
+  let response = await callBrainLLMWithFallback(
     'Interviewer',
     systemPrompt,
     userPrompt,
     schema,
     () => mockLLMCall(session.candidateSnapshot, currentTopic, lastQuestion, candidateMessage, session.followupCountForCurrentTopic, detectedConnections, nextQuestionType, nextTopic, difficultyTier, session, hedgeMarkers)
   );
+
+  // Part D: Check Question Understandability & Self-Correct / Regenerate once
+  if (response && response.reply) {
+    const isUnderstandable = await checkQuestionUnderstandability(response.reply);
+    if (!isUnderstandable) {
+      console.warn(`[Self-Check QA] Technical stem failed check: "${response.reply}". Regenerating...`);
+      const systemPromptRegen = `${systemPrompt}\n\nCRITICAL QUALITY NOTICE: Your previous output question stem was flagged as not being fully understandable or self-contained in isolation. You MUST rewrite the technical question in "reply" so it is a complete, conversational spoken technical question that spells out the full scenario clearly, without referencing topic day numbers or assuming external metadata context.`;
+      
+      response = await callBrainLLMWithFallback(
+        'Interviewer',
+        systemPromptRegen,
+        userPrompt,
+        schema,
+        () => mockLLMCall(session.candidateSnapshot, currentTopic, lastQuestion, candidateMessage, session.followupCountForCurrentTopic, detectedConnections, nextQuestionType, nextTopic, difficultyTier, session, hedgeMarkers)
+      );
+    }
+  }
+
+  return response;
 }
 
 /**
