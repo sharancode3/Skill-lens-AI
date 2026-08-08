@@ -365,7 +365,12 @@ export function computeMetrics(session) {
       difficultyProgression: session.tiersReached || ['foundational', 'standard'],
       questionTypeBreakdown: { open: 0, mcq: 0, diagram_interpret: 0 },
       totalInterviewDurationSeconds,
-      perQuestionTimes: []
+      perQuestionTimes: [],
+      correctness: 0,
+      depth: 0,
+      reasoning: 0,
+      tradeoffs: 0,
+      clarity: 0
     };
   }
 
@@ -406,13 +411,41 @@ export function computeMetrics(session) {
     return { day: dayNum, title, score: avgScore };
   });
 
+  // Calculate aggregate dimensions from accuracyLog
+  const ratedLogs = accuracyLog.filter(item => item.correctness !== undefined);
+  let correctness = 0;
+  let depth = 0;
+  let reasoningScore = 0;
+  let tradeoffs = 0;
+  let clarity = 0;
+
+  if (ratedLogs.length > 0) {
+    correctness = Math.round(ratedLogs.reduce((sum, item) => sum + item.correctness, 0) / ratedLogs.length);
+    depth = Math.round(ratedLogs.reduce((sum, item) => sum + item.depth, 0) / ratedLogs.length);
+    reasoningScore = Math.round(ratedLogs.reduce((sum, item) => sum + item.reasoningScore, 0) / ratedLogs.length);
+    tradeoffs = Math.round(ratedLogs.reduce((sum, item) => sum + item.tradeoffs, 0) / ratedLogs.length);
+    clarity = Math.round(ratedLogs.reduce((sum, item) => sum + item.clarity, 0) / ratedLogs.length);
+  } else {
+    // If no evaluations ran, fallback based on overallAccuracy
+    correctness = overallAccuracy;
+    depth = overallAccuracy;
+    reasoningScore = overallAccuracy;
+    tradeoffs = overallAccuracy;
+    clarity = overallAccuracy;
+  }
+
   return {
     overallAccuracy,
     perDay,
     difficultyProgression,
     questionTypeBreakdown,
     totalInterviewDurationSeconds,
-    perQuestionTimes
+    perQuestionTimes,
+    correctness,
+    depth,
+    reasoning: reasoningScore,
+    tradeoffs,
+    clarity
   };
 }
 
@@ -770,7 +803,12 @@ export async function handleTurn(sessionId, message) {
     communicationConfidence: llmResponse ? (llmResponse.communicationConfidence || "medium") : "medium",
     rootUnderstandingReached: llmResponse ? !!llmResponse.rootUnderstandingReached : false,
     reactionClause: llmResponse ? (llmResponse.reactionClause || "") : "",
-    interruptFlag: llmResponse && llmResponse.reactionClause && llmResponse.reactionClause.includes('Sorry to interrupt')
+    interruptFlag: llmResponse && llmResponse.reactionClause && llmResponse.reactionClause.includes('Sorry to interrupt'),
+    correctness: llmResponse ? llmResponse.correctness : undefined,
+    depth: llmResponse ? llmResponse.depth : undefined,
+    reasoningScore: llmResponse ? llmResponse.reasoningScore : undefined,
+    tradeoffs: llmResponse ? llmResponse.tradeoffs : undefined,
+    clarity: llmResponse ? llmResponse.clarity : undefined
   });
 
   // Capstone Trigger Check (Phase I4)

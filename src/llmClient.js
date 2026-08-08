@@ -1181,16 +1181,20 @@ export async function evaluateTopicPerformanceWithLLM(currentTopic, exchangeHist
   }
 
   const systemPrompt = `You are the Evaluator Brain (the "grader") for a technical software engineering interview.
-Your sole job is to analyze the full exchange history for a completed curriculum topic and produce both the numeric technical score (0-100) and the narrative feedback together in one pass so they never contradict.
+Your job is to analyze the full exchange history for a completed curriculum topic and evaluate the candidate across multiple distinct dimensions.
 
 CURRICULUM TOPIC: Day ${currentTopic.day} - "${currentTopic.title}"
 OBJECTIVES: ${currentTopic.objectives.join(', ')}
 
-ALIGNMENT RULES:
-- High depth / specific details -> score 80-100, strength feedback referencing concrete candidate statements.
-- Vague / shallow / incorrect details -> score 20-59, gap feedback specifying missing mechanisms.
-- Refusal / gibberish / nonsense -> score 10-20, gap feedback noting non-attempt.
-- You must NEVER praise a topic that scored below 70, and never generate generic boilerplate.`;
+EVALUATION CRITERIA (Rate each from 0-100 independently):
+1. score: The blended overall accuracy score indicating overall performance.
+2. correctness: Technical accuracy of facts, logic, algorithms, or API usages.
+3. depth: Level of specific concrete details and structural mechanisms mentioned, avoiding generic hand-waving.
+4. reasoning: Coherence, flow, logic, and architectural soundness of the arguments.
+5. tradeoffs: Understanding and discussion of pros/cons, constraints, and alternative designs.
+6. clarity: Articulation, precision, structure, and readability of the explanations.
+
+IMPORTANT: Do not duplicate the same score across all dimensions. Evaluate each metric strictly on its own merits based on the exchange history. Produce both the numeric scores and the narrative feedback together in one pass so they never contradict.`;
 
   const userPrompt = JSON.stringify({
     exchangeHistory: exchangeHistory.map(e => `${e.role.toUpperCase()}: ${e.text}`).join('\n')
@@ -1201,14 +1205,34 @@ ALIGNMENT RULES:
     properties: {
       score: {
         type: 'INTEGER',
-        description: 'The numeric score from 0 to 100.'
+        description: 'The overall numeric blended score from 0 to 100.'
+      },
+      correctness: {
+        type: 'INTEGER',
+        description: 'Technical correctness from 0 to 100 (accuracy of facts, logic, and concepts).'
+      },
+      depth: {
+        type: 'INTEGER',
+        description: 'Depth of explanation from 0 to 100 (level of detail, mechanism explanation, avoiding high-level hand-waving).'
+      },
+      reasoning: {
+        type: 'INTEGER',
+        description: 'Reasoning quality from 0 to 100 (logical coherence, structured problem-solving, code/architecture flow).'
+      },
+      tradeoffs: {
+        type: 'INTEGER',
+        description: 'Trade-off awareness from 0 to 100 (ability to identify pros/cons of architectural decisions, database models, etc.).'
+      },
+      clarity: {
+        type: 'INTEGER',
+        description: 'Communication clarity from 0 to 100 (articulation, conciseness, clean layout of thoughts).'
       },
       narrativeFeedback: {
         type: 'STRING',
         description: 'The specific narrative feedback detailing strengths or gaps.'
       }
     },
-    required: ['score', 'narrativeFeedback']
+    required: ['score', 'correctness', 'depth', 'reasoning', 'tradeoffs', 'clarity', 'narrativeFeedback']
   };
 
   return callBrainLLMWithFallback(
@@ -1253,7 +1277,16 @@ function mockTopicEvaluation(currentTopic, exchangeHistory) {
     }
   }
 
-  return { score, narrativeFeedback: feedback };
+  // Generate distinct non-identical dimension scores based on overall score
+  return {
+    score,
+    correctness: score,
+    depth: Math.max(10, score - 5),
+    reasoning: Math.max(10, score - 2),
+    tradeoffs: Math.max(10, score - 10),
+    clarity: Math.max(10, score + 2 > 100 ? 100 : score + 2),
+    narrativeFeedback: feedback
+  };
 }
 
 /**
@@ -1328,6 +1361,13 @@ export async function evaluateTurnWithLLM(session, candidateMessage, detectedCon
     // Override score & reasoning in the turn response so they match narrative feedback exactly
     interviewerRes.llmConfidence = evaluation.score;
     interviewerRes.reasoning = evaluation.narrativeFeedback;
+    
+    // Store dimensions on the returned object so handleTurn can pick them up
+    interviewerRes.correctness = evaluation.correctness;
+    interviewerRes.depth = evaluation.depth;
+    interviewerRes.reasoningScore = evaluation.reasoning;
+    interviewerRes.tradeoffs = evaluation.tradeoffs;
+    interviewerRes.clarity = evaluation.clarity;
     
     // Map technical quality classification based on Evaluator score
     if (conduct.classification === 'genuine_attempt') {
@@ -1621,6 +1661,29 @@ export function generateMechanicalFeedback(session) {
     next
   }, session);
 
+  // Compute aggregate dimensions from accuracyLog
+  const ratedLogs = (session.accuracyLog || []).filter(item => item.correctness !== undefined);
+  let correctness = 50, depth = 50, reasoning = 50, tradeoffs = 50, clarity = 50;
+
+  if (ratedLogs.length > 0) {
+    correctness = Math.round(ratedLogs.reduce((sum, item) => sum + item.correctness, 0) / ratedLogs.length);
+    depth = Math.round(ratedLogs.reduce((sum, item) => sum + item.depth, 0) / ratedLogs.length);
+    reasoning = Math.round(ratedLogs.reduce((sum, item) => sum + item.reasoningScore, 0) / ratedLogs.length);
+    tradeoffs = Math.round(ratedLogs.reduce((sum, item) => sum + item.tradeoffs, 0) / ratedLogs.length);
+    clarity = Math.round(ratedLogs.reduce((sum, item) => sum + item.clarity, 0) / ratedLogs.length);
+  } else {
+    // If no evaluations ran, fallback based on average computed accuracy score
+    const totalScore = (session.accuracyLog || []).reduce((sum, item) => sum + item.finalAccuracyScore, 0);
+    const avgVal = (session.accuracyLog || []).length > 0 ? Math.round(totalScore / session.accuracyLog.length) : 50;
+    correctness = avgVal;
+    depth = avgVal;
+    reasoning = avgVal;
+    tradeoffs = avgVal;
+    clarity = avgVal;
+  }
+
+  processedFeedback.dimensions = { correctness, depth, reasoning, tradeoffs, clarity };
+
   const mechanicalVerdict = computeMechanicalVerdict(session);
 
   return {
@@ -1887,6 +1950,30 @@ You MUST return ONLY valid JSON matching the schema. Do not output markdown code
     if (result) {
       const finalFeedbackObj = result.feedback || { summary: "", strengths: [], gaps: [], next: [] };
       const processedFeedback = postProcessFeedback(finalFeedbackObj, session);
+
+      // Compute aggregate dimensions from accuracyLog
+      const ratedLogs = (session.accuracyLog || []).filter(item => item.correctness !== undefined);
+      let correctness = 50, depth = 50, reasoning = 50, tradeoffs = 50, clarity = 50;
+
+      if (ratedLogs.length > 0) {
+        correctness = Math.round(ratedLogs.reduce((sum, item) => sum + item.correctness, 0) / ratedLogs.length);
+        depth = Math.round(ratedLogs.reduce((sum, item) => sum + item.depth, 0) / ratedLogs.length);
+        reasoning = Math.round(ratedLogs.reduce((sum, item) => sum + item.reasoningScore, 0) / ratedLogs.length);
+        tradeoffs = Math.round(ratedLogs.reduce((sum, item) => sum + item.tradeoffs, 0) / ratedLogs.length);
+        clarity = Math.round(ratedLogs.reduce((sum, item) => sum + item.clarity, 0) / ratedLogs.length);
+      } else {
+        // Fallback
+        const totalScore = (session.accuracyLog || []).reduce((sum, item) => sum + item.finalAccuracyScore, 0);
+        const avgVal = (session.accuracyLog || []).length > 0 ? Math.round(totalScore / session.accuracyLog.length) : 50;
+        correctness = avgVal;
+        depth = avgVal;
+        reasoning = avgVal;
+        tradeoffs = avgVal;
+        clarity = avgVal;
+      }
+
+      processedFeedback.dimensions = { correctness, depth, reasoning, tradeoffs, clarity };
+
       return {
         feedback: processedFeedback,
         judgeVerdict: result.judgeVerdict || { decision: "borderline", reasoning: "No details provided.", evidenceTrail: [] }
