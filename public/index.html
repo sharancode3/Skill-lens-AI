@@ -38,48 +38,48 @@
     </section>
 
     <!-- Content / Candidate Selector Card -->
-    <section class="flex-grow flex items-center justify-center p-6 bg-gray-50">
-      <div class="w-full max-w-2xl bg-white rounded-lg border-4 border-gray-900 p-8 flex flex-col gap-6">
+    <section class="flex-grow flex items-center justify-center p-6 bg-slate-50">
+      <div class="w-full max-w-2xl bg-white rounded-xl border-4 border-slate-900 p-8 flex flex-col gap-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
         <div>
-          <label for="candidate-select" class="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Select Candidate Profile</label>
+          <label for="candidate-select" class="block text-xs font-black uppercase tracking-wider text-slate-700 mb-2">Select Candidate Profile</label>
           <div class="relative">
-            <select id="candidate-select" class="w-full h-14 px-4 bg-gray-100 rounded-md text-gray-900 font-semibold border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none appearance-none cursor-pointer">
+            <select id="candidate-select" class="w-full h-14 px-4 bg-slate-100 rounded-xl text-slate-900 font-extrabold border-2 border-slate-900 focus:border-blue-600 focus:bg-white outline-none appearance-none cursor-pointer">
               <option value="" disabled selected>Loading candidates...</option>
             </select>
-            <div class="absolute inset-y-0 right-4 flex items-center pointer-events-none text-gray-500">
-              <i data-lucide="chevron-down"></i>
+            <div class="absolute inset-y-0 right-4 flex items-center pointer-events-none text-slate-700">
+              <i data-lucide="chevron-down" class="w-5 h-5"></i>
             </div>
           </div>
         </div>
 
         <!-- Selected Candidate Preview Details (Color Block Card) -->
-        <div id="candidate-card" class="bg-gray-100 rounded-lg p-6 flex flex-col gap-4 hidden">
-          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-2 border-gray-200 pb-4">
+        <div id="candidate-card" class="bg-slate-100 rounded-xl border-2 border-slate-900 p-6 flex flex-col gap-4 hidden">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b-2 border-slate-200 pb-4">
             <div>
-              <h2 id="cand-name" class="text-2xl font-bold tracking-tight text-gray-900">Name</h2>
-              <p id="cand-role" class="text-sm font-semibold uppercase tracking-wider text-blue-600 mt-1">Backend Engineer</p>
+              <h2 id="cand-name" class="text-2xl font-extrabold tracking-tight text-slate-900">Name</h2>
+              <p id="cand-role" class="text-xs font-black uppercase tracking-wider text-blue-600 mt-1">Backend Engineer</p>
             </div>
-            <div class="flex items-center gap-2 bg-blue-50 text-blue-700 font-bold px-3 py-1 rounded-full text-xs">
-              <i data-lucide="award" class="w-4 h-4"></i>
+            <div class="flex items-center gap-2 bg-blue-100 text-blue-900 border border-blue-300 font-extrabold px-3 py-1 rounded-lg text-xs">
+              <i data-lucide="award" class="w-4 h-4 text-blue-600"></i>
               <span id="cand-exp">0 Years</span>
             </div>
           </div>
 
           <!-- Multi-color stats row -->
           <div class="grid grid-cols-2 gap-4">
-            <div class="bg-green-50 p-4 rounded-md flex flex-col justify-center">
-              <span class="text-3xl font-extrabold text-emerald-600" id="stat-completed">0</span>
-              <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-800 mt-1">Missions Passed</span>
+            <div class="bg-emerald-50 border-2 border-emerald-300 p-4 rounded-xl flex flex-col justify-center">
+              <span class="text-3xl font-black text-emerald-600" id="stat-completed">0</span>
+              <span class="text-[10px] font-black uppercase tracking-wider text-emerald-900 mt-1">Missions Passed</span>
             </div>
-            <div class="bg-amber-50 p-4 rounded-md flex flex-col justify-center">
-              <span class="text-3xl font-extrabold text-amber-600" id="stat-rate">0%</span>
-              <span class="text-[10px] font-bold uppercase tracking-wider text-amber-800 mt-1">First-Try Rate</span>
+            <div class="bg-amber-50 border-2 border-amber-300 p-4 rounded-xl flex flex-col justify-center">
+              <span class="text-3xl font-black text-amber-600" id="stat-rate">0%</span>
+              <span class="text-[10px] font-black uppercase tracking-wider text-amber-900 mt-1">First-Try Rate</span>
             </div>
           </div>
         </div>
 
         <!-- Start CTA -->
-        <button id="btn-start" class="w-full h-14 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md transition-all duration-200 transform hover:scale-105 active:scale-95 outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center justify-center gap-2">
+        <button id="btn-start" class="w-full h-14 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl border-2 border-slate-900 transition-all duration-200 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2">
           <span>Start Technical Interview</span>
           <i data-lucide="arrow-right" class="w-5 h-5"></i>
         </button>
@@ -372,19 +372,19 @@
   </main>
 
   <!-- ==================== SCREEN 3: FEEDBACK SCREEN ==================== -->
-  <main id="screen-feedback" class="view min-h-screen bg-gray-50 flex flex-col hidden">
+  <main id="screen-feedback" class="view min-h-screen bg-slate-50 flex flex-col hidden">
     <!-- Summary Header Block -->
-    <section class="bg-blue-600 text-white p-8 md:p-16 relative overflow-hidden">
+    <section class="bg-slate-900 text-white p-8 md:p-16 relative overflow-hidden border-b-4 border-slate-900">
       <!-- Decos -->
       <div class="deco-shape rotated-square absolute"></div>
       
       <div class="max-w-4xl mx-auto z-10 relative flex flex-col gap-4">
-        <span class="badge bg-blue-500 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full border border-blue-400 self-start">Evaluation Report</span>
+        <span class="badge bg-blue-600 text-xs font-black uppercase tracking-wider px-3 py-1 rounded-md border border-blue-400 self-start">Evaluation Report</span>
         <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight leading-none">Technical Feedback Composer</h1>
         
         <!-- Summary Box -->
-        <div class="bg-blue-700 rounded-lg p-6 mt-4 border border-blue-500">
-          <h2 class="text-xs font-bold uppercase tracking-wider text-blue-200 mb-2">Performance Summary</h2>
+        <div class="bg-slate-800 rounded-xl p-6 mt-4 border-2 border-slate-700">
+          <h2 class="text-xs font-extrabold uppercase tracking-wider text-slate-300 mb-2">Performance Summary</h2>
           <p id="feedback-summary" class="text-lg text-white font-normal leading-relaxed">
             Summary content loaded dynamically...
           </p>
@@ -395,19 +395,19 @@
     <!-- Details Sections -->
     <section class="flex-grow p-6 md:p-12 max-w-5xl w-full mx-auto flex flex-col gap-12">
       <!-- Hiring Panel Verdict (Phase I7) -->
-      <div id="feedback-verdict-section" class="bg-white border-8 border-gray-900 rounded-lg p-8 flex flex-col gap-6 hidden animate-fadeIn">
-        <div class="flex items-center justify-between border-b-4 border-gray-900 pb-3">
+      <div id="feedback-verdict-section" class="bg-white border-4 border-slate-900 rounded-xl p-8 flex flex-col gap-6 hidden animate-fadeIn shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+        <div class="flex items-center justify-between border-b-2 border-slate-900 pb-3">
           <div class="flex items-center gap-2">
-            <i data-lucide="gavel" class="w-6 h-6 text-slate-800"></i>
-            <h2 class="text-xl font-black tracking-tight text-gray-900">Interviewer Panel Verdict</h2>
+            <i data-lucide="gavel" class="w-6 h-6 text-slate-900"></i>
+            <h2 class="text-xl font-extrabold tracking-tight text-slate-900">Interviewer Panel Verdict</h2>
           </div>
-          <span id="verdict-decision" class="text-xs font-black uppercase px-4 py-1.5 rounded-md border-4 border-gray-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">decision</span>
+          <span id="verdict-decision" class="text-xs font-black uppercase px-4 py-1.5 rounded-lg border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">decision</span>
         </div>
-        <p id="verdict-reasoning" class="text-sm text-gray-700 font-semibold leading-relaxed">
+        <p id="verdict-reasoning" class="text-sm text-slate-700 font-semibold leading-relaxed">
           Verdict reasoning...
         </p>
         <div class="flex flex-col gap-3">
-          <h3 class="text-xs font-bold uppercase tracking-wider text-gray-500">Evidence Trail</h3>
+          <h3 class="text-xs font-black uppercase tracking-wider text-slate-500">Evidence Trail</h3>
           <div id="verdict-evidence-trail" class="flex flex-col gap-2.5">
             <!-- Evidence rows injected dynamically -->
           </div>
@@ -416,9 +416,9 @@
 
       <!-- strengths (Emerald Tinted cards) -->
       <div class="flex flex-col gap-4">
-        <div class="flex items-center gap-2 border-b-2 border-emerald-200 pb-2">
+        <div class="flex items-center gap-2 border-b-2 border-emerald-300 pb-2">
           <i data-lucide="check-circle" class="w-6 h-6 text-emerald-600"></i>
-          <h2 class="text-xl font-bold tracking-tight text-gray-900">Key Strengths</h2>
+          <h2 class="text-xl font-extrabold tracking-tight text-slate-900">Key Strengths</h2>
         </div>
         <div id="feedback-strengths" class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <!-- strengths cards injected dynamically -->
@@ -427,9 +427,9 @@
 
       <!-- gaps (Amber Tinted cards) -->
       <div class="flex flex-col gap-4">
-        <div class="flex items-center gap-2 border-b-2 border-amber-200 pb-2">
+        <div class="flex items-center gap-2 border-b-2 border-amber-300 pb-2">
           <i data-lucide="alert-triangle" class="w-6 h-6 text-amber-600"></i>
-          <h2 class="text-xl font-bold tracking-tight text-gray-900">Identified Gaps</h2>
+          <h2 class="text-xl font-extrabold tracking-tight text-slate-900">Identified Gaps</h2>
         </div>
         <div id="feedback-gaps" class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <!-- gaps cards injected dynamically -->
@@ -437,10 +437,10 @@
       </div>
 
       <!-- next steps (Dark Section) -->
-      <div class="bg-gray-900 text-white rounded-lg p-8 flex flex-col gap-6">
-        <div class="flex items-center gap-2 border-b border-gray-800 pb-3">
+      <div class="bg-slate-900 text-white rounded-xl border-4 border-slate-900 p-8 flex flex-col gap-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+        <div class="flex items-center gap-2 border-b-2 border-slate-800 pb-3">
           <i data-lucide="trending-up" class="w-6 h-6 text-blue-400"></i>
-          <h2 class="text-xl font-bold tracking-tight">Recommended Next Steps</h2>
+          <h2 class="text-xl font-extrabold tracking-tight">Recommended Next Steps</h2>
         </div>
         <div id="feedback-next" class="flex flex-col gap-4">
           <!-- next items injected dynamically -->
@@ -449,25 +449,26 @@
 
       <!-- metrics (New 5th Section - Surfaced dynamically) -->
       <div id="feedback-metrics-section" class="flex flex-col gap-6 hidden">
-        <div class="flex items-center gap-2 border-b-2 border-blue-200 pb-2">
+        <div class="flex items-center gap-2 border-b-2 border-blue-300 pb-2">
           <i data-lucide="bar-chart-2" class="w-6 h-6 text-blue-600"></i>
-          <h2 class="text-xl font-bold tracking-tight text-gray-900">Performance Analytics</h2>
+          <h2 class="text-xl font-extrabold tracking-tight text-slate-900">Performance Analytics</h2>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
           <!-- Overall Accuracy Block -->
-          <div class="bg-blue-600 text-white rounded-lg p-6 flex flex-col justify-between items-center text-center border-4 border-blue-700">
-            <h3 class="text-sm font-bold uppercase tracking-wider text-blue-200">Overall Accuracy</h3>
+          <div class="bg-blue-600 text-white rounded-xl p-6 flex flex-col justify-between items-center text-center border-4 border-slate-900 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+            <h3 class="text-xs font-black uppercase tracking-wider text-blue-200">Overall Accuracy</h3>
             <p id="metrics-overall" class="text-6xl font-black my-4">0%</p>
-            <span class="text-xs text-blue-100">Blended performance score across turns</span>
+            <span class="text-xs font-bold text-blue-100">Blended performance score across turns</span>
           </div>
 
           <!-- Difficulty Progression Indicator -->
-          <div class="bg-white border-4 border-gray-900 rounded-lg p-6 flex flex-col justify-between">
-            <h3 class="text-sm font-bold uppercase tracking-wider text-gray-500 border-b border-gray-100 pb-2">Difficulty Progression</h3>
+          <div class="bg-white border-4 border-slate-900 rounded-xl p-6 flex flex-col justify-between shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+            <h3 class="text-xs font-black uppercase tracking-wider text-slate-500 border-b-2 border-slate-100 pb-2">Difficulty Progression</h3>
             <div id="metrics-progression" class="flex flex-col gap-2 my-4">
               <!-- Progression markers injected here -->
             </div>
-            <span class="text-xs text-gray-400">Adaptive scaling difficulty tier reached</span>
+            <span class="text-xs font-bold text-slate-400">Adaptive scaling difficulty tier reached</span>
+          </div>
           </div>
 
           <!-- Question Types Breakdown -->
