@@ -1772,7 +1772,7 @@ if (chatMessages) {
   scrollObserver.observe(chatMessages, { childList: true, subtree: true });
 }
 
-// Register ProctoringNotifier window callback for MediaPipe proctoring violations (Phase C3)
+// Register ProctoringNotifier window callback for MediaPipe proctoring violations (Phase C3/C4)
 window.ProctoringNotifier = async (type) => {
   if (!isInterviewActive) return;
   console.log(`[Proctoring App] Handling proctoring violation event: ${type}`);
@@ -1790,6 +1790,8 @@ window.ProctoringNotifier = async (type) => {
       msg = 'Proctoring Warning: Multiple faces detected. Proctoring rules prohibit other individuals in frame.';
     } else if (type === 'gaze_violation') {
       msg = 'Proctoring Warning: Gaze deviation detected. Please look directly at the screen.';
+    } else if (type === 'phone_violation') {
+      msg = 'Proctoring Warning: Cell phone usage detected. All electronic devices are strictly prohibited during the interview.';
     }
 
     pasteError.innerHTML = `<i data-lucide="shield-alert" class="w-3.5 h-3.5 text-red-700 font-extrabold"></i> <span>${msg}</span>`;

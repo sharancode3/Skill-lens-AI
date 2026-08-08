@@ -82,6 +82,7 @@ This document is maintained to help AI models understand the current state of th
 - [x] Phase C1: Instruction Screen Camera Permission Request & Preview Setup (disabled auto-request, locked rules accept button, and warning banner toggle).
 - [x] Phase C2: Persistent Camera Widget During the Interview (positioned at bottom-left corner with z-index 99999 to guarantee visibility on top of inputs and keyboard modals).
 - [x] Phase C3: Face Presence & Head Pose Detection (throttled 1s model checking loop triggering presence, multi-face, and head yaw gaze deviation alerts).
+- [x] Phase C4: Phone / Object Detection (throttled 1s COCO object detector checking loop filtering for cell phones score >= 0.65 with 2-consecutive-sample warning trigger).
 
 
 
