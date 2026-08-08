@@ -100,6 +100,8 @@ This document tracks all AI-assisted actions taken during the hackathon to satis
 | 2026-08-08 | Implemented Phase I5: Simulated AI Interrupt | Antigravity | "PHASE I5 — Simulated AI Interrupt with mid-sentence reaction clause anchors, consecutive interrupt blocking, and spacing tests" | `src/sessionManager.js`, `src/llmClient.js`, `src/testPhaseI5.js`, `project_memory.md`, `ai_usage_log.md` |
 | 2026-08-08 | Implemented Phase I6: Per-Question Timer & Real-World Time Comparison | Antigravity | "PHASE I6 — Per-Question Timer & Real-World Time Comparison with server timing, visual running chat timers, and final feedback timing bounds comparisons" | `src/sessionManager.js`, `public/app.js`, `public/index.html`, `src/testPhaseI6.js`, `project_memory.md`, `ai_usage_log.md` |
 | 2026-08-08 | Implemented Phase I7: Judge Mode | Antigravity | "PHASE I7 — Judge Mode with committed hiring decisions, descriptive reasoning, ordered evidence trails, and custom panel verdict frontend dashboard displays" | `src/sessionManager.js`, `src/llmClient.js`, `public/app.js`, `public/index.html`, `src/testPhaseI7.js`, `project_memory.md`, `ai_usage_log.md` |
+| 2026-08-08 | Implemented Phase I8: Frontend: Surfacing All of This | Antigravity | "PHASE I8 — Frontend: Surfacing All of This with inline warning banners inside chat bubble, confidence/why-probe/hallucination sidebar tags, and vertical timeline verdict summary cards" | `src/sessionManager.js`, `public/app.js`, `src/testPhaseI8.js`, `project_memory.md`, `ai_usage_log.md` |
+
 
 
 

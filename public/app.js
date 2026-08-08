@@ -382,7 +382,7 @@ async function handleSendMessage() {
         }
       }
       
-      appendInterviewerMessage(data.reply, data.detectedConnections, data.nextQuestionType, data.mcqOptions, data.diagramDefinition, data.diagramQuestionText);
+      appendInterviewerMessage(data.reply, data.detectedConnections, data.nextQuestionType, data.mcqOptions, data.diagramDefinition, data.diagramQuestionText, data.hallucinationFlag ? data.hallucinationCorrection : null);
       updateProgress(data.questionsAsked, data.distinctDaysCovered, data.difficultyTier);
 
       let nextActiveTopic = null;
@@ -412,12 +412,33 @@ chatInput.addEventListener('keydown', (e) => {
 });
 
 // ==================== DOM GENERATORS & HELPERS ====================
-async function appendInterviewerMessage(text, connections = [], nextQuestionType = 'open', mcqOptions = null, diagramDefinition = null, diagramQuestionText = null) {
+async function appendInterviewerMessage(text, connections = [], nextQuestionType = 'open', mcqOptions = null, diagramDefinition = null, diagramQuestionText = null, hallucinationCorrection = null) {
   const wrapper = document.createElement('div');
   wrapper.className = 'chat-bubble interviewer';
   
+  let cleanText = text;
+  if (hallucinationCorrection) {
+    const banner = document.createElement('div');
+    banner.className = 'bg-amber-50 border-2 border-amber-500 rounded-md p-3 flex items-start gap-2 text-amber-900 text-xs font-semibold leading-relaxed mb-2.5';
+    banner.innerHTML = `
+      <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600 mt-0.5 shrink-0"></i>
+      <div>
+        <span class="font-extrabold uppercase text-[10px] tracking-wider text-amber-700 block mb-0.5">Concept Hallucination Alert</span>
+        ${hallucinationCorrection}
+      </div>
+    `;
+    wrapper.appendChild(banner);
+
+    const term = `⚠️ ${hallucinationCorrection}`.trim();
+    if (cleanText.startsWith(term)) {
+      cleanText = cleanText.replace(term, '').trim();
+    } else if (cleanText.includes(hallucinationCorrection)) {
+      cleanText = cleanText.replace(`⚠️`, '').replace(hallucinationCorrection, '').trim();
+    }
+  }
+
   const stemEl = document.createElement('div');
-  stemEl.textContent = text;
+  stemEl.textContent = cleanText;
   wrapper.appendChild(stemEl);
 
   // Appending the running timer display next to the current question (Phase I6)
@@ -612,17 +633,17 @@ function transitionToFeedback(feedback, metrics, judgeVerdict) {
     verdictSection.classList.remove('hidden');
 
     // Setup color classes for decision
-    let decisionClass = 'bg-slate-50 text-slate-800 border-slate-400';
+    let decisionClass = 'bg-slate-50 text-slate-800 border-slate-500';
     let decisionText = 'Borderline';
     if (judgeVerdict.decision === 'would_hire') {
-      decisionClass = 'bg-emerald-50 text-emerald-800 border-emerald-400';
+      decisionClass = 'bg-emerald-50 text-emerald-800 border-emerald-500';
       decisionText = 'Would Hire';
     } else if (judgeVerdict.decision === 'would_reject') {
-      decisionClass = 'bg-red-50 text-red-800 border-red-400';
+      decisionClass = 'bg-rose-50 text-rose-800 border-rose-500';
       decisionText = 'Would Reject';
     }
 
-    verdictDecision.className = `text-xs font-black uppercase px-4 py-1.5 rounded-md border-4 border-gray-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${decisionClass}`;
+    verdictDecision.className = `text-xs font-black uppercase px-4 py-1.5 rounded-md border-4 border-gray-900 ${decisionClass}`;
     verdictDecision.textContent = decisionText;
 
     verdictReasoning.textContent = judgeVerdict.reasoning || 'No details provided.';
@@ -631,25 +652,39 @@ function transitionToFeedback(feedback, metrics, judgeVerdict) {
     verdictEvidenceTrail.innerHTML = '';
     const trail = judgeVerdict.evidenceTrail || [];
     if (trail.length > 0) {
-      trail.forEach(e => {
-        let outcomeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      trail.forEach((e, idx) => {
+        let outcomeMarkerClass = 'bg-emerald-400';
+        let badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-300';
         let outcomeText = 'Strong';
         if (e.outcome === 'weak') {
-          outcomeClass = 'bg-red-50 text-red-700 border-red-200';
+          outcomeMarkerClass = 'bg-red-400';
+          badgeClass = 'bg-red-100 text-red-800 border-red-300';
           outcomeText = 'Weak';
         } else if (e.outcome === 'recovered') {
-          outcomeClass = 'bg-blue-50 text-blue-700 border-blue-200';
+          outcomeMarkerClass = 'bg-blue-400';
+          badgeClass = 'bg-blue-100 text-blue-800 border-blue-300';
           outcomeText = 'Recovered';
         }
 
         const row = document.createElement('div');
-        row.className = 'flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 py-3 gap-2 last:border-b-0';
+        row.className = 'flex gap-4 items-start relative pl-6 pb-6 last:pb-0';
+        
+        if (idx < trail.length - 1) {
+          row.className += " before:content-[''] before:absolute before:left-2 before:top-4 before:bottom-0 before:w-1 before:bg-slate-200";
+        }
+
         row.innerHTML = `
-          <div class="flex flex-col">
-            <span class="text-sm font-bold text-slate-800">${e.questionRef}</span>
-            <p class="text-xs text-slate-500 mt-1">${e.note}</p>
+          <!-- marker -->
+          <div class="absolute left-0.5 top-1.5 w-4 h-4 rounded-full border-2 border-gray-900 ${outcomeMarkerClass}"></div>
+          
+          <!-- block content -->
+          <div class="flex-grow bg-slate-50 border-4 border-gray-900 rounded-md p-4 flex flex-col gap-1 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+            <div class="flex justify-between items-center border-b-2 border-slate-200 pb-1.5 mb-1">
+              <span class="text-xs font-black text-gray-900">${e.questionRef}</span>
+              <span class="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded border border-gray-900 ${badgeClass}">${outcomeText}</span>
+            </div>
+            <p class="text-xs text-gray-700 font-semibold leading-relaxed">${e.note}</p>
           </div>
-          <span class="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border self-start sm:self-center ${outcomeClass}">${outcomeText}</span>
         `;
         verdictEvidenceTrail.appendChild(row);
       });
@@ -1025,6 +1060,48 @@ function updateSidebar(history, currentActiveTopic = null) {
 
       leftBadges.appendChild(diffBadge);
       leftBadges.appendChild(typeBadge);
+
+      // Communication Confidence Badge (Phase I8)
+      const confBadge = document.createElement('span');
+      confBadge.className = 'sidebar-badge';
+      confBadge.textContent = `confidence: ${item.communicationConfidence || 'medium'}`;
+      if (item.communicationConfidence === 'low') {
+        confBadge.style.backgroundColor = '#FFF7ED';
+        confBadge.style.color = '#EA580C';
+        confBadge.style.borderColor = '#FED7AA';
+      } else if (item.communicationConfidence === 'high') {
+        confBadge.style.backgroundColor = '#EEF2FF';
+        confBadge.style.color = '#4F46E5';
+        confBadge.style.borderColor = '#C7D2FE';
+      } else {
+        confBadge.style.backgroundColor = '#F8FAFC';
+        confBadge.style.color = '#475569';
+        confBadge.style.borderColor = '#E2E8F0';
+      }
+      leftBadges.appendChild(confBadge);
+
+      // Hallucination Tag (Phase I8)
+      if (item.hallucinationFlag) {
+        const hallBadge = document.createElement('span');
+        hallBadge.className = 'sidebar-badge';
+        hallBadge.textContent = '⚠️ H';
+        hallBadge.title = 'Hallucination Detected';
+        hallBadge.style.backgroundColor = '#FEF2F2';
+        hallBadge.style.color = '#DC2626';
+        hallBadge.style.borderColor = '#FCA5A5';
+        leftBadges.appendChild(hallBadge);
+      }
+
+      // why-probe Tag (Phase I8)
+      if (item.whyProbe) {
+        const whyBadge = document.createElement('span');
+        whyBadge.className = 'sidebar-badge';
+        whyBadge.textContent = 'why?';
+        whyBadge.style.backgroundColor = '#F5F3FF';
+        whyBadge.style.color = '#7C3AED';
+        whyBadge.style.borderColor = '#DDD6FE';
+        leftBadges.appendChild(whyBadge);
+      }
 
       const qualLabel = document.createElement('span');
       qualLabel.style.fontSize = '0.7rem';

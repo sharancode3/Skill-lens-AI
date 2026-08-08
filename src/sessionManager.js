@@ -894,12 +894,17 @@ export async function handleTurn(sessionId, message) {
       mcqOptions: llmResponse.mcqOptions || null,
       diagramDefinition: llmResponse.diagramDefinition || null,
       diagramQuestionText: llmResponse.diagramQuestionText || null,
+      hallucinationFlag: hallucinationFlag,
+      hallucinationCorrection: hallucinationFlag ? (llmResponse.hallucinationCorrection || "") : "",
       questionHistory: (session.accuracyLog || []).map(log => ({
         day: log.day,
         title: log.title || 'Curriculum Topic',
         difficultyTier: log.difficultyTier,
         questionType: log.questionType,
-        classification: log.classification || 'unknown'
+        classification: log.classification || 'unknown',
+        communicationConfidence: log.communicationConfidence || 'medium',
+        hallucinationFlag: !!log.hallucinationFlag,
+        whyProbe: !!log.whyProbe
       }))
     };
 
@@ -939,12 +944,17 @@ export async function handleTurn(sessionId, message) {
       mcqOptions: null,
       diagramDefinition: null,
       diagramQuestionText: null,
+      hallucinationFlag: hallucinationFlag,
+      hallucinationCorrection: hallucinationFlag ? (llmResponse.hallucinationCorrection || "") : "",
       questionHistory: (session.accuracyLog || []).map(log => ({
         day: log.day,
         title: log.title || 'Curriculum Topic',
         difficultyTier: log.difficultyTier,
         questionType: log.questionType,
-        classification: log.classification || 'unknown'
+        classification: log.classification || 'unknown',
+        communicationConfidence: log.communicationConfidence || 'medium',
+        hallucinationFlag: !!log.hallucinationFlag,
+        whyProbe: !!log.whyProbe
       }))
     };
 
@@ -1029,12 +1039,17 @@ export async function handleTurn(sessionId, message) {
       mcqOptions: llmResponse.mcqOptions || null,
       diagramDefinition: llmResponse.diagramDefinition || null,
       diagramQuestionText: llmResponse.diagramQuestionText || null,
+      hallucinationFlag: hallucinationFlag,
+      hallucinationCorrection: hallucinationFlag ? (llmResponse.hallucinationCorrection || "") : "",
       questionHistory: (session.accuracyLog || []).map(log => ({
         day: log.day,
         title: log.title || 'Curriculum Topic',
         difficultyTier: log.difficultyTier,
         questionType: log.questionType,
-        classification: log.classification || 'unknown'
+        classification: log.classification || 'unknown',
+        communicationConfidence: log.communicationConfidence || 'medium',
+        hallucinationFlag: !!log.hallucinationFlag,
+        whyProbe: !!log.whyProbe
       }))
     };
 
