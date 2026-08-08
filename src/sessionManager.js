@@ -1303,7 +1303,8 @@ export async function reportViolation(sessionId, violationType) {
     clipboardViolations: session.clipboardViolations,
     warningsRemaining,
     violationCount,
-    flaggedForReview: session.flaggedForReview || false
+    flaggedForReview: session.flaggedForReview || false,
+    proctoringSummary: getProctoringSummary(session)
   };
 }
 
