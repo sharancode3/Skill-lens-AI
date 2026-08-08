@@ -185,6 +185,17 @@ export async function createSession(sessionId, candidate) {
     lastResponse: null,
     transcript: [],
     interviewMemory: '',
+    // Phase 7: Compact derived state — incrementally updated after each topic evaluation.
+    // Replaces freeform interviewMemory string as the structured context passed to LLM brains.
+    compactState: {
+      strongTopics: [],
+      weakTopics: [],
+      misconceptions: [],
+      currentDay: topicQueue[0]?.day || null,
+      currentDifficultyTier: 'standard',
+      questionsAsked: 1,
+      daysCovered: []
+    },
     feedback: null,
     createdAt: new Date().toISOString(),
     interviewStartedAt: new Date().toISOString(),
@@ -333,6 +344,86 @@ export function updateDifficulty(session, finalScore, currentHallucinationFlag =
 
   console.log(`[Difficulty Engine Log] recentScores: [${session.recentScores.join(', ')}], pendingQuestionType: ${session.pendingQuestionType}, difficultyTier: ${session.difficultyTier}, tiersReached: [${session.tiersReached.join(', ')}]`);
 }
+
+/**
+ * PHASE 7: Deterministic compact state update.
+ * Called once per topic evaluation (on advance), never on follow-ups or interim turns.
+ * No LLM call — purely code-driven based on score and narrative feedback.
+ *
+ * @param {Object} session   - The live session document.
+ * @param {Object} topic     - The topic that just completed (from topicQueue).
+ * @param {number} score     - The blended finalAccuracyScore for this topic (0-100).
+ * @param {string} narrative - The Evaluator's narrativeFeedback string.
+ * @param {Object} dims      - Optional dimension scores object { correctness, depth, reasoning, tradeoffs, clarity }.
+ */
+export function updateCompactState(session, topic, score, narrative = '', dims = {}) {
+  if (!session.compactState) {
+    // Bootstrap in case the session was created before Phase 7 was deployed
+    session.compactState = {
+      strongTopics: [],
+      weakTopics: [],
+      misconceptions: [],
+      currentDay: topic ? topic.day : null,
+      currentDifficultyTier: session.difficultyTier || 'standard',
+      questionsAsked: session.questionsAsked || 0,
+      daysCovered: [...(session.distinctDaysCovered || [])]
+    };
+  }
+
+  const state = session.compactState;
+
+  // Always sync current interview state fields
+  if (topic) {
+    state.currentDay = topic.day;
+  }
+  state.currentDifficultyTier = session.difficultyTier || 'standard';
+  state.questionsAsked = session.questionsAsked || 0;
+  state.daysCovered = [...(session.distinctDaysCovered || [])];
+
+  if (!topic) return;
+
+  // Classify this topic's performance and update lists accordingly
+  if (score >= 70) {
+    // Strong: add to strongTopics (once per day)
+    if (!state.strongTopics.find(t => t.day === topic.day)) {
+      const entry = { day: topic.day, title: topic.title, score };
+      if (dims.correctness !== undefined) {
+        entry.correctness = dims.correctness;
+        entry.depth = dims.depth;
+        entry.reasoning = dims.reasoning;
+      }
+      state.strongTopics.push(entry);
+    } else {
+      // Update score if re-evaluated (e.g. follow-up improved it)
+      const existing = state.strongTopics.find(t => t.day === topic.day);
+      if (existing && score > existing.score) existing.score = score;
+    }
+    // Remove from weakTopics if it was previously marked weak (candidate recovered)
+    const weakIdx = state.weakTopics.findIndex(t => t.day === topic.day);
+    if (weakIdx !== -1) {
+      state.weakTopics.splice(weakIdx, 1);
+      console.log(`[CompactState] Day ${topic.day} recovered from weakTopics to strongTopics (score: ${score}).`);
+    }
+  } else if (score < 50) {
+    // Weak: add to weakTopics (once per day, not if already in strongTopics)
+    const alreadyStrong = state.strongTopics.find(t => t.day === topic.day);
+    if (!alreadyStrong && !state.weakTopics.find(t => t.day === topic.day)) {
+      state.weakTopics.push({ day: topic.day, title: topic.title, score });
+    }
+    // Extract misconception: first sentence of narrative feedback as a short gap note
+    if (narrative && !state.misconceptions.some(m => m.day === topic.day)) {
+      const firstSentence = narrative.split(/[.!?]/)[0].trim();
+      if (firstSentence.length > 10) {
+        state.misconceptions.push({ day: topic.day, note: firstSentence });
+      }
+    }
+  }
+  // 50-69 range (partial): not added to either list — acknowledged implicitly by absence
+
+  console.log(`[CompactState] Updated after Day ${topic.day}: strongTopics=${state.strongTopics.length}, weakTopics=${state.weakTopics.length}, misconceptions=${state.misconceptions.length}, tier=${state.currentDifficultyTier}.`);
+}
+
+
 
 /**
  * Computes performance analytics metrics for final review.
@@ -1071,6 +1162,23 @@ export async function handleTurn(sessionId, message) {
         session.distinctDaysCovered.push(currentTopic.day);
       }
       session.questionsAsked++;
+    }
+
+    // Phase 7: Update compact state deterministically with this topic's evaluation result
+    if (currentTopic) {
+      updateCompactState(
+        session,
+        currentTopic,
+        finalAccuracyScore,
+        llmResponse ? llmResponse.reasoning : '',
+        {
+          correctness: llmResponse ? llmResponse.correctness : undefined,
+          depth: llmResponse ? llmResponse.depth : undefined,
+          reasoning: llmResponse ? llmResponse.reasoningScore : undefined,
+          tradeoffs: llmResponse ? llmResponse.tradeoffs : undefined,
+          clarity: llmResponse ? llmResponse.clarity : undefined
+        }
+      );
     }
 
     session.followupCountForCurrentTopic = 0;

@@ -1153,10 +1153,13 @@ CONSTRAINTS:
 5. Omit day numbers from follow-up questions within the same topic.
 6. REALISTIC BREVITY: Keep your reply to 1-3 sentences.`;
 
+  // Phase 7: Send structured compactState as candidateStateSnapshot instead of freeform interviewMemory string.
+  // compactState provides: strongTopics[], weakTopics[], misconceptions[], currentDay, currentDifficultyTier, questionsAsked, daysCovered[].
+  // interviewMemory is still stored on the session (for backward compat) but no longer passed into the prompt.
   const userPrompt = JSON.stringify({
     candidateLastMessage: candidateMessage,
     previousQuestion: lastQuestion,
-    runningInterviewMemory: session.interviewMemory || 'No history yet.',
+    candidateStateSnapshot: session.compactState || {},
     followupCount: session.followupCountForCurrentTopic,
     detectedConnections: detectedConnections || []
   });
@@ -1175,7 +1178,7 @@ CONSTRAINTS:
  * Sole job: Once a curriculum topic's exchange is complete, produce the numeric score and narrative feedback together.
  * Generates score and narrative in the same reasoning pass so they can never contradict.
  */
-export async function evaluateTopicPerformanceWithLLM(currentTopic, exchangeHistory) {
+export async function evaluateTopicPerformanceWithLLM(currentTopic, exchangeHistory, session = null) {
   if (process.env.SIMULATE_LLM_OUTAGE === 'true') {
     return mockTopicEvaluation(currentTopic, exchangeHistory);
   }
@@ -1194,10 +1197,16 @@ EVALUATION CRITERIA (Rate each from 0-100 independently):
 5. tradeoffs: Understanding and discussion of pros/cons, constraints, and alternative designs.
 6. clarity: Articulation, precision, structure, and readability of the explanations.
 
-IMPORTANT: Do not duplicate the same score across all dimensions. Evaluate each metric strictly on its own merits based on the exchange history. Produce both the numeric scores and the narrative feedback together in one pass so they never contradict.`;
+IMPORTANT: Do not duplicate the same score across all dimensions. Evaluate each metric strictly on its own merits based on the exchange history. Produce both the numeric scores and the narrative feedback together in one pass so they never contradict.
+
+You will also receive a priorPerformanceContext object showing this candidate's cumulative performance to date (strongTopics, weakTopics, misconceptions). Use this for calibration context only — your scores must still be grounded in THIS topic's exchange history, not prior performance.`;
+
+  // Phase 7: Include compact state as prior performance context for evaluator calibration
+  const priorContext = (session && session.compactState) ? session.compactState : {};
 
   const userPrompt = JSON.stringify({
-    exchangeHistory: exchangeHistory.map(e => `${e.role.toUpperCase()}: ${e.text}`).join('\n')
+    exchangeHistory: exchangeHistory.map(e => `${e.role.toUpperCase()}: ${e.text}`).join('\n'),
+    priorPerformanceContext: priorContext
   });
 
   const evaluatorSchema = {
@@ -1355,7 +1364,8 @@ export async function evaluateTurnWithLLM(session, candidateMessage, detectedCon
     const dayExchangeHistory = recentExchange.map(e => ({ role: e.role, text: e.text }));
     dayExchangeHistory.push({ role: 'candidate', text: candidateMessage });
 
-    const evaluation = await evaluateTopicPerformanceWithLLM(currentTopic, dayExchangeHistory);
+    // Phase 7: Pass session into evaluateTopicPerformanceWithLLM so it can include priorPerformanceContext
+    const evaluation = await evaluateTopicPerformanceWithLLM(currentTopic, dayExchangeHistory, session);
     console.log(`[Multi-Agent] Evaluator score for Day ${currentTopic.day}: ${evaluation.score} (${evaluation.narrativeFeedback})`);
 
     // Override score & reasoning in the turn response so they match narrative feedback exactly
