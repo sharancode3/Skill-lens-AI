@@ -1771,26 +1771,22 @@ video.scale-x-\[-1\] {
   transition: border-color 0.2s ease !important;
 }
 
-#sidebar-camera-container {
-  border-bottom: 2px solid #0F172A !important;
-  background-color: #F8FAFC !important;
-}
-
-.dark #sidebar-camera-container {
-  border-bottom-color: #334155 !important;
+#camera-widget {
+  position: fixed !important;
+  bottom: 1.5rem !important;
+  left: 1.5rem !important;
+  width: 180px !important;
+  height: 101.25px !important;
   background-color: #0F172A !important;
+  border: 2px solid #0F172A !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  z-index: 99999 !important;
+  box-shadow: none !important;
 }
 
-#sidebar-camera-container h3 {
-  color: #64748B !important;
-}
-
-.dark #sidebar-camera-container h3 {
-  color: #94A3B8 !important;
-}
-
-#camera-active-dot {
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.4) !important;
+.dark #camera-widget {
+  border-color: #F8FAFC !important;
 }
 
 /* Disabled button state overrides */

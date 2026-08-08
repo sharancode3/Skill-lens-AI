@@ -440,25 +440,16 @@
           <span id="sidebar-count" class="text-xs font-extrabold bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full">0</span>
         </div>
 
-        <!-- Camera Proctoring Feed Container -->
-        <div id="sidebar-camera-container" class="p-4 border-b border-slate-200 bg-slate-50 flex flex-col gap-2 shrink-0">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-1.5">
-              <i data-lucide="video" class="w-4 h-4 text-blue-600 font-bold"></i>
-              <h3 class="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">Proctoring Camera Feed</h3>
-            </div>
-            <span id="camera-active-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse border border-slate-900"></span>
-          </div>
-          <div class="relative w-full aspect-video bg-slate-900 rounded-lg border-2 border-slate-900 overflow-hidden shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-            <video id="video-active" autoplay playsinline muted class="w-full h-full object-cover scale-x-[-1]"></video>
-          </div>
-        </div>
-
         <!-- Sidebar Question Cards List -->
         <div id="sidebar-list" class="flex-grow overflow-y-auto p-4 flex flex-col gap-3">
           <!-- Active question in progress & historical cards dynamically rendered here -->
         </div>
       </aside>
+    </div>
+
+    <!-- Persistent Proctoring Camera Widget -->
+    <div id="camera-widget" class="bg-slate-900 rounded-lg border-2 border-slate-900 overflow-hidden hidden">
+      <video id="video-active" autoplay playsinline muted class="w-full h-full object-cover scale-x-[-1]"></video>
     </div>
   </main>
 

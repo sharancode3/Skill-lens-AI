@@ -202,6 +202,9 @@ async function startInterviewSession() {
     screenChat.classList.remove('hidden');
 
     // Transition camera to ACTIVE
+    const cameraWidget = document.getElementById('camera-widget');
+    if (cameraWidget) cameraWidget.classList.remove('hidden');
+
     const videoActive = document.getElementById('video-active');
     if (window.CameraManager && videoActive) {
       window.CameraManager.startActive(videoActive);
@@ -282,6 +285,8 @@ if (btnBackToSelect) {
     if (window.CameraManager) {
       window.CameraManager.stop();
     }
+    const cameraWidget = document.getElementById('camera-widget');
+    if (cameraWidget) cameraWidget.classList.add('hidden');
   });
 }
 
@@ -429,6 +434,8 @@ function showSuspensionScreen() {
   if (window.CameraManager) {
     window.CameraManager.stop();
   }
+  const cameraWidget = document.getElementById('camera-widget');
+  if (cameraWidget) cameraWidget.classList.add('hidden');
   
   // Start countdown timer
   const cooldownTimer = document.getElementById('cooldown-timer');
@@ -466,6 +473,8 @@ document.getElementById('btn-suspended-exit').addEventListener('click', () => {
   if (window.CameraManager) {
     window.CameraManager.stop();
   }
+  const cameraWidget = document.getElementById('camera-widget');
+  if (cameraWidget) cameraWidget.classList.add('hidden');
 });
 
 // Continuously monitor fullscreen changes
@@ -1121,6 +1130,8 @@ function transitionToFeedback(feedback, metrics, judgeVerdict) {
   if (window.CameraManager) {
     window.CameraManager.stop();
   }
+  const cameraWidget = document.getElementById('camera-widget');
+  if (cameraWidget) cameraWidget.classList.add('hidden');
 }
 
 // Restart button actions
@@ -1138,6 +1149,8 @@ btnRestart.addEventListener('click', () => {
   if (window.CameraManager) {
     window.CameraManager.stop();
   }
+  const cameraWidget = document.getElementById('camera-widget');
+  if (cameraWidget) cameraWidget.classList.add('hidden');
 
   // Clear sidebar state
   updateSidebar([]);
