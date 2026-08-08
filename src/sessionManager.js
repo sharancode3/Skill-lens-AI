@@ -1535,6 +1535,47 @@ export async function handleTurn(sessionId, message, violationType = null, flagC
 }
 
 /**
+ * Voluntarily ends the session early.
+ */
+export async function endSessionEarly(sessionId) {
+  const session = await getSessionDoc(sessionId);
+  if (!session) {
+    return { error: 'Session not found', status: 404 };
+  }
+
+  session.state = SessionState.DONE;
+  session.interviewEndedAt = new Date().toISOString();
+
+  let feedback = null;
+  try {
+    feedback = await generateFeedbackReport(session);
+  } catch (e) {
+    console.error('Failed to generate LLM feedback report for early exit, using mechanical fallback:', e);
+    feedback = generateMechanicalFeedback(session);
+  }
+
+  // Explicitly note that the candidate voluntarily ended early
+  feedback.summary = "The candidate voluntarily ended the interview session early. " + (feedback.summary || "");
+  
+  // Custom borderline/early verdict
+  session.judgeVerdict = {
+    decision: 'borderline',
+    reasoning: 'Candidate voluntarily ended the session early. Assessment completed with partial performance data.'
+  };
+
+  session.feedback = feedback;
+  await saveSessionDoc(sessionId, session);
+
+  return {
+    done: true,
+    feedback: session.feedback,
+    metrics: computeMetrics(session),
+    judgeVerdict: session.judgeVerdict,
+    proctoringSummary: getProctoringSummary(session)
+  };
+}
+
+/**
  * Logs a proctoring violation server-side.
  * If total violations (including fullscreen-exit and tab-switch) exceeds 3,
  * the candidate is suspended.

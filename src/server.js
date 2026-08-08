@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import { initFirebase, runStartupHealthCheck } from './firebase.js';
 import { initializeData, getEnrichedCandidate, candidatesById, precomputeConceptTerms } from './dataManager.js';
 import { generateEmbeddings } from './embeddingManager.js';
-import { createSession, handleTurn, reportViolation, cooldowns, getSessionDoc } from './sessionManager.js';
+import { createSession, handleTurn, reportViolation, cooldowns, getSessionDoc, endSessionEarly } from './sessionManager.js';
 
 dotenv.config();
 
@@ -97,7 +97,16 @@ app.post('/api/interview', async (req, res) => {
       return res.json(result);
     }
 
-    // 3. Flag question: presence of flagCurrentQuestion
+    // 3. End session early: presence of endSessionEarly
+    if (req.body.endSessionEarly) {
+      const result = await endSessionEarly(sessionId);
+      if (result.error) {
+        return res.status(result.status || 400).json({ error: result.error });
+      }
+      return res.json(result);
+    }
+
+    // 4. Flag question: presence of flagCurrentQuestion
     if (flagCurrentQuestion) {
       const result = await handleTurn(sessionId, '', null, true, flagReason);
       if (result.error) {

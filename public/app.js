@@ -2142,7 +2142,7 @@ function showFlaggedForReviewNotice() {
 window.finalInterviewData = null;
 
 // Flag Question Modal triggers
-const btnFlagQuestion = document.getElementById('btn-flag-question');
+const btnEndSession = document.getElementById('btn-end-session');
 const modalFlagQuestion = document.getElementById('modal-flag-question');
 const btnCloseFlagModal = document.getElementById('btn-close-flag-modal');
 const btnSkipFlag = document.getElementById('btn-skip-flag');
@@ -2151,12 +2151,36 @@ const btnSubmitFlag = document.getElementById('btn-submit-flag');
 const flagReasonPreset = document.getElementById('flag-reason-preset');
 const flagReasonText = document.getElementById('flag-reason-text');
 
-if (btnFlagQuestion) {
-  btnFlagQuestion.addEventListener('click', () => {
+if (btnEndSession) {
+  btnEndSession.addEventListener('click', async () => {
     if (!isInterviewActive) return;
-    modalFlagQuestion.classList.remove('hidden');
-    flagReasonPreset.value = '';
-    flagReasonText.value = '';
+    
+    const confirmExit = confirm("Are you sure you want to end the interview? This cannot be undone.");
+    if (!confirmExit) return;
+    
+    const thinkingEl = appendThinkingIndicator();
+    scrollChatBottom(true);
+    
+    try {
+      const res = await fetch('/api/interview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: currentSessionId,
+          endSessionEarly: true
+        })
+      });
+      
+      thinkingEl.remove();
+      if (!res.ok) throw new Error('Failed to end session early');
+      const data = await res.json();
+      
+      handleInterviewEndFlow(data);
+    } catch (err) {
+      if (thinkingEl) thinkingEl.remove();
+      console.error('Error ending session early:', err);
+      alert('Failed to end session early. Please try again.');
+    }
   });
 }
 
