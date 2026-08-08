@@ -1877,7 +1877,7 @@ button {
 }
 
 /* Specific button overrides that must preserve default paddings */
-.vkey-btn, .btn-font-size, #btn-toggle-settings, #btn-flag-question, #btn-toggle-sidebar, .btn-calc-num, #modal-calculator button, #settings-popover button, .lucide {
+.vkey-btn, .btn-font-size, #btn-toggle-settings, #btn-end-session, #btn-toggle-sidebar, .btn-calc-num, #modal-calculator button, #settings-popover button, .lucide {
   padding-left: inherit !important;
   padding-right: inherit !important;
 }
