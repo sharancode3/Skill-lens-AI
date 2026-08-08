@@ -2,6 +2,7 @@ import { db } from './firebase.js';
 import { buildTopicQueue } from './topicSelector.js';
 import { findRelatedDays, computeSemanticScore } from './embeddingManager.js';
 import { evaluateTurnWithLLM, generateFeedbackReport, generateInterviewerResponseWithLLM, mockLLMCall } from './llmClient.js';
+import { getMCQForDay, getDiagramForDay } from './questionBank.js';
 
 
 // Explicit Session States
@@ -180,6 +181,21 @@ export async function createSession(sessionId, candidate) {
   const candidateName = candidate.member?.name || candidate.name || 'Candidate';
   console.log(`[SessionManager] session "${sessionId}": target=${targetQuestionCount}, candidate="${candidateName}"`);
 
+  // Bounded mix rule: At most 2 MCQs and at most 2 Graphs total across session drawn from bank
+  const eligibleSlotIndices = [];
+  for (let i = 1; i < Math.min(targetQuestionCount - 1, topicQueue.length); i++) {
+    eligibleSlotIndices.push(i);
+  }
+  const shuffledSlots = [...eligibleSlotIndices].sort(() => 0.5 - Math.random());
+  const mcqSlotSet = new Set(shuffledSlots.slice(0, 2));
+  const diagSlotSet = new Set(shuffledSlots.slice(2, 4));
+
+  const slotModalities = topicQueue.map((_, idx) => {
+    if (mcqSlotSet.has(idx)) return 'mcq';
+    if (diagSlotSet.has(idx)) return 'diagram_interpret';
+    return 'open';
+  });
+
   // Construct initial session document matching schema
   const session = {
     sessionId,
@@ -187,6 +203,10 @@ export async function createSession(sessionId, candidate) {
     candidateSnapshot: candidate,
     targetQuestionCount,
     topicQueue,
+    slotModalities,
+    mcqCount: 0,
+    diagramCount: 0,
+    usedBankQuestionIds: [],
     cursor: 0,
     questionsAsked: 1,
     distinctDaysCovered: [],
@@ -304,45 +324,63 @@ export function updateDifficulty(session, finalScore, currentHallucinationFlag =
     const isFirstQuestionAtNewTier = session.lastTierChangeTurnCount !== undefined && (session.turnCount <= session.lastTierChangeTurnCount + 1);
     const canDeEscalate = finalScore < 40 && !isFirstQuestionAtNewTier;
 
-    const cursor = typeof session.cursor === 'number' ? session.cursor : 0;
-    const nextTopic = (session.topicQueue && session.topicQueue[cursor + 1]) || null;
-    const isArchitecturalTopic = nextTopic && (
-      nextTopic.day === 2 || nextTopic.day === 7 || nextTopic.day === 15 || nextTopic.day === 23 || nextTopic.day === 29 ||
-      (nextTopic.title && (
-        nextTopic.title.toLowerCase().includes('architecture') ||
-        nextTopic.title.toLowerCase().includes('observability') ||
-        nextTopic.title.toLowerCase().includes('pipeline') ||
-        nextTopic.title.toLowerCase().includes('system') ||
-        nextTopic.title.toLowerCase().includes('concurrency')
-      ))
-    );
-
     if (canEscalate) {
       const nextIdx = Math.min(currentIdx + 1, tiers.length - 1);
       if (nextIdx !== currentIdx) {
         session.difficultyTier = tiers[nextIdx];
         session.lastTierChangeTurnCount = session.turnCount;
-        console.log(`[Difficulty Engine] Escalating difficulty to: ${session.difficultyTier}. Next type: diagram_interpret`);
+        console.log(`[Difficulty Engine] Escalating difficulty to: ${session.difficultyTier}.`);
       }
-      session.pendingQuestionType = 'diagram_interpret';
     } else if (canDeEscalate) {
       const nextIdx = Math.max(currentIdx - 1, 0);
       if (nextIdx !== currentIdx) {
         session.difficultyTier = tiers[nextIdx];
         session.lastTierChangeTurnCount = session.turnCount;
-        console.log(`[Difficulty Engine] De-escalating difficulty to: ${session.difficultyTier}. Next type: mcq`);
+        console.log(`[Difficulty Engine] De-escalating difficulty to: ${session.difficultyTier}.`);
       }
+    }
+  }
+
+  // Question Bank Integration & Bounded Mix Rule Enforcement (Max 2 MCQs, Max 2 Diagrams across session)
+  const cursor = typeof session.cursor === 'number' ? session.cursor : 0;
+  const nextSlotIndex = cursor + 1;
+  const assignedModality = (session.slotModalities && session.slotModalities[nextSlotIndex]) || 'open';
+  const nextTopic = (session.topicQueue && session.topicQueue[nextSlotIndex]) || null;
+
+  session.pendingQuestionType = 'open';
+  session.bankMCQItem = null;
+  session.bankDiagramItem = null;
+
+  if (assignedModality === 'mcq' && (session.mcqCount || 0) < 2 && nextTopic) {
+    const mcqItem = getMCQForDay(nextTopic.day, session.difficultyTier, session.usedBankQuestionIds || []);
+    if (mcqItem) {
       session.pendingQuestionType = 'mcq';
-    } else if (isArchitecturalTopic && currentIdx >= 1 && (!session.lastDiagramTurn || (session.questionsAsked - session.lastDiagramTurn) >= 2)) {
-      // Architectural systems topic diagram trigger
-      session.pendingQuestionType = 'diagram_interpret';
-      session.lastDiagramTurn = session.questionsAsked;
-      console.log(`[Difficulty Engine] Architectural systems topic detected (Day ${nextTopic.day}). Next type: diagram_interpret`);
+      session.bankMCQItem = mcqItem;
+      session.pendingMCQAnswer = mcqItem.correctAnswer;
+      session.mcqOptions = mcqItem.options;
+      session.usedBankQuestionIds = session.usedBankQuestionIds || [];
+      session.usedBankQuestionIds.push(mcqItem.id);
+      session.mcqCount = (session.mcqCount || 0) + 1;
+      console.log(`[Question Bank] Assigned pre-validated MCQ for Day ${nextTopic.day} (Tier: ${session.difficultyTier}, ID: ${mcqItem.id})`);
     } else {
-      console.log(`[Difficulty Engine] No difficulty change: ${session.difficultyTier}. Next type: open`);
+      console.log(`[Question Bank Exhaustion] No eligible MCQ found for Day ${nextTopic.day}. Falling back to descriptive open question.`);
+    }
+  } else if (assignedModality === 'diagram_interpret' && (session.diagramCount || 0) < 2 && nextTopic) {
+    const diagItem = getDiagramForDay(nextTopic.day, session.difficultyTier, session.usedBankQuestionIds || []);
+    if (diagItem) {
+      session.pendingQuestionType = 'diagram_interpret';
+      session.bankDiagramItem = diagItem;
+      session.diagramDefinition = diagItem.diagramDefinition;
+      session.diagramQuestionText = diagItem.diagramQuestionText;
+      session.usedBankQuestionIds = session.usedBankQuestionIds || [];
+      session.usedBankQuestionIds.push(diagItem.id);
+      session.diagramCount = (session.diagramCount || 0) + 1;
+      console.log(`[Question Bank] Assigned pre-validated Diagram for Day ${nextTopic.day} (Tier: ${session.difficultyTier}, ID: ${diagItem.id})`);
+    } else {
+      console.log(`[Question Bank Exhaustion] No eligible Diagram found for Day ${nextTopic.day}. Falling back to descriptive open question.`);
     }
   } else {
-    console.log(`[Difficulty Engine] Less than 2 scores. Next type: open`);
+    console.log(`[Question Engine] Next question type: open (Live LLM-generated descriptive question)`);
   }
 
   // Record reached tiers cumulatively for performance analytics
@@ -1462,9 +1500,25 @@ export async function handleTurn(sessionId, message, violationType = null, flagC
       session.nextQuestionType = 'open';
     }
     
-    const replyText = isForcedAdvance
-      ? `Got it. Let's move on to the next topic. Can you tell me about your experience on Day ${nextTopic.day}: "${nextTopic.title}"?`
-      : fullReply;
+    let replyText = fullReply;
+    if (session.bankMCQItem) {
+      replyText = `Let's evaluate a specific concept from Day ${nextTopic.day} ("${nextTopic.title}"):\n\n${session.bankMCQItem.question}`;
+      session.nextQuestionType = 'mcq';
+      if (llmResponse) {
+        llmResponse.mcqOptions = session.bankMCQItem.options;
+      }
+      session.bankMCQItem = null;
+    } else if (session.bankDiagramItem) {
+      replyText = `Take a look at this system architecture for Day ${nextTopic.day} ("${nextTopic.title}"):`;
+      session.nextQuestionType = 'diagram_interpret';
+      if (llmResponse) {
+        llmResponse.diagramDefinition = session.bankDiagramItem.diagramDefinition;
+        llmResponse.diagramQuestionText = session.bankDiagramItem.diagramQuestionText;
+      }
+      session.bankDiagramItem = null;
+    } else if (isForcedAdvance) {
+      replyText = `Got it. Let's move on to the next topic. Can you tell me about your experience on Day ${nextTopic.day}: "${nextTopic.title}"?`;
+    }
 
     session.transcript.push({
       role: 'interviewer',
@@ -1472,19 +1526,6 @@ export async function handleTurn(sessionId, message, violationType = null, flagC
       text: replyText,
       turn: session.turnCount + 1
     });
-
-    // Safeguard: Check against immediately preceding question/options in the same session
-    if (session.nextQuestionType === 'mcq' && llmResponse && llmResponse.mcqOptions) {
-      const isDuplicateMCQ = session.lastMCQOptions && JSON.stringify(session.lastMCQOptions) === JSON.stringify(llmResponse.mcqOptions);
-      if (isDuplicateMCQ) {
-        console.warn(`[MCQ Safeguard] Detected duplicate MCQ options back-to-back for session "${sessionId}". Regenerating options for upcoming topic Day ${nextTopic ? nextTopic.day : 'next'}...`);
-        const freshTopic = nextTopic || session.topicQueue[session.cursor] || session.topicQueue[0];
-        const regenerated = mockLLMCall(session.candidateSnapshot, freshTopic, '', '', 0, [], 'mcq', session.topicQueue[session.cursor + 1], session.difficultyTier, session);
-        llmResponse.mcqOptions = regenerated.mcqOptions;
-        llmResponse.reply = regenerated.reply;
-        session.pendingMCQAnswer = regenerated.mcqCorrectIndex;
-      }
-    }
 
     session.questionSentAt = new Date().toISOString();
     await saveSessionDoc(sessionId, session);
@@ -1499,9 +1540,9 @@ export async function handleTurn(sessionId, message, violationType = null, flagC
       nextQuestionType: session.nextQuestionType,
       difficultyTier: session.difficultyTier,
       conductViolations: session.conductViolations,
-      mcqOptions: llmResponse.mcqOptions || null,
-      diagramDefinition: llmResponse.diagramDefinition || null,
-      diagramQuestionText: llmResponse.diagramQuestionText || null,
+      mcqOptions: session.mcqOptions || (llmResponse ? llmResponse.mcqOptions : null) || null,
+      diagramDefinition: session.diagramDefinition || (llmResponse ? llmResponse.diagramDefinition : null) || null,
+      diagramQuestionText: session.diagramQuestionText || (llmResponse ? llmResponse.diagramQuestionText : null) || null,
       hallucinationFlag: hallucinationFlag,
       hallucinationCorrection: hallucinationFlag ? (llmResponse.hallucinationCorrection || "") : "",
       questionHistory: (session.accuracyLog || []).map(log => ({
