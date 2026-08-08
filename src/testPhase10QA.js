@@ -17,16 +17,16 @@ async function runQAPass() {
   console.log('   - View "#screen-rules" is enforced in frontend state machine prior to calling createSession().');
   console.log('   - Covers curriculum, answering quality, hallucination policy, 4 proctoring rules, and post-interview verdict.\n');
 
-  // --- ITEM 2: Fullscreen Enforcement (4th Exit Suspends) ---
+  // --- ITEM 2: Fullscreen Enforcement (3rd Exit Suspends) ---
   const sFS = `qa-fs-${Date.now()}`;
   await createSession(sFS, candidate);
   await reportViolation(sFS, 'fullscreen-exit');
   await reportViolation(sFS, 'fullscreen-exit');
-  await reportViolation(sFS, 'fullscreen-exit');
-  const fs4 = await reportViolation(sFS, 'fullscreen-exit');
-  const item2Pass = fs4.done === true && fs4.suspended === true && fs4.feedback.summary.includes('fullscreen violations');
-  console.log(`2. Fullscreen Enforcement (4th Exit Suspends): ${item2Pass ? 'PASS' : 'FAIL'}`);
-  console.log(`   - 4th exit returned done: true, suspended: true, summary: "${fs4.feedback.summary}"\n`);
+  const fs3 = await reportViolation(sFS, 'fullscreen-exit'); // 3rd exit
+  const item2Pass = fs3.done === true && fs3.suspended === true && fs3.feedback.summary.includes('fullscreen violations');
+  console.log(`2. Fullscreen Enforcement (3rd Exit Suspends): ${item2Pass ? 'PASS' : 'FAIL'}`);
+  console.log(`   - 3rd exit returned done: true, suspended: true, summary: "${fs3.feedback.summary}"\n`);
+
 
   // --- ITEM 3: Tab-Switch Suspension (1st Switch Suspends) ---
   const sTab = `qa-tab-${Date.now()}`;

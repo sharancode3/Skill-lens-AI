@@ -1074,8 +1074,8 @@ export async function reportViolation(sessionId, violationType) {
 
   console.log(`[Proctoring Server] Logged violation ${violationCount} (fullscreenExits: ${session.fullscreenExits}, tabSwitches: ${session.tabSwitches}, clipboardViolations: ${session.clipboardViolations}) for session "${sessionId}": ${violationType}`);
 
-  // Phase 2 Rule: 4th fullscreen exit causes immediate suspension
-  const isFullscreenSuspension = (violationType === 'fullscreen-exit' && session.fullscreenExits >= 4);
+  // Phase 2 Rule: 3rd fullscreen exit causes immediate suspension
+  const isFullscreenSuspension = (violationType === 'fullscreen-exit' && session.fullscreenExits >= 3);
   // Phase 3 Rule: 1st tab switch causes immediate suspension (zero tolerance)
   const isTabSwitchSuspension = (violationType === 'tab-switch' && session.tabSwitches >= 1);
   // Phase 4 Rule: 2nd copy/paste or screenshot attempt causes immediate suspension
@@ -1091,7 +1091,7 @@ export async function reportViolation(sessionId, violationType) {
     } else if (isTabSwitchSuspension) {
       summaryMsg = "Candidate was suspended immediately due to switching tabs/windows during an active proctored session.";
     } else if (isFullscreenSuspension) {
-      summaryMsg = "Candidate was suspended due to repeated fullscreen violations (exited fullscreen 4 times).";
+      summaryMsg = "Candidate was suspended due to repeated fullscreen violations (exited fullscreen 3 times).";
     }
 
     session.feedback = {
@@ -1139,7 +1139,7 @@ export async function reportViolation(sessionId, violationType) {
   await saveSessionDoc(sessionId, session);
   const warningsRemaining = (violationType === 'copy-paste' || violationType === 'screenshot')
     ? Math.max(0, 2 - session.clipboardViolations)
-    : Math.max(0, 4 - session.fullscreenExits);
+    : Math.max(0, 3 - session.fullscreenExits);
 
   return {
     done: false,

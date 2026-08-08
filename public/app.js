@@ -272,34 +272,19 @@ async function reportViolationToServer(type) {
           setTimeout(() => { pasteError.classList.add('hidden'); }, 6000);
         }
       } else {
-        // Show fullscreen exit warning overlay
-        const warningOverlay = document.getElementById('fullscreen-warning-overlay');
         const countText = document.getElementById('fullscreen-violation-count');
         const msgText = document.getElementById('fullscreen-violation-msg');
-        if (warningOverlay) warningOverlay.classList.remove('hidden');
         
-        const exits = data.fullscreenExits || data.violationCount || 1;
-        const remaining = data.warningsRemaining !== undefined ? data.warningsRemaining : Math.max(0, 4 - exits);
+        const exits = data.fullscreenExits || 1;
+        const remaining = data.warningsRemaining !== undefined ? data.warningsRemaining : Math.max(0, 3 - exits);
 
         if (countText) {
-          countText.textContent = `Warning ${exits} of 3 — ${remaining} warning${remaining === 1 ? '' : 's'} remaining before automatic suspension.`;
+          countText.textContent = `Warning ${exits} of 2 — ${remaining} warning${remaining === 1 ? '' : 's'} remaining before automatic suspension.`;
         }
         if (msgText) {
           msgText.textContent = type === 'fullscreen-exit' 
             ? 'Exiting fullscreen mode is not permitted during proctored technical evaluations.'
             : 'Switching away from this browser window or tab is not allowed during the interview.';
-        }
-
-        // Auto-recovery attempt: Try to re-enter fullscreen programmatically after 1.5s
-        if (type === 'fullscreen-exit') {
-          setTimeout(async () => {
-            if (isInterviewActive && !isCurrentlyFullscreen()) {
-              const reEntered = await enterFullscreen();
-              if (reEntered || isCurrentlyFullscreen()) {
-                if (warningOverlay) warningOverlay.classList.add('hidden');
-              }
-            }
-          }, 1500);
         }
       }
     }
@@ -360,19 +345,31 @@ document.getElementById('btn-suspended-exit').addEventListener('click', () => {
 });
 
 // Continuously monitor fullscreen changes
-function handleFullscreenChange() {
+async function handleFullscreenChange() {
   if (!isInterviewActive) return;
   if (isReenteringFullscreen) return;
 
   const warningOverlay = document.getElementById('fullscreen-warning-overlay');
-  if (warningOverlay && !warningOverlay.classList.contains('hidden')) {
-    return;
-  }
 
   if (!isCurrentlyFullscreen()) {
-    reportViolationToServer('fullscreen-exit');
+    // 1. Immediately show the warning overlay
+    if (warningOverlay) {
+      warningOverlay.classList.remove('hidden');
+    }
+
+    // 2. Immediately try to programmatically re-enter fullscreen
+    const reEntered = await enterFullscreen();
+    if (reEntered || isCurrentlyFullscreen()) {
+      if (warningOverlay) {
+        warningOverlay.classList.add('hidden');
+      }
+    }
+
+    // 3. Report the violation to the server
+    await reportViolationToServer('fullscreen-exit');
   }
 }
+
 
 
 // Monitor visibility and window focus changes (Phase 3 Zero Tolerance Tab-Switch)

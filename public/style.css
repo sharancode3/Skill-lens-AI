@@ -877,5 +877,96 @@ html, body {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
 }
 
+/* ==================== RESPONSIVE LAYOUT & SIDEBAR FIXES ==================== */
+#settings-popover {
+  position: absolute !important;
+  right: 0 !important;
+  top: 3.5rem !important;
+  width: 18rem !important;
+  z-index: 9999 !important;
+  background-color: #FFFFFF !important;
+  border: 4px solid #111827 !important;
+  border-radius: 0.75rem !important;
+  padding: 1.25rem !important;
+  box-shadow: 6px 6px 0px 0px rgba(0,0,0,1) !important;
+}
+
+#settings-popover.hidden {
+  display: none !important;
+}
+
+/* Candidate name & role truncation to prevent header layout breakage */
+#chat-cand-name {
+  max-width: 110px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  display: block !important;
+}
+#chat-cand-role {
+  max-width: 110px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  display: block !important;
+}
+
+@media (min-width: 640px) {
+  #chat-cand-name, #chat-cand-role {
+    max-width: 180px !important;
+  }
+}
+
+/* Responsive toggle for sidebars under 1024px */
+#btn-toggle-sidebar {
+  display: none !important;
+}
+
+@media (max-width: 1023px) {
+  #btn-toggle-sidebar {
+    display: flex !important;
+  }
+  #chat-sidebar {
+    position: absolute !important;
+    top: 0 !important;
+    right: 0 !important;
+    transform: translateX(100%) !important;
+    display: flex !important;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    box-shadow: none !important;
+    border-left: 2px solid #E2E8F0 !important;
+    z-index: 40 !important;
+    width: 280px !important;
+    height: 100% !important;
+  }
+  #chat-sidebar.active {
+    transform: translateX(0) !important;
+  }
+}
+
+/* Responsive visibility utilities matching HTML specifications */
+@media (max-width: 639px) {
+  .sm\:hidden { display: none !important; }
+}
+@media (min-width: 640px) {
+  .sm\:flex { display: flex !important; }
+  .sm\:inline { display: inline !important; }
+}
+@media (max-width: 767px) {
+  .md\:hidden { display: none !important; }
+}
+@media (min-width: 768px) {
+  .md\:flex { display: flex !important; }
+  .md\:inline { display: inline !important; }
+}
+@media (max-width: 1023px) {
+  .lg\:hidden { display: none !important; }
+}
+@media (min-width: 1024px) {
+  .lg\:flex { display: flex !important; }
+  .lg\:inline { display: inline !important; }
+}
+
+
 
 
