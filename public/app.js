@@ -1772,3 +1772,37 @@ if (chatMessages) {
   scrollObserver.observe(chatMessages, { childList: true, subtree: true });
 }
 
+// Register ProctoringNotifier window callback for MediaPipe proctoring violations (Phase C3)
+window.ProctoringNotifier = async (type) => {
+  if (!isInterviewActive) return;
+  console.log(`[Proctoring App] Handling proctoring violation event: ${type}`);
+  
+  // 1. Report to server
+  await reportViolationToServer(type);
+
+  // 2. Display warning banner toast
+  const pasteError = document.getElementById('paste-error');
+  if (pasteError) {
+    let msg = '';
+    if (type === 'presence_violation') {
+      msg = 'Proctoring Warning: Face not detected. Please ensure your face is fully visible in the camera widget.';
+    } else if (type === 'multi_face_violation') {
+      msg = 'Proctoring Warning: Multiple faces detected. Proctoring rules prohibit other individuals in frame.';
+    } else if (type === 'gaze_violation') {
+      msg = 'Proctoring Warning: Gaze deviation detected. Please look directly at the screen.';
+    }
+
+    pasteError.innerHTML = `<i data-lucide="shield-alert" class="w-3.5 h-3.5 text-red-700 font-extrabold"></i> <span>${msg}</span>`;
+    pasteError.style.display = 'flex';
+    if (window.lucide) lucide.createIcons();
+    
+    // Auto-hide warning toast after 5 seconds
+    setTimeout(() => {
+      if (pasteError.innerHTML.includes(msg)) {
+        pasteError.style.display = 'none';
+      }
+    }, 5000);
+  }
+};
+
+
