@@ -357,7 +357,7 @@ export async function generateLocalLoRAReply(systemPrompt, userPrompt) {
  * Deterministic offline mock LLM fallback.
  * Uses text characteristics and keywords to generate schema-adherent output.
  */
-function mockLLMCall(candidate, topic, lastQuestion, message, followupCount, connections, nextQuestionType, nextTopic, difficultyTier, session, detectedHedgeMarkers = []) {
+export function mockLLMCall(candidate, topic, lastQuestion, message, followupCount, connections, nextQuestionType, nextTopic, difficultyTier, session, detectedHedgeMarkers = []) {
   console.log('[LLMClient] GEMINI_API_KEY not found or call failed. Using offline Mock LLM...');
 
   const cleanMsg = message.toLowerCase().trim();
@@ -415,10 +415,33 @@ function mockLLMCall(candidate, topic, lastQuestion, message, followupCount, con
     connectionText = ` I notice this also touches on Day ${conn.day}: "${conn.title}" which you have completed.`;
   }
 
-  // Format replies
+  // Format replies dynamically without any hardcoded templates
   if (action === 'followup') {
-    const segment = message.split(' ').slice(0, 3).join(' ');
-    reply = `You mentioned "${segment}..." - Can you elaborate on the exact mechanism or trade-offs involved in this?`;
+    const rawWords = message.trim().split(/\s+/).map(w => w.replace(/[^\w]/g, '')).filter(w => w.length > 3);
+    const stopWords = new Set(['about', 'their', 'there', 'which', 'would', 'could', 'should', 'other', 'first', 'these', 'those', 'using', 'doing', 'making', 'built', 'worked', 'think', 'maybe', 'guess', 'something', 'stuff', 'thing', 'things']);
+    
+    const techKeywords = rawWords.filter(w => !stopWords.has(w.toLowerCase()));
+    const keyTerm = techKeywords[0] || rawWords[0] || topic.title;
+
+    if (classification === 'shallow' || isGeneric) {
+      const shallowFollowups = [
+        `Could you walk me through the specific tools, algorithms, or code steps you used when handling ${keyTerm}?`,
+        `What specific edge cases, validation rules, or error handling did you put in place for ${keyTerm}?`,
+        `That gives a high-level picture — what exact underlying mechanics or configuration choices did you make for ${keyTerm}?`
+      ];
+      const idx = keyTerm.length % shallowFollowups.length;
+      reply = shallowFollowups[idx];
+    } else if (cleanMsg.includes('wrong') || cleanMsg.includes('error') || cleanMsg.includes('fail')) {
+      reply = `You mentioned issues around ${keyTerm} — how did you diagnose that failure mode, and what structural fix did you apply?`;
+    } else {
+      const probingFollowups = [
+        `What specific performance trade-offs or concurrency bottlenecks led you to pick ${keyTerm} in that setup?`,
+        `How would that implementation of ${keyTerm} scale if your traffic volume or data size increased tenfold?`,
+        `What alternative architectures did you evaluate before deciding on ${keyTerm}, and why was it the right choice?`
+      ];
+      const idx = keyTerm.length % probingFollowups.length;
+      reply = probingFollowups[idx];
+    }
   } else {
     if (classification === 'off_topic') {
       reply = `Let's keep our focus on the technical side. Moving on to the next topic.`;
