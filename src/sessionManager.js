@@ -136,6 +136,13 @@ export function shouldWrapUp(session, modelWantsToStop) {
   if (hitsHardCap) {
     return true;
   }
+  
+  // If Capstone is triggered but has not been evaluated in accuracyLog, force modelWantsToStop to false
+  const hasAnsweredCapstone = (session.accuracyLog || []).some(log => log.questionType === 'capstone');
+  if (session.capstoneTriggered && !hasAnsweredCapstone) {
+    return false;
+  }
+
   return !!modelWantsToStop;
 }
 
@@ -732,6 +739,7 @@ export async function handleTurn(sessionId, message) {
         console.log(`[SessionManager] CAPSTONE TRIGGERED! Avg Score: ${avg}, Hallucinations: 0.`);
         session.capstoneTriggered = true;
         session.pendingQuestionType = 'capstone';
+        session.nextQuestionType = 'capstone';
 
         // Compute strongest topic
         const scoresByDay = {};
