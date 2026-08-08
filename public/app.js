@@ -1803,7 +1803,6 @@ if (btnToggleSidebar && chatSidebar) {
 const btnToggleSettings = document.getElementById('btn-toggle-settings');
 const btnCloseSettings = document.getElementById('btn-close-settings');
 const settingsPopover = document.getElementById('settings-popover');
-const btnToggleHistoryPanel = document.getElementById('btn-toggle-history-panel');
 const fontButtons = document.querySelectorAll('.btn-font-size');
 
 // 1. Toggle Settings Popover
@@ -2078,39 +2077,6 @@ document.querySelectorAll('.vkey-btn').forEach(btn => {
     chatInput.focus();
   });
 });
-
-// 6. History Panel Show / Hide Toggle Logic
-function updateHistoryPanelToggleUI(isPanelVisible) {
-  if (!chatSidebar || !btnToggleHistoryPanel) return;
-
-  if (isPanelVisible) {
-    chatSidebar.classList.remove('hidden');
-    btnToggleHistoryPanel.textContent = 'Hide Panel';
-    btnToggleHistoryPanel.className = 'px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold rounded-lg border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0 transition shrink-0';
-  } else {
-    chatSidebar.classList.add('hidden');
-    btnToggleHistoryPanel.textContent = 'Show Panel';
-    btnToggleHistoryPanel.className = 'px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-extrabold rounded-lg border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0 transition shrink-0';
-  }
-
-  try {
-    localStorage.setItem('interview_show_history_panel', isPanelVisible ? 'true' : 'false');
-  } catch (e) {}
-}
-
-if (btnToggleHistoryPanel && chatSidebar) {
-  btnToggleHistoryPanel.addEventListener('click', () => {
-    const isCurrentlyHidden = chatSidebar.classList.contains('hidden');
-    updateHistoryPanelToggleUI(isCurrentlyHidden);
-  });
-
-  const savedPanelState = localStorage.getItem('interview_show_history_panel');
-  if (savedPanelState === 'false') {
-    updateHistoryPanelToggleUI(false);
-  } else {
-    updateHistoryPanelToggleUI(true);
-  }
-}
 
 // Derived state logic for input area response mode
 window.lastQuestionData = null;
