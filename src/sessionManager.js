@@ -1136,17 +1136,35 @@ export async function reportViolation(sessionId, violationType) {
     session.clipboardViolations += 1;
   }
   
+  const isCameraViolation = ['presence_violation', 'multi_face_violation', 'gaze_violation', 'phone_violation'].includes(violationType);
+  
+  let cameraType = violationType;
+  let severity = 'medium';
+  if (isCameraViolation) {
+    if (violationType === 'presence_violation') cameraType = 'presence';
+    if (violationType === 'multi_face_violation') { cameraType = 'multi_face'; severity = 'high'; }
+    if (violationType === 'gaze_violation') cameraType = 'gaze';
+    if (violationType === 'phone_violation') { cameraType = 'phone'; severity = 'high'; }
+  }
+  
   const violationCount = session.violations.length + 1;
   session.violations.push({
     timestamp: new Date().toISOString(),
-    type: violationType,
+    type: cameraType,
     count: violationCount,
+    severity: severity,
     fullscreenExits: session.fullscreenExits,
     tabSwitches: session.tabSwitches,
     clipboardViolations: session.clipboardViolations
   });
 
-  console.log(`[Proctoring Server] Logged violation ${violationCount} (fullscreenExits: ${session.fullscreenExits}, tabSwitches: ${session.tabSwitches}, clipboardViolations: ${session.clipboardViolations}) for session "${sessionId}": ${violationType}`);
+  console.log(`[Proctoring Server] Logged violation ${violationCount} (fullscreenExits: ${session.fullscreenExits}, tabSwitches: ${session.tabSwitches}, clipboardViolations: ${session.clipboardViolations}, severity: ${severity}) for session "${sessionId}": ${violationType}`);
+
+  // Set flaggedForReview if total violations reach 4
+  if (violationCount >= 4 && !session.flaggedForReview) {
+    session.flaggedForReview = true;
+    console.log(`[Proctoring Server] SESSION FLAGGED FOR REVIEW (Total violations: ${violationCount})`);
+  }
 
   // Phase 2 Rule: 3rd fullscreen exit causes immediate suspension
   const isFullscreenSuspension = (violationType === 'fullscreen-exit' && session.fullscreenExits >= 3);
@@ -1154,9 +1172,14 @@ export async function reportViolation(sessionId, violationType) {
   const isTabSwitchSuspension = (violationType === 'tab-switch' && session.tabSwitches >= 1);
   // Phase 4 Rule: 2nd copy/paste or screenshot attempt causes immediate suspension
   const isClipboardSuspension = ((violationType === 'copy-paste' || violationType === 'screenshot') && session.clipboardViolations >= 2);
-  const isGeneralSuspension = violationCount >= 4;
+  
+  // General suspension for non-camera interface violations reaching 4
+  const nonCameraViolationCount = (session.fullscreenExits || 0) + (session.tabSwitches || 0) + (session.clipboardViolations || 0);
+  const isGeneralSuspension = nonCameraViolationCount >= 4;
 
-  if (isFullscreenSuspension || isTabSwitchSuspension || isClipboardSuspension || isGeneralSuspension) {
+  const shouldSuspend = !isCameraViolation && (isFullscreenSuspension || isTabSwitchSuspension || isClipboardSuspension || isGeneralSuspension);
+
+  if (shouldSuspend) {
     // Suspend candidate!
     session.state = SessionState.DONE;
     let summaryMsg = "Candidate was suspended for repeated proctoring violations.";
@@ -1222,7 +1245,8 @@ export async function reportViolation(sessionId, violationType) {
     tabSwitches: session.tabSwitches,
     clipboardViolations: session.clipboardViolations,
     warningsRemaining,
-    violationCount
+    violationCount,
+    flaggedForReview: session.flaggedForReview || false
   };
 }
 

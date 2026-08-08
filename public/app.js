@@ -4,6 +4,7 @@ let selectedCandidate = null;
 let currentSessionId = null;
 let isInterviewActive = false;
 let violationCount = 0;
+let firedFlaggedNotice = false;
 let activeTimerInterval = null;
 let sessionTimerInterval = null;
 let sessionElapsedSeconds = 0;
@@ -468,6 +469,7 @@ document.getElementById('btn-suspended-exit').addEventListener('click', () => {
   currentSessionId = null;
   isInterviewActive = false;
   violationCount = 0;
+  firedFlaggedNotice = false;
 
   // Enforce camera OFF
   if (window.CameraManager) {
@@ -1144,6 +1146,7 @@ btnRestart.addEventListener('click', () => {
   currentSessionId = null;
   isInterviewActive = false;
   violationCount = 0;
+  firedFlaggedNotice = false;
 
   // Enforce camera OFF
   if (window.CameraManager) {
@@ -1772,39 +1775,89 @@ if (chatMessages) {
   scrollObserver.observe(chatMessages, { childList: true, subtree: true });
 }
 
-// Register ProctoringNotifier window callback for MediaPipe proctoring violations (Phase C3/C4)
+// Register ProctoringNotifier window callback for MediaPipe proctoring violations (Phase C3/C4/C5)
 window.ProctoringNotifier = async (type) => {
   if (!isInterviewActive) return;
   console.log(`[Proctoring App] Handling proctoring violation event: ${type}`);
   
-  // 1. Report to server
-  await reportViolationToServer(type);
+  // 1. Report to server and get updated violation counts and flagging status
+  const data = await reportViolationToServer(type);
+  if (!data) return;
 
-  // 2. Display warning banner toast
+  const currentCount = data.violationCount || 1;
+
+  // 2. Check for one-time flagged notice threshold (4+ violations)
+  if (data.flaggedForReview && !firedFlaggedNotice) {
+    firedFlaggedNotice = true;
+    showFlaggedForReviewNotice();
+    return;
+  }
+
+  // 3. Display warning banner toast based on escalation rules
   const pasteError = document.getElementById('paste-error');
   if (pasteError) {
     let msg = '';
-    if (type === 'presence_violation') {
-      msg = 'Proctoring Warning: Face not detected. Please ensure your face is fully visible in the camera widget.';
-    } else if (type === 'multi_face_violation') {
-      msg = 'Proctoring Warning: Multiple faces detected. Proctoring rules prohibit other individuals in frame.';
-    } else if (type === 'gaze_violation') {
-      msg = 'Proctoring Warning: Gaze deviation detected. Please look directly at the screen.';
-    } else if (type === 'phone_violation') {
-      msg = 'Proctoring Warning: Cell phone usage detected. All electronic devices are strictly prohibited during the interview.';
+    let duration = 5000;
+
+    if (currentCount === 1) {
+      // First violation escalation: brief generic warning
+      msg = 'Please stay visible and focused on the screen during the interview';
+      duration = 4000;
+    } else {
+      // Second/Third violation escalation: specific plain-language warning
+      let label = 'Proctoring anomaly';
+      if (type === 'presence_violation') label = 'No face detected for several seconds';
+      else if (type === 'multi_face_violation') label = 'Multiple faces detected in frame';
+      else if (type === 'gaze_violation') label = 'Gaze deviation detected for several seconds';
+      else if (type === 'phone_violation') label = 'Phone detected in frame';
+
+      msg = `Proctoring Warning: ${label}.`;
+      duration = 8000;
     }
 
     pasteError.innerHTML = `<i data-lucide="shield-alert" class="w-3.5 h-3.5 text-red-700 font-extrabold"></i> <span>${msg}</span>`;
     pasteError.style.display = 'flex';
     if (window.lucide) lucide.createIcons();
     
-    // Auto-hide warning toast after 5 seconds
+    // Auto-hide warning toast
     setTimeout(() => {
       if (pasteError.innerHTML.includes(msg)) {
         pasteError.style.display = 'none';
       }
-    }, 5000);
+    }, duration);
   }
 };
+
+function showFlaggedForReviewNotice() {
+  // Clear any active toast warnings
+  const pasteError = document.getElementById('paste-error');
+  if (pasteError) pasteError.style.display = 'none';
+
+  const flaggedModal = document.createElement('div');
+  flaggedModal.className = 'fixed inset-0 flex items-center justify-center bg-slate-900/80 z-[100000] p-4';
+  flaggedModal.innerHTML = `
+    <div class="bg-white border-4 border-slate-900 rounded-xl p-8 max-w-md w-full shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] flex flex-col gap-4 animate-scaleUp">
+      <div class="flex items-center gap-2.5 text-amber-600 font-extrabold text-xl">
+        <i data-lucide="shield-alert" class="w-6 h-6"></i>
+        <span>Session Flagged for Review</span>
+      </div>
+      <p class="text-slate-800 text-sm font-semibold leading-relaxed">
+        Due to repeated proctoring anomalies (camera, face, or gaze deviations), your session has been flagged for administrative review.
+      </p>
+      <p class="text-slate-500 text-xs font-semibold leading-relaxed">
+        You may continue and complete your technical interview normally. Evaluation scoring and system design rounds will progress as scheduled.
+      </p>
+      <button id="btn-dismiss-flagged" class="mt-2 py-3 bg-slate-900 hover:bg-slate-800 text-white text-sm font-extrabold rounded-lg border-2 border-slate-900 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition w-full">
+        Understood & Continue
+      </button>
+    </div>
+  `;
+  document.body.appendChild(flaggedModal);
+  if (window.lucide) lucide.createIcons();
+  
+  document.getElementById('btn-dismiss-flagged').addEventListener('click', () => {
+    flaggedModal.remove();
+  });
+}
 
 
