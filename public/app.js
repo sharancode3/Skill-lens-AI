@@ -1555,6 +1555,87 @@ btnRestart.addEventListener('click', () => {
   if (chatSidebar) chatSidebar.classList.remove('active');
 });
 
+// ─── End Session Early: Confirmation Modal + API Call ───────────────────────
+// Wire the "End Session" button in the nav to open the confirmation modal.
+// Cancelling leaves the interview completely unaffected.
+// Confirming calls the same endSessionEarly backend path and pipes the
+// response through handleInterviewEndFlow — identical to a natural completion.
+
+const btnEndSession = document.getElementById('btn-end-session');
+const btnCancelEndSession = document.getElementById('btn-cancel-end-session');
+const btnConfirmEndSession = document.getElementById('btn-confirm-end-session-action');
+const modalConfirmEndSession = document.getElementById('modal-confirm-end-session');
+
+if (btnEndSession) {
+  btnEndSession.addEventListener('click', () => {
+    // Only open the modal if an interview is actually in progress
+    if (!isInterviewActive || !currentSessionId) return;
+    if (modalConfirmEndSession) modalConfirmEndSession.classList.remove('hidden');
+  });
+}
+
+if (btnCancelEndSession) {
+  btnCancelEndSession.addEventListener('click', () => {
+    // Cancel: close modal, interview continues untouched
+    if (modalConfirmEndSession) modalConfirmEndSession.classList.add('hidden');
+  });
+}
+
+// Clicking the backdrop (outside the modal card) also cancels
+if (modalConfirmEndSession) {
+  modalConfirmEndSession.addEventListener('click', (e) => {
+    if (e.target === modalConfirmEndSession) {
+      modalConfirmEndSession.classList.add('hidden');
+    }
+  });
+}
+
+if (btnConfirmEndSession) {
+  btnConfirmEndSession.addEventListener('click', async () => {
+    if (!currentSessionId) return;
+
+    // Close modal immediately and lock button to prevent double-fire
+    if (modalConfirmEndSession) modalConfirmEndSession.classList.add('hidden');
+    btnConfirmEndSession.disabled = true;
+    const originalBtnHTML = btnConfirmEndSession.innerHTML;
+    btnConfirmEndSession.innerHTML = `<i data-lucide="loader-circle" class="w-4 h-4 animate-spin"></i><span>Ending…</span>`;
+
+    try {
+      const res = await fetch('/api/interview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: currentSessionId,
+          endSessionEarly: true
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        console.error('[End Session] API error:', errData);
+        // Restore button so user can retry
+        btnConfirmEndSession.disabled = false;
+        btnConfirmEndSession.innerHTML = originalBtnHTML;
+        alert('Something went wrong ending the session. Please try again.');
+        return;
+      }
+
+      const data = await res.json();
+
+      // The backend always returns done:true for an early end.
+      // Route through the identical handleInterviewEndFlow used by natural completion.
+      await handleInterviewEndFlow(data);
+
+    } catch (err) {
+      console.error('[End Session] Network error:', err);
+      btnConfirmEndSession.disabled = false;
+      btnConfirmEndSession.innerHTML = originalBtnHTML;
+      alert('Network error. Please check your connection and try again.');
+    }
+  });
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Anti-cheating: Disable paste, copy, cut on answer input field
 function showPasteWarning() {
   const errorEl = document.getElementById('paste-error');

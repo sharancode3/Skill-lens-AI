@@ -1599,11 +1599,13 @@ export async function endSessionEarly(sessionId) {
   // Explicitly note that the candidate voluntarily ended early
   feedbackObj.summary = "The candidate voluntarily ended the interview session early. " + (feedbackObj.summary || "");
   
-  // Custom borderline/early verdict
-  session.judgeVerdict = (report && report.judgeVerdict) ? report.judgeVerdict : {
+  // Always use borderline for voluntary early exits regardless of mechanical verdict.
+  // A mechanical verdict can legitimately compute 'would_reject' on zero answers, which
+  // is misleading — the candidate chose to stop, not failed. Borderline is the honest signal.
+  session.judgeVerdict = {
     decision: 'borderline',
     reasoning: 'Candidate voluntarily ended the session early. Assessment completed with partial performance data.',
-    evidenceTrail: []
+    evidenceTrail: (report && report.judgeVerdict && report.judgeVerdict.evidenceTrail) ? report.judgeVerdict.evidenceTrail : []
   };
 
   session.feedback = feedbackObj;
