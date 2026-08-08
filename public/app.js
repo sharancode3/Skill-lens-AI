@@ -606,14 +606,14 @@ function updateProgress(questions, topics) {
   chatProgressTopics.textContent = `${topics || 0}/4`;
 }
 
-function scrollChatBottom() {
+function scrollChatBottom(force = false) {
   if (!chatMessages) return;
-  requestAnimationFrame(() => {
+  setTimeout(() => {
     chatMessages.scrollTo({
       top: chatMessages.scrollHeight,
-      behavior: 'smooth'
+      behavior: force ? 'auto' : 'smooth'
     });
-  });
+  }, 100);
 }
 
 function transitionToFeedback(feedback, metrics, judgeVerdict) {

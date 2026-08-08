@@ -552,6 +552,7 @@ button:focus-visible {
   font-weight: 600;
   padding: 0.25rem 0;
   color: #374151;
+}
 /* ==================== WORKSPACE FULLSCREEN CONSOLE ==================== */
 html, body {
   height: 100%;
@@ -611,10 +612,34 @@ html, body {
 .chat-input-footer {
   flex-shrink: 0 !important;
   background-color: #FFFFFF !important;
-  border-top: 1px solid #E2E8F0 !important;
+  border-top: 2px solid #E2E8F0 !important;
   padding: 1rem 1.5rem !important;
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.05) !important;
+  box-shadow: none !important;
   width: 100% !important;
+}
+
+#chat-input {
+  border-radius: 6px !important;
+  box-shadow: none !important;
+  border: 2px solid #E2E8F0 !important;
+  background-color: #F1F5F9 !important;
+}
+
+#chat-input:focus {
+  border-color: #2563EB !important;
+  background-color: #FFFFFF !important;
+}
+
+#btn-send {
+  border-radius: 6px !important;
+  box-shadow: none !important;
+  background-color: #2563EB !important;
+  border: none !important;
+  transition: background-color 0.15s ease-in-out !important;
+}
+
+#btn-send:hover {
+  background-color: #1D4ED8 !important;
 }
 
 /* Chat Message Bubbles */
@@ -626,26 +651,24 @@ html, body {
   word-break: break-word !important;
   overflow-wrap: break-word !important;
   position: relative !important;
-  border-radius: 1rem !important;
+  border-radius: 6px !important;
 }
 
 .chat-bubble.interviewer {
   align-self: flex-start !important;
   background-color: #FFFFFF !important;
   color: #0F172A !important;
-  border: 1px solid #E2E8F0 !important;
-  border-left: 5px solid #2563EB !important;
-  border-top-left-radius: 0.25rem !important;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03) !important;
+  border: 2px solid #E2E8F0 !important;
+  border-left: 6px solid #2563EB !important;
+  box-shadow: none !important;
 }
 
 .chat-bubble.candidate {
   align-self: flex-end !important;
   background-color: #2563EB !important;
   color: #FFFFFF !important;
-  border: 1px solid #1D4ED8 !important;
-  border-top-right-radius: 0.25rem !important;
-  box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2) !important;
+  border: 2px solid #2563EB !important;
+  box-shadow: none !important;
   font-weight: 500 !important;
 }
 
@@ -656,7 +679,7 @@ html, body {
   height: 100% !important;
   max-height: 100% !important;
   background-color: #FFFFFF !important;
-  border-left: 1px solid #E2E8F0 !important;
+  border-left: 2px solid #E2E8F0 !important;
   display: flex !important;
   flex-direction: column !important;
   overflow: hidden !important;
@@ -676,14 +699,14 @@ html, body {
 
 .sidebar-row {
   background-color: #FFFFFF !important;
-  border: 1px solid #E2E8F0 !important;
-  border-radius: 0.75rem !important;
+  border: 2px solid #E2E8F0 !important;
+  border-radius: 6px !important;
   padding: 0.85rem !important;
   display: flex !important;
   flex-direction: column !important;
   gap: 0.5rem !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
-  transition: transform 0.15s ease, border-color 0.15s ease !important;
+  box-shadow: none !important;
+  transition: border-color 0.15s ease !important;
 }
 
 .sidebar-row:hover {
@@ -734,16 +757,19 @@ html, body {
     display: flex !important;
   }
   #chat-sidebar {
-    position: absolute;
-    top: 0;
-    right: 0;
-    transform: translateX(100%);
-    box-shadow: -4px 0 0 rgba(0,0,0,0.15);
-    display: none;
+    position: absolute !important;
+    top: 0 !important;
+    right: 0 !important;
+    transform: translateX(100%) !important;
+    display: flex !important;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    box-shadow: none !important;
+    border-left: 2px solid #E2E8F0 !important;
+    z-index: 40 !important;
+    width: 280px !important;
   }
   #chat-sidebar.active {
-    transform: translateX(0);
-    display: flex !important;
+    transform: translateX(0) !important;
   }
 }
 
