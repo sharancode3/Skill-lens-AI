@@ -236,7 +236,7 @@ export async function createSession(sessionId, candidate) {
 /**
  * Updates difficulty tier and determines next question type based on performance.
  */
-export function updateDifficulty(session, finalScore) {
+export function updateDifficulty(session, finalScore, currentHallucinationFlag = false) {
   if (!session.recentScores) {
     session.recentScores = [];
   }
@@ -257,6 +257,18 @@ export function updateDifficulty(session, finalScore) {
     let currentIdx = tiers.indexOf(session.difficultyTier || 'standard');
     if (currentIdx === -1) currentIdx = 1;
 
+    // Check last two log entries for hallucination flags (one current, one previous)
+    const log = session.accuracyLog || [];
+    const prevEntry = log[log.length - 1];
+    const hasRecentHallucinations = !!currentHallucinationFlag || (prevEntry && !!prevEntry.hallucinationFlag);
+
+    // Hysteresis escalation logic: last 2 scores >= 80, no recent hallucinations
+    const canEscalate = s1 >= 80 && s2 >= 80 && !hasRecentHallucinations;
+
+    // Hysteresis de-escalation logic: most recent score < 40, and not the very first question at this new tier
+    const isFirstQuestionAtNewTier = session.lastTierChangeTurnCount !== undefined && (session.turnCount <= session.lastTierChangeTurnCount + 1);
+    const canDeEscalate = finalScore < 40 && !isFirstQuestionAtNewTier;
+
     const cursor = typeof session.cursor === 'number' ? session.cursor : 0;
     const nextTopic = (session.topicQueue && session.topicQueue[cursor + 1]) || null;
     const isArchitecturalTopic = nextTopic && (
@@ -270,18 +282,22 @@ export function updateDifficulty(session, finalScore) {
       ))
     );
 
-    if (s1 >= 80 && s2 >= 80) {
-      // Escalation: 2 consecutive strong scores (>= 80) advance the difficulty tier
+    if (canEscalate) {
       const nextIdx = Math.min(currentIdx + 1, tiers.length - 1);
-      session.difficultyTier = tiers[nextIdx];
+      if (nextIdx !== currentIdx) {
+        session.difficultyTier = tiers[nextIdx];
+        session.lastTierChangeTurnCount = session.turnCount;
+        console.log(`[Difficulty Engine] Escalating difficulty to: ${session.difficultyTier}. Next type: diagram_interpret`);
+      }
       session.pendingQuestionType = 'diagram_interpret';
-      console.log(`[Difficulty Engine] Escalating difficulty to: ${session.difficultyTier}. Next type: diagram_interpret`);
-    } else if (s1 < 40 || s2 < 40) {
-      // De-escalation: weak performance (< 40) drops difficulty tier
+    } else if (canDeEscalate) {
       const nextIdx = Math.max(currentIdx - 1, 0);
-      session.difficultyTier = tiers[nextIdx];
+      if (nextIdx !== currentIdx) {
+        session.difficultyTier = tiers[nextIdx];
+        session.lastTierChangeTurnCount = session.turnCount;
+        console.log(`[Difficulty Engine] De-escalating difficulty to: ${session.difficultyTier}. Next type: mcq`);
+      }
       session.pendingQuestionType = 'mcq';
-      console.log(`[Difficulty Engine] De-escalating difficulty to: ${session.difficultyTier}. Next type: mcq`);
     } else if (isArchitecturalTopic && currentIdx >= 1 && (!session.lastDiagramTurn || (session.questionsAsked - session.lastDiagramTurn) >= 2)) {
       // Architectural systems topic diagram trigger
       session.pendingQuestionType = 'diagram_interpret';
@@ -717,7 +733,7 @@ export async function handleTurn(sessionId, message) {
   const whyProbe = !!session.pendingWhyProbe;
 
   // Update difficulty and next question type based on accuracy
-  updateDifficulty(session, finalAccuracyScore);
+  updateDifficulty(session, finalAccuracyScore, hallucinationFlag);
 
   // Set the next question type to the type of the question that was generated on this turn
   session.nextQuestionType = nextQuestionTypeGenerated;
