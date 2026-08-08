@@ -684,7 +684,8 @@ export async function handleTurn(sessionId, message) {
     hallucinationCorrection: llmResponse ? (llmResponse.hallucinationCorrection || "") : "",
     hedgeMarkers,
     whyProbe,
-    communicationConfidence: llmResponse ? (llmResponse.communicationConfidence || "medium") : "medium"
+    communicationConfidence: llmResponse ? (llmResponse.communicationConfidence || "medium") : "medium",
+    rootUnderstandingReached: llmResponse ? !!llmResponse.rootUnderstandingReached : false
   });
 
   console.log(`\n--- [LLM Evaluation Log] Session "${sessionId}" Turn ${session.turnCount} ---`);
@@ -745,6 +746,9 @@ export async function handleTurn(sessionId, message) {
   let action = llmResponse.action;
   let forceAdvanceDueToFollowupLimit = false;
   let forceAdvanceDueToHallucinationLimit = false;
+  let forceAdvanceDueToWhyProbeLimit = false;
+
+  const wasWhyProbing = (session.whyChainDepth || 0) > 0;
 
   if (isMCQTurn) {
     console.log(`[SessionManager Override] Overwriting action to "advance" because MCQ turns always transition to the next topic.`);
@@ -757,6 +761,21 @@ export async function handleTurn(sessionId, message) {
     console.log(`[SessionManager Override] Overwriting action "followup" to "advance" because hallucinationCountForCurrentTopic is ${session.hallucinationCountForCurrentTopic}.`);
     action = 'advance';
     forceAdvanceDueToHallucinationLimit = true;
+  } else if (action === 'why_probe') {
+    if ((session.whyChainDepth || 0) > 3 || session.followupCountForCurrentTopic >= 1) {
+      console.log(`[SessionManager Override] Overwriting action "why_probe" to "advance" because whyChainDepth is ${session.whyChainDepth} or standard follow-up was already asked.`);
+      action = 'advance';
+      forceAdvanceDueToWhyProbeLimit = true;
+    }
+  }
+
+  // Stop the chain mid-drill if candidate drops classification or rootReached is true
+  if (wasWhyProbing && action !== 'advance') {
+    if (llmResponse.rootUnderstandingReached || (session.whyChainDepth || 0) > 3 || llmResponse.classification === 'shallow' || llmResponse.classification === 'off_topic') {
+      console.log(`[SessionManager Override] Overwriting action to "advance" due to why-probe chain termination triggers (Root: ${llmResponse.rootUnderstandingReached}, Depth: ${session.whyChainDepth}, Class: ${llmResponse.classification}).`);
+      action = 'advance';
+      forceAdvanceDueToWhyProbeLimit = true;
+    }
   }
 
   // Handle follow-up action
@@ -805,6 +824,51 @@ export async function handleTurn(sessionId, message) {
     return responsePayload;
   }
 
+  // Handle why_probe action
+  if (action === 'why_probe') {
+    session.questionsAsked++;
+
+    session.transcript.push({
+      role: 'interviewer',
+      day: currentTopic.day,
+      text: fullReply,
+      turn: session.turnCount + 1
+    });
+
+    session.questionSentAt = new Date().toISOString();
+    await saveSessionDoc(sessionId, session);
+
+    const responsePayload = {
+      reply: fullReply,
+      done: false,
+      questionsAsked: session.questionsAsked,
+      distinctDaysCovered: session.distinctDaysCovered.length,
+      detectedConnections,
+      action,
+      nextQuestionType: session.nextQuestionType,
+      difficultyTier: session.difficultyTier,
+      mcqOptions: null,
+      diagramDefinition: null,
+      diagramQuestionText: null,
+      questionHistory: (session.accuracyLog || []).map(log => ({
+        day: log.day,
+        title: log.title || 'Curriculum Topic',
+        difficultyTier: log.difficultyTier,
+        questionType: log.questionType,
+        classification: log.classification || 'unknown'
+      }))
+    };
+
+    session.lastMessageHash = cleanMsg;
+    session.lastMessageTime = new Date().toISOString();
+    session.lastResponse = responsePayload;
+    session.lastMCQOptions = null;
+    session.questionSentAt = new Date().toISOString();
+    await saveSessionDoc(sessionId, session);
+
+    return responsePayload;
+  }
+
   // Handle advance action
   if (action === 'advance' || action === 'wrapup') {
     if (currentTopic) {
@@ -847,7 +911,7 @@ export async function handleTurn(sessionId, message) {
     session.cursor++;
     const nextTopic = session.topicQueue[session.cursor];
     
-    const replyText = (forceAdvanceDueToFollowupLimit || forceAdvanceDueToBlankRetries || forceAdvanceDueToHallucinationLimit)
+    const replyText = (forceAdvanceDueToFollowupLimit || forceAdvanceDueToBlankRetries || forceAdvanceDueToHallucinationLimit || forceAdvanceDueToWhyProbeLimit)
       ? `Got it. Let's move on to the next topic. Can you tell me about your experience on Day ${nextTopic.day}: "${nextTopic.title}"?`
       : fullReply;
 

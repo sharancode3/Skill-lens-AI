@@ -19,8 +19,8 @@ export function buildResponseSchema(nextQuestionType) {
       },
       action: {
         type: 'STRING',
-        description: 'One of: followup (if answer is partial/shallow and no follow-up has been asked yet), or advance (if strong, off_topic, or follow-up count is already 1).',
-        enum: ['followup', 'advance', 'wrapup']
+        description: 'One of: followup (if answer is partial/shallow and no follow-up has been asked yet), why_probe (if answer is strong/partial and whyChainDepth < 3), or advance (if we should transition topics or wrapup).',
+        enum: ['followup', 'why_probe', 'advance', 'wrapup']
       },
       reactionClause: {
         type: 'STRING',
@@ -57,9 +57,13 @@ export function buildResponseSchema(nextQuestionType) {
       communicationConfidence: {
         type: 'STRING',
         description: 'The candidate\'s verbal certainty and delivery confidence: low, medium, or high, independent of correctness.'
+      },
+      rootUnderstandingReached: {
+        type: 'BOOLEAN',
+        description: 'True if candidate response demonstrates final root mechanistic understanding in a why-probing chain. Otherwise false.'
       }
     },
-    required: ['classification', 'reasoning', 'action', 'reactionClause', 'reply', 'updatedMemory', 'llmConfidence', 'modelWantsToStop', 'hallucinationFlag', 'hallucinationCorrection', 'whyProbe', 'communicationConfidence']
+    required: ['classification', 'reasoning', 'action', 'reactionClause', 'reply', 'updatedMemory', 'llmConfidence', 'modelWantsToStop', 'hallucinationFlag', 'hallucinationCorrection', 'whyProbe', 'communicationConfidence', 'rootUnderstandingReached']
   };
 
   if (nextQuestionType === 'mcq') {
@@ -442,19 +446,60 @@ function mockLLMCall(candidate, topic, lastQuestion, message, followupCount, con
     ? (followupCount >= 1 ? "Let's move on to the next topic." : "Can you clarify how vectors are stored in a standard RAG pipeline?")
     : reply;
 
+  const isWhyInitial = cleanMsg.includes('why-initial');
+  const isWhyL1 = cleanMsg.includes('why-level-1');
+  const isWhyL2 = cleanMsg.includes('why-level-2');
+  const isWhyL3 = cleanMsg.includes('why-level-3');
+  const isWhyWeak = cleanMsg.includes('why-weak');
+
+  let mockAction = finalAction;
+  let mockClassification = finalClassification;
+  let mockReasoning = reasoning;
+  let mockReply = finalReply;
+  let mockRootReached = false;
+
+  if (isWhyInitial) {
+    mockClassification = 'strong';
+    mockAction = 'why_probe';
+    mockReasoning = 'Candidate gave strong initial answer. Probing why.';
+    mockReply = "Why did you choose SQLite over keeping it in memory? (Level 1)";
+  } else if (isWhyL1) {
+    mockClassification = 'strong';
+    mockAction = 'why_probe';
+    mockReasoning = 'Candidate justified level 1. Probing why level 2.';
+    mockReply = "Why do you think that specific SQLite index behaves this way? (Level 2)";
+  } else if (isWhyL2) {
+    mockClassification = 'strong';
+    mockAction = 'why_probe';
+    mockReasoning = 'Candidate justified level 2. Probing why level 3.';
+    mockReply = "What is the ultimate bottleneck at the filesystem layer for this? (Level 3)";
+  } else if (isWhyL3) {
+    mockClassification = 'strong';
+    mockAction = 'advance';
+    mockReasoning = 'Candidate reached root understanding.';
+    mockRootReached = true;
+    mockReply = "Makes sense.";
+  } else if (isWhyWeak) {
+    mockClassification = 'shallow';
+    mockAction = 'advance';
+    mockReasoning = 'Candidate failed to justify why probe.';
+    mockReply = "Okay. Let's move on.";
+  }
+
   const result = {
-    classification: finalClassification,
-    reasoning: isHallucination ? 'Candidate hallucinated vector storage mechanics.' : reasoning,
-    action: finalAction,
+    classification: mockClassification,
+    reasoning: isHallucination ? 'Candidate hallucinated vector storage mechanics.' : mockReasoning,
+    action: mockAction,
     reactionClause: finalReaction,
-    reply: finalReply,
+    reply: mockReply,
     updatedMemory,
-    llmConfidence: finalConfidence,
+    llmConfidence: isHallucination ? 20 : (mockClassification === 'shallow' ? 35 : finalConfidence),
     modelWantsToStop,
     hallucinationFlag,
     hallucinationCorrection,
-    whyProbe: isHallucination ? false : (action === 'followup'),
-    communicationConfidence
+    whyProbe: isHallucination ? false : (mockAction === 'why_probe' || mockAction === 'followup'),
+    communicationConfidence,
+    rootUnderstandingReached: mockRootReached
   };
 
   // Add MCQ fields if requested
@@ -626,10 +671,11 @@ CONSTRAINTS FOR MENTIONING THE DAY:
 - Never mention the Day number in follow-up questions, "why" questions, or probing questions within the same topic.
 
 CONSTRAINTS FOR ACTION & PHRASING:
-- "strong" -> Action MUST be "advance".
+- "why_probe": Usable ONLY when the current turn's classification is "strong" or "partial" (never on "shallow" or "off_topic"). Selecting "why_probe" triggers a recursive follow-up asking the candidate to justify their technical decisions or explain the underlying root mechanisms of their previous answer. E.g. "Why did you choose SQLite instead of keeping the DataFrame in memory?"
+- "strong" -> Action can be "why_probe" (if whyChainDepth < 3 to drill deeper into the mechanism) or "advance" (if we have completed the drilling).
 - "off_topic" -> Action MUST be "advance". You must gently redirect the conversation back in the reply text.
-- "partial" or "shallow" -> Action MUST be "followup" (which will be overwritten to "advance" by the server if a follow-up was already asked).
-- When action is "followup": The reply MUST reference something concrete or quote a word/phrase from the candidate last message. DO NOT ask generic "can you elaborate?" questions.
+- "partial" or "shallow" -> If "shallow", Action MUST be "followup" (or advance if followupCount >= 1). If "partial", Action can be "why_probe" (if whyChainDepth < 3) or "followup" (if we just want a standard clarification).
+- When action is "followup" or "why_probe": The reply MUST reference something concrete or quote a word/phrase from the candidate's last message. DO NOT ask generic "can you elaborate?" questions.
 - Adjust your vocabulary and question depth based on the candidate's years of experience:
   * Junior candidate (<3 years): Maintain supportive, concept-focused language.
   * Senior candidate (5+ years): Ask for architectural trade-offs, edge cases, scalability, and "why" decisions.

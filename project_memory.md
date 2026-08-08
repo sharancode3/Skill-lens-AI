@@ -69,6 +69,7 @@ This document is maintained to help AI models understand the current state of th
 - [x] Phase I0: Session Schema & Turn-Input Additions (server timing, detectHedging, whyChainDepth, and schema extensions).
 - [x] Phase I1: Hallucination Detector (structured schema output, contrastive instructions, warning prefixes, and repeated hallucination advancement overrides).
 - [x] Phase I2: Communication Confidence Detection (confidence tracking separate from correctness, user prompt hedge event metrics, and probing reaction notes).
+- [x] Phase I3: \"Why?\" Recursive Loop (recursive why-probing, rootUnderstandingReached detection, and loop depth cap overrides).
 
 
 
