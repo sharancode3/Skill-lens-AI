@@ -246,7 +246,7 @@ async function callGeminiREST(systemPrompt, userPrompt, schema, retryCount = 1, 
  * Call the OpenAI-compatible Qwen REST endpoint.
  */
 async function callQwenREST(systemPrompt, userPrompt, schema, retryCount = 1, temperature = 0.7) {
-  const baseURL = process.env.OLLAMA_API_URL || process.env.LOCAL_API_URL || process.env.QWEN_API_URL || 'http://localhost:11434/v1';
+  const baseURL = process.env.OLLAMA_API_URL || process.env.LOCAL_API_URL || process.env.QWEN_API_URL || 'http://127.0.0.1:11434/v1';
   const modelName = process.env.GEMMA_MODEL_NAME || process.env.LOCAL_MODEL_NAME || process.env.QWEN_MODEL_NAME || 'qwen2.5:3b';
   const timeoutMs = parseInt(process.env.LOCAL_MODEL_TIMEOUT_MS || '15000', 10);
   
@@ -342,7 +342,7 @@ async function callQwenREST(systemPrompt, userPrompt, schema, retryCount = 1, te
  * Queries local Ollama model with 3s timeout; falls back gracefully to null on timeout or error.
  */
 export async function generateLocalLoRAReply(systemPrompt, userPrompt) {
-  const apiUrl = process.env.QWEN_API_URL || 'http://localhost:11434/v1';
+  const apiUrl = process.env.QWEN_API_URL || 'http://127.0.0.1:11434/v1';
   const modelName = process.env.LORA_MODEL_NAME || process.env.LOCAL_MODEL_NAME || process.env.QWEN_MODEL_NAME || 'qwen2.5:3b';
 
   const requestBody = {
