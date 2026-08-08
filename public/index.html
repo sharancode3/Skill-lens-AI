@@ -108,16 +108,16 @@
       <div class="max-w-3xl mx-auto flex flex-col gap-8">
         
         <!-- Header Banner -->
-        <div class="bg-blue-600 text-white rounded-xl p-8 border-2 border-blue-700">
-          <span class="badge bg-blue-500 text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full border border-blue-400">Pre-Interview Briefing</span>
+        <div class="bg-slate-900 text-white rounded-xl p-8 border-4 border-slate-900 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+          <span class="badge bg-blue-600 text-xs font-black uppercase tracking-wider px-3 py-1 rounded-md border border-blue-400">Pre-Interview Briefing</span>
           <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight mt-3">Candidate Evaluation Rules & Guidelines</h1>
-          <p class="text-blue-100 text-sm md:text-base mt-2 font-medium">
-            Please read these evaluation standards and anti-cheating proctoring policies carefully before beginning your session for <strong id="rules-cand-name" class="text-white underline">Candidate</strong>.
+          <p class="text-slate-300 text-sm md:text-base mt-2 font-medium">
+            Please read these evaluation standards and anti-cheating proctoring policies carefully before beginning your session for <strong id="rules-cand-name" class="text-white underline font-bold">Candidate</strong>.
           </p>
         </div>
 
         <!-- Section 1: What This Interview Is -->
-        <div class="bg-white border-2 border-slate-200 rounded-xl p-6 md:p-8 flex flex-col gap-3">
+        <div class="bg-white border-2 border-slate-900 rounded-xl p-6 md:p-8 flex flex-col gap-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
           <div class="flex items-center gap-2.5 text-blue-600 font-extrabold text-lg">
             <i data-lucide="cpu" class="w-5 h-5"></i>
             <h2>1. What This Interview Is</h2>
@@ -128,7 +128,7 @@
         </div>
 
         <!-- Section 2: How to Answer -->
-        <div class="bg-white border-2 border-slate-200 rounded-xl p-6 md:p-8 flex flex-col gap-3">
+        <div class="bg-white border-2 border-slate-900 rounded-xl p-6 md:p-8 flex flex-col gap-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
           <div class="flex items-center gap-2.5 text-blue-600 font-extrabold text-lg">
             <i data-lucide="message-square-text" class="w-5 h-5"></i>
             <h2>2. How to Answer</h2>
@@ -138,60 +138,49 @@
           </p>
           <ul class="list-disc list-inside text-sm text-slate-700 flex flex-col gap-2 font-medium mt-1">
             <li><strong>Be Genuine & Specific:</strong> Explain the exact mechanisms, architecture, data structures, or trade-offs involved in your engineering choices.</li>
-            <li><strong>Avoid Vague Filler:</strong> Short, superficial answers (e.g. <em>"it processes data"</em> or <em>"something with vectors"</em>) are scored as shallow and will prompt deeper follow-ups.</li>
-            <li><strong>Do Not Restate the Prompt:</strong> Simply repeating the interviewer's question back in different words is recognized as non-responsive.</li>
+            <li><strong>Avoid Vague Filler:</strong> Surface-level answers like <em>"it was good"</em> or <em>"used python"</em> trigger mandatory technical follow-ups.</li>
+            <li><strong>Refusal & Conduct Penalties:</strong> Intentionally dodging questions (<em>"idk"</em>), off-topic inputs, or dismissive responses (<em>"do as u like"</em>) register conduct warnings and can cause immediate session suspension.</li>
           </ul>
         </div>
 
-        <!-- Section 3: What the AI Checks For -->
-        <div class="bg-white border-2 border-slate-200 rounded-xl p-6 md:p-8 flex flex-col gap-3">
-          <div class="flex items-center gap-2.5 text-blue-600 font-extrabold text-lg">
-            <i data-lucide="target" class="w-5 h-5"></i>
-            <h2>3. What the AI Evaluates & Evasive Answers</h2>
-          </div>
-          <p class="text-slate-700 text-sm leading-relaxed">
-            The AI evaluates relevance, technical correctness, and mechanistic depth on every turn. Intentionally evasive answers, nonsensical phrasing (e.g. <em>"do as you like"</em>), or disrespectful responses will be recognized immediately. They reduce your accuracy score and prevent advancement to advanced system design rounds.
-          </p>
-        </div>
-
-        <!-- Section 4: Accuracy & Hallucination Policy -->
-        <div class="bg-white border-2 border-slate-200 rounded-xl p-6 md:p-8 flex flex-col gap-3">
+        <!-- Section 3: Hallucination Policy -->
+        <div class="bg-white border-2 border-slate-900 rounded-xl p-6 md:p-8 flex flex-col gap-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
           <div class="flex items-center gap-2.5 text-amber-600 font-extrabold text-lg">
-            <i data-lucide="alert-circle" class="w-5 h-5"></i>
-            <h2>4. Accuracy & Concept Hallucination Policy</h2>
+            <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+            <h2>3. Hallucination & Fact-Checking Policy</h2>
           </div>
           <p class="text-slate-700 text-sm leading-relaxed">
-            Answer based on genuine understanding. Questions are generated from authentic technical curriculum content. Confidently asserting incorrect facts (such as fabricating nonexistent library APIs or misrepresenting core mechanics) triggers a <strong>Concept Hallucination Alert</strong> with an inline correction and a deduction in score.
+            The AI interviewer actively verifies your claims against authoritative technical standards. Inventing non-existent APIs, claiming incorrect performance metrics, or fabricating library methods registers a <strong>Hallucination Flag</strong>, deducts points, and triggers immediate correction.
           </p>
         </div>
 
-        <!-- Section 5: Mandatory Proctoring Rules -->
-        <div class="bg-amber-50 border-2 border-amber-400 rounded-xl p-6 md:p-8 flex flex-col gap-4">
-          <div class="flex items-center gap-2.5 text-amber-900 font-extrabold text-lg border-b border-amber-200 pb-3">
-            <i data-lucide="shield-alert" class="w-6 h-6 text-amber-600"></i>
-            <h2>5. Mandatory Anti-Cheating & Proctoring Rules</h2>
+        <!-- Section 4: 4-Tier Proctoring Policy -->
+        <div class="bg-amber-50 border-2 border-amber-500 rounded-xl p-6 md:p-8 flex flex-col gap-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+          <div class="flex items-center gap-2.5 text-amber-900 font-extrabold text-lg">
+            <i data-lucide="shield-alert" class="w-6 h-6 text-amber-700"></i>
+            <h2>4. Anti-Cheating & Proctoring Rules</h2>
           </div>
           <div class="flex flex-col gap-3 text-sm text-amber-950 font-medium">
             <div class="flex items-start gap-3">
-              <span class="w-6 h-6 rounded-full bg-amber-200 text-amber-900 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">1</span>
+              <span class="w-6 h-6 rounded-md bg-amber-200 text-amber-950 flex items-center justify-center font-black text-xs shrink-0 mt-0.5 border border-amber-400">1</span>
               <div>
-                <strong>Fullscreen Requirement:</strong> The interview runs in mandatory fullscreen mode. Exiting fullscreen triggers an automatic warning and re-entry prompt. Exiting fullscreen <strong>3 times</strong> results in immediate interview termination.
+                <strong>Mandatory Fullscreen Mode:</strong> You must remain in Fullscreen mode throughout the entire session. Exiting fullscreen triggers a warning and auto-recovery attempt. Reaching <strong>4 exits</strong> results in immediate suspension.
               </div>
             </div>
             <div class="flex items-start gap-3">
-              <span class="w-6 h-6 rounded-full bg-amber-200 text-amber-900 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">2</span>
+              <span class="w-6 h-6 rounded-md bg-amber-200 text-amber-950 flex items-center justify-center font-black text-xs shrink-0 mt-0.5 border border-amber-400">2</span>
               <div>
-                <strong>Tab & Window Switching:</strong> Navigating away from this browser window or switching tabs at any point triggers a proctoring violation. Repeated tab switching immediately terminates the session.
+                <strong>Tab & Window Switching:</strong> Navigating away from this browser window or switching tabs at any point triggers a proctoring violation. Tab switching immediately terminates the session on the 1st occurrence.
               </div>
             </div>
             <div class="flex items-start gap-3">
-              <span class="w-6 h-6 rounded-full bg-amber-200 text-amber-900 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">3</span>
+              <span class="w-6 h-6 rounded-md bg-amber-200 text-amber-950 flex items-center justify-center font-black text-xs shrink-0 mt-0.5 border border-amber-400">3</span>
               <div>
                 <strong>Copy/Paste & Shortcut Lockdown:</strong> Copying, pasting, cutting text, or using developer shortcuts (Ctrl+C, Ctrl+V, F12) is disabled. Attempting copy/paste triggers a warning on the 1st attempt and suspension on the 2nd attempt.
               </div>
             </div>
             <div class="flex items-start gap-3">
-              <span class="w-6 h-6 rounded-full bg-amber-200 text-amber-900 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">4</span>
+              <span class="w-6 h-6 rounded-md bg-amber-200 text-amber-950 flex items-center justify-center font-black text-xs shrink-0 mt-0.5 border border-amber-400">4</span>
               <div>
                 <strong>Suspension & 5-Minute Cooldown:</strong> Suspended sessions are permanently recorded as a <strong>FAILED / SUSPENDED</strong> evaluation. A <strong>5-minute cooldown period</strong> is strictly enforced before candidate re-attempts are permitted.
               </div>
@@ -200,23 +189,23 @@
         </div>
 
         <!-- Section 6: End of Interview Summary -->
-        <div class="bg-white border-2 border-slate-200 rounded-xl p-6 md:p-8 flex flex-col gap-3">
+        <div class="bg-white border-2 border-slate-900 rounded-xl p-6 md:p-8 flex flex-col gap-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
           <div class="flex items-center gap-2.5 text-blue-600 font-extrabold text-lg">
             <i data-lucide="award" class="w-5 h-5"></i>
-            <h2>6. Post-Interview Report & Panel Verdict</h2>
+            <h2>5. Post-Interview Report & Panel Verdict</h2>
           </div>
           <p class="text-slate-700 text-sm leading-relaxed">
-            Upon completing all required curriculum topics (minimum 8 questions across 4 days), your session concludes automatically. You will receive a structured <strong>Interview Panel Verdict</strong> detailing key strengths, identified technical gaps, response speed analytics, and actionable recommended next steps.
+            Upon completing all required curriculum topics, your session concludes automatically. You will receive a structured <strong>Interview Panel Verdict</strong> detailing key strengths, identified technical gaps, response speed analytics, and actionable recommended next steps.
           </p>
         </div>
 
         <!-- Bottom Call to Action Card -->
-        <div class="bg-slate-900 text-white rounded-xl p-8 flex flex-col md:flex-row items-center justify-between gap-6 mb-8">
+        <div class="bg-slate-900 text-white rounded-xl p-8 flex flex-col md:flex-row items-center justify-between gap-6 mb-8 border-4 border-slate-900 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
           <div>
             <h3 class="text-xl font-extrabold">Ready to begin your technical interview?</h3>
-            <p class="text-slate-400 text-xs mt-1 font-medium">By clicking below, you acknowledge that you have read, understood, and agreed to all proctoring rules.</p>
+            <p class="text-slate-300 text-xs mt-1 font-medium">By clicking below, you acknowledge that you have read, understood, and agreed to all proctoring rules.</p>
           </div>
-          <button id="btn-accept-rules" class="h-14 px-8 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm rounded-xl flex items-center justify-center gap-2 transition-all shrink-0 w-full md:w-auto shadow-md">
+          <button id="btn-accept-rules" class="h-14 px-8 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm rounded-xl flex items-center justify-center gap-2 transition-all shrink-0 w-full md:w-auto border-2 border-slate-900 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0">
             <span>I Understand & Begin Interview</span>
             <i data-lucide="arrow-right" class="w-5 h-5"></i>
           </button>
@@ -481,47 +470,48 @@
   </main>
 
   <!-- ==================== SCREEN 4: SUSPENSION SCREEN ==================== -->
-  <main id="screen-suspended" class="view min-h-screen bg-red-950 flex flex-col items-center justify-center p-6 text-center hidden">
-    <div class="bg-white max-w-lg w-full p-10 rounded-lg border-8 border-red-700 flex flex-col items-center gap-6">
-      <div class="w-20 h-20 bg-red-100 text-red-600 rounded-full flex items-center justify-center border-4 border-red-300 animate-bounce">
-        <i data-lucide="shield-off" class="w-10 h-10"></i>
+  <main id="screen-suspended" class="view min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center hidden">
+    <div class="bg-white max-w-lg w-full p-8 md:p-10 rounded-xl border-4 border-slate-900 flex flex-col items-center gap-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+      <div class="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center border-2 border-red-300 animate-bounce">
+        <i data-lucide="shield-off" class="w-8 h-8"></i>
       </div>
       <div>
-        <h1 class="text-3xl font-black text-gray-900">Interview Suspended</h1>
-        <p class="text-sm text-gray-600 mt-4 leading-relaxed">
-          Your interview session has been permanently suspended due to repeated proctoring violations (exiting fullscreen or switching tabs/windows).
+        <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Interview Suspended</h1>
+        <p class="text-sm text-slate-600 mt-3 leading-relaxed font-medium">
+          Your interview session has been permanently suspended due to repeated proctoring or conduct violations.
         </p>
-        <p class="text-sm font-bold text-red-600 mt-2">
-          Your final score has been zeroed, and your attempt is flagged.
+        <p class="text-xs font-extrabold text-red-600 mt-2 bg-red-50 py-1.5 px-3 rounded-lg border border-red-200">
+          Evaluation zeroed & candidate attempt flagged on server
         </p>
       </div>
-      <div class="bg-gray-100 p-4 rounded-md w-full">
-        <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Cooldown Remaining</span>
-        <span id="cooldown-timer" class="text-2xl font-black text-gray-900 mt-1 block">05:00</span>
+      <div class="bg-slate-100 p-4 rounded-xl border-2 border-slate-900 w-full">
+        <span class="text-xs font-extrabold text-slate-500 uppercase tracking-wider block">Cooldown Remaining</span>
+        <span id="cooldown-timer" class="text-3xl font-black text-slate-900 mt-1 block">05:00</span>
       </div>
-      <button id="btn-suspended-exit" class="w-full h-14 bg-gray-900 hover:bg-gray-800 text-white font-bold rounded-md transition-all duration-200 transform hover:scale-105 active:scale-95 outline-none">
-        Return to Home
+      <button id="btn-suspended-exit" class="w-full h-14 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl border-2 border-slate-900 transition-all flex items-center justify-center gap-2 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0">
+        <i data-lucide="home" class="w-5 h-5"></i>
+        <span>Return to Candidate Select</span>
       </button>
     </div>
   </main>
 
   <!-- ==================== PROCTORING OVERLAYS ==================== -->
   <!-- Fullscreen Enforcer Modal Overlay -->
-  <div id="fullscreen-overlay" class="fixed inset-0 bg-gray-900 bg-opacity-95 z-50 flex flex-col items-center justify-center p-6 text-center hidden">
-    <div class="bg-white max-w-md w-full p-8 rounded-lg border-4 border-gray-900 flex flex-col items-center gap-6">
+  <div id="fullscreen-overlay" class="fixed inset-0 bg-slate-950/90 z-50 flex flex-col items-center justify-center p-6 text-center hidden backdrop-blur-sm">
+    <div class="bg-white max-w-md w-full p-8 rounded-xl border-4 border-slate-900 flex flex-col items-center gap-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
       <div class="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center border-2 border-red-300">
         <i data-lucide="monitor" class="w-8 h-8"></i>
       </div>
       <div>
-        <h2 class="text-2xl font-black text-gray-900">Fullscreen Required</h2>
-        <p class="text-sm text-gray-600 mt-2">
+        <h2 class="text-2xl font-extrabold text-slate-900">Fullscreen Required</h2>
+        <p class="text-sm text-slate-600 mt-2 font-medium leading-relaxed">
           This technical screen is a proctored environment. You must enter Fullscreen mode to begin and conduct the interview.
         </p>
       </div>
-      <button id="btn-fullscreen-grant" class="w-full h-14 bg-red-600 hover:bg-red-700 text-white font-bold rounded-md transition-all duration-200 transform hover:scale-105 active:scale-95 outline-none">
+      <button id="btn-fullscreen-grant" class="w-full h-14 bg-red-600 hover:bg-red-700 text-white font-extrabold rounded-xl border-2 border-slate-900 transition-all shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0">
         Grant & Enter Fullscreen
       </button>
-      <span class="text-[10px] text-gray-400">Exiting fullscreen mode mid-screen counts as a violation.</span>
+      <span class="text-[11px] font-bold text-slate-400">Exiting fullscreen mode mid-session counts as a proctoring violation.</span>
     </div>
   </div>
 

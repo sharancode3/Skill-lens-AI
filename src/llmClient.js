@@ -633,7 +633,34 @@ export function mockLLMCall(candidate, topic, lastQuestion, message, followupCou
     let mcqCorrectIndex = 2;
 
     const cleanTitle = targetTopic.title.toLowerCase();
-    if (cleanTitle.includes('embedding')) {
+    if (cleanTitle.includes('python') || cleanTitle.includes('pipeline') || cleanTitle.includes('dataframe')) {
+      reply = `For Day ${targetTopic.day}: "${targetTopic.title}", how does Pandas optimize vectorization across DataFrame columns?`;
+      mcqOptions = [
+        `By compiling Python loops directly into WebAssembly modules.`,
+        `By delegating element-wise calculations to underlying C/NumPy contiguous memory arrays.`,
+        `By executing asynchronous GIL-bypassing threads for each row iteration.`,
+        `By caching string values in shared memory heaps.`
+      ];
+      mcqCorrectIndex = 1;
+    } else if (cleanTitle.includes('sql') || cleanTitle.includes('database') || cleanTitle.includes('relational')) {
+      reply = `When configuring indexing for Day ${targetTopic.day}: "${targetTopic.title}", what index structure accelerates B-Tree search queries?`;
+      mcqOptions = [
+        `Creating covering indexes on high-cardinality search columns.`,
+        `Storing all table rows as unindexed JSON blobs.`,
+        `Disabling WAL mode to force synchronous file writes.`,
+        `Executing linear scans over unindexed primary key lists.`
+      ];
+      mcqCorrectIndex = 0;
+    } else if (cleanTitle.includes('async') || cleanTitle.includes('event loop') || cleanTitle.includes('concurrency')) {
+      reply = `In asynchronous Python environments for Day ${targetTopic.day}, what occurs when a blocking IO operation runs on the main thread?`;
+      mcqOptions = [
+        `The event loop spawns a background worker process automatically.`,
+        `The event loop stalls entirely, blocking all pending concurrent tasks.`,
+        `The server shifts execution to worker threads without latency penalty.`,
+        `The garbage collector frees the blocking socket immediately.`
+      ];
+      mcqCorrectIndex = 1;
+    } else if (cleanTitle.includes('embedding')) {
       reply = `For Day ${targetTopic.day}: "${targetTopic.title}", how is a text chunk converted into a vector representation in standard production setups?`;
       mcqOptions = [
         `By mapping keywords directly to a sparse matrix of TF-IDF frequencies.`,
@@ -642,7 +669,7 @@ export function mockLLMCall(candidate, topic, lastQuestion, message, followupCou
         `By hashing the character sequences using MD5 and converting the hex representation to float.`
       ];
       mcqCorrectIndex = 2;
-    } else if (cleanTitle.includes('vector')) {
+    } else if (cleanTitle.includes('vector') || cleanTitle.includes('index')) {
       reply = `In a vector database optimized for Day ${targetTopic.day} objectives, how does HNSW indexing optimize similarity search?`;
       mcqOptions = [
         `By creating a multi-layer graph where upper layers have sparser connections for fast skip-list-like routing.`,
@@ -660,7 +687,7 @@ export function mockLLMCall(candidate, topic, lastQuestion, message, followupCou
         `It guarantees thread-safety for logging libraries via synchronous file locks.`
       ];
       mcqCorrectIndex = 1;
-    } else if (cleanTitle.includes('docker') || cleanTitle.includes('kubernetes')) {
+    } else if (cleanTitle.includes('docker') || cleanTitle.includes('kubernetes') || cleanTitle.includes('container')) {
       reply = `For Day ${targetTopic.day}: "${targetTopic.title}", what is the primary role of a Kubernetes Service resource?`;
       mcqOptions = [
         `To define the resource constraints and CPU limits for individual pods.`,
@@ -669,7 +696,7 @@ export function mockLLMCall(candidate, topic, lastQuestion, message, followupCou
         `To schedule pod deployments onto specific worker nodes based on affinity labels.`
       ];
       mcqCorrectIndex = 1;
-    } else if (cleanTitle.includes('prompt')) {
+    } else if (cleanTitle.includes('prompt') || cleanTitle.includes('llm') || cleanTitle.includes('rag')) {
       reply = `When applying Prompt Engineering for Day ${targetTopic.day}, how does Few-Shot Prompting improve model behavior?`;
       mcqOptions = [
         `By fine-tuning the model's underlying weights using backpropagation on sample sets.`,
@@ -687,6 +714,13 @@ export function mockLLMCall(candidate, topic, lastQuestion, message, followupCou
         `Relying on database polling at 10ms intervals to synchronize replication status.`
       ];
       mcqCorrectIndex = 1;
+    }
+
+    // Safeguard: Guarantee mcqOptions are never identical to session.lastMCQOptions
+    if (session && session.lastMCQOptions && JSON.stringify(mcqOptions) === JSON.stringify(session.lastMCQOptions)) {
+      console.log('[LLMClient Duplicate MCQ Safeguard] Detected duplicate options matching previous turn. Shifting options order...');
+      mcqOptions = [mcqOptions[1], mcqOptions[2], mcqOptions[3], mcqOptions[0]];
+      mcqCorrectIndex = (mcqCorrectIndex + 3) % 4;
     }
 
     result.reply = reply;
