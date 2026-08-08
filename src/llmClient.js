@@ -341,7 +341,11 @@ function mockLLMCall(candidate, topic, lastQuestion, message, followupCount, con
     return words.some(w => w.length > 4 && cleanMsg.includes(w));
   });
 
-  if (cleanMsg.includes('apples') || cleanMsg.includes('banana') || cleanMsg.includes('weather')) {
+  if (cleanMsg.includes('strong-score')) {
+    classification = 'strong';
+    action = 'advance';
+    reasoning = 'Forced strong score mock rule.';
+  } else if (cleanMsg.includes('apples') || cleanMsg.includes('banana') || cleanMsg.includes('weather')) {
     classification = 'off_topic';
     action = 'advance';
     reasoning = 'Candidate response is completely unrelated to the technical topic.';
@@ -484,6 +488,20 @@ function mockLLMCall(candidate, topic, lastQuestion, message, followupCount, con
     mockAction = 'advance';
     mockReasoning = 'Candidate failed to justify why probe.';
     mockReply = "Okay. Let's move on.";
+  }
+
+  // Capstone question generation mock override
+  if (nextQuestionType === 'capstone') {
+    const strongest = (session && session.strongestTopic) || { day: 29, title: "Monitoring, Logging & Observability" };
+    mockReply = `🏆 Capstone Challenge: Design a highly scalable and fault-tolerant system for "${strongest.title}" serving 10 million daily active users. Walk me through your database choices, ingestion pipeline, data partition strategy, and key trade-offs.`;
+    mockAction = 'followup';
+  }
+
+  // Capstone preferential why-loop followup mock override
+  const isRespondingToCapstone = lastQuestion && (lastQuestion.includes('Capstone Challenge') || lastQuestion.includes('🏆 Capstone'));
+  if (isRespondingToCapstone && (mockClassification === 'strong' || mockClassification === 'partial') && !isWhyWeak && !isWhyL1 && !isWhyL2 && !isWhyL3) {
+    mockAction = 'why_probe';
+    mockReply = "Why did you choose that specific design over alternative architectures? (Level 1)";
   }
 
   const result = {
@@ -755,6 +773,8 @@ nextQuestionType parameter: the type of the next question must be "${nextQuestio
   4. Avoid syntax errors: Output only clean, valid Mermaid flowchart syntax (e.g., starting with 'graph TD') or sequence diagram syntax (e.g. starting with 'sequenceDiagram'). Do NOT use markdown code fences in "diagramDefinition".
   5. ANTI-REPETITION: If you see any entries in the "recentDiagrams" array in the input, you MUST generate a diagram that has a different structure and node layout. DO NOT reuse those exact node connections or graph flow structures again.
 - If "open": Return normal open-ended text question in "reply".
+- If "capstone": You MUST generate a single, substantial, open-ended system-design challenge in "reply", grounded in the candidate's strongestTopic (supplied in the input). For example, if RAG is their strongest topic, prompt them to design a scalable enterprise RAG system serving 10 million users. Do NOT make it a multi-part checklist; make it an open architectural system design question focusing on design decisions and trade-offs. The "whyProbe" property should be true for capstone follow-ups to drill into their design choices with "why did you choose X over Y?"
+- Preferential Why-Loop for Capstone: When previousInterviewerQuestion was a capstone challenge, you should preferentially use the "why_probe" action rather than "followup" to stress-test their design choices.
 
 detectedConnections parameter: if populated, it contains curriculum days matching the candidate response semantically. You may optionally weave a brief acknowledgment of this connection into the reply if relevant, e.g. "That actually touches on Day 8 vector databases..." but never force it.
 
@@ -796,7 +816,8 @@ modelWantsToStop instruction: You MUST decide if we should wrap up the interview
     recentDiagrams: session.recentDiagrams || [],
     recentReactions: session.recentReactions || [],
     detectedHedgeMarkers: detectedHedgeMarkers || [],
-    hedgeEventCount: session.hedgeEventCount || 0
+    hedgeEventCount: session.hedgeEventCount || 0,
+    strongestTopic: session.strongestTopic ? { day: session.strongestTopic.day, title: session.strongestTopic.title } : null
   }, null, 2);
 
   const provider = process.env.LLM_PROVIDER || 'gemini';

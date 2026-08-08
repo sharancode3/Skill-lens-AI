@@ -373,7 +373,11 @@ async function handleSendMessage() {
     } else {
       // Check for topic transition (Emerald tag)
       if (data.action === 'advance') {
-        appendTopicTag('New Topic');
+        if (data.nextQuestionType === 'capstone') {
+          appendTopicTag('🏆 Capstone Challenge');
+        } else {
+          appendTopicTag('New Topic');
+        }
       }
       
       appendInterviewerMessage(data.reply, data.detectedConnections, data.nextQuestionType, data.mcqOptions, data.diagramDefinition, data.diagramQuestionText);
@@ -499,7 +503,11 @@ async function appendInterviewerMessage(text, connections = [], nextQuestionType
             transitionToFeedback(data.feedback, data.metrics);
           } else {
             if (data.action === 'advance') {
-              appendTopicTag('New Topic');
+              if (data.nextQuestionType === 'capstone') {
+                appendTopicTag('🏆 Capstone Challenge');
+              } else {
+                appendTopicTag('New Topic');
+              }
             }
             appendInterviewerMessage(data.reply, data.detectedConnections, data.nextQuestionType, data.mcqOptions, data.diagramDefinition, data.diagramQuestionText);
             updateProgress(data.questionsAsked, data.distinctDaysCovered, data.difficultyTier);

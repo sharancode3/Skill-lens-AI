@@ -70,6 +70,7 @@ This document is maintained to help AI models understand the current state of th
 - [x] Phase I1: Hallucination Detector (structured schema output, contrastive instructions, warning prefixes, and repeated hallucination advancement overrides).
 - [x] Phase I2: Communication Confidence Detection (confidence tracking separate from correctness, user prompt hedge event metrics, and probing reaction notes).
 - [x] Phase I3: \"Why?\" Recursive Loop (recursive why-probing, rootUnderstandingReached detection, and loop depth cap overrides).
+- [x] Phase I4: System Design Transition (capstone trigger check on 4-turn average score >= 80, strongest topic extraction, and preferential why-loop redirects).
 
 
 

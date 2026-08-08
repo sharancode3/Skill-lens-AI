@@ -429,8 +429,9 @@ export async function handleTurn(sessionId, message) {
   const currentTopicIndex = session.cursor;
   const currentTopic = session.topicQueue[currentTopicIndex];
 
-  const isMCQTurn = session.nextQuestionType === 'mcq';
-  const isDiagramTurn = session.nextQuestionType === 'diagram_interpret';
+  const answeredQuestionType = session.nextQuestionType || 'open';
+  const isMCQTurn = answeredQuestionType === 'mcq';
+  const isDiagramTurn = answeredQuestionType === 'diagram_interpret';
   const isDisengaged = checkDisengagement(message, isMCQTurn);
 
   if (isDisengaged && !forceAdvanceDueToBlankRetries) {
@@ -668,7 +669,7 @@ export async function handleTurn(sessionId, message) {
   session.accuracyLog.push({
     day: currentTopic ? currentTopic.day : null,
     title: currentTopic ? currentTopic.title : 'Curriculum Topic',
-    questionType: isMCQTurn ? 'mcq' : (isDiagramTurn ? 'diagram_interpret' : 'open'),
+    questionType: answeredQuestionType,
     difficultyTier: session.difficultyTier,
     classification: llmResponse ? llmResponse.classification : 'unknown',
     finalAccuracyScore,
@@ -687,6 +688,45 @@ export async function handleTurn(sessionId, message) {
     communicationConfidence: llmResponse ? (llmResponse.communicationConfidence || "medium") : "medium",
     rootUnderstandingReached: llmResponse ? !!llmResponse.rootUnderstandingReached : false
   });
+
+  // Capstone Trigger Check (Phase I4)
+  if (!session.capstoneTriggered) {
+    const floorMetAtEnd = (session.questionsAsked >= 8 && session.distinctDaysCovered.length >= 4);
+    const logLength = session.accuracyLog.length;
+    if (floorMetAtEnd && logLength >= 4) {
+      const last4 = session.accuracyLog.slice(-4);
+      const avg = last4.reduce((sum, entry) => sum + entry.finalAccuracyScore, 0) / 4;
+      const hasHallucinations = last4.some(entry => entry.hallucinationFlag);
+      if (avg >= 80 && !hasHallucinations) {
+        console.log(`[SessionManager] CAPSTONE TRIGGERED! Avg Score: ${avg}, Hallucinations: 0.`);
+        session.capstoneTriggered = true;
+        session.pendingQuestionType = 'capstone';
+
+        // Compute strongest topic
+        const scoresByDay = {};
+        session.accuracyLog.forEach(log => {
+          if (log.day !== null) {
+            if (!scoresByDay[log.day]) {
+              scoresByDay[log.day] = [];
+            }
+            scoresByDay[log.day].push(log.finalAccuracyScore);
+          }
+        });
+        let highestDay = null;
+        let highestAvg = -1;
+        for (const day in scoresByDay) {
+          const avgScore = scoresByDay[day].reduce((a, b) => a + b, 0) / scoresByDay[day].length;
+          if (avgScore > highestAvg) {
+            highestAvg = avgScore;
+            highestDay = day;
+          }
+        }
+        const dayNum = highestDay ? parseInt(highestDay) : (currentTopic ? currentTopic.day : 1);
+        const strongestTopic = session.topicQueue.find(t => t.day === dayNum) || session.topicQueue[0];
+        session.strongestTopic = { day: strongestTopic.day, title: strongestTopic.title };
+      }
+    }
+  }
 
   console.log(`\n--- [LLM Evaluation Log] Session "${sessionId}" Turn ${session.turnCount} ---`);
   console.log(`  Classification: ${llmResponse.classification}`);
@@ -742,16 +782,34 @@ export async function handleTurn(sessionId, message) {
   // Update memory
   session.interviewMemory = llmResponse.updatedMemory;
 
+  // Find last interviewer question
+  let lastQuestion = '';
+  for (let i = session.transcript.length - 1; i >= 0; i--) {
+    if (session.transcript[i].role === 'interviewer') {
+      lastQuestion = session.transcript[i].text;
+      break;
+    }
+  }
+
   // Rule enforcement
   let action = llmResponse.action;
   let forceAdvanceDueToFollowupLimit = false;
   let forceAdvanceDueToHallucinationLimit = false;
   let forceAdvanceDueToWhyProbeLimit = false;
 
+  const isPreviousCapstone = lastQuestion && (lastQuestion.includes('Capstone Challenge') || lastQuestion.includes('🏆 Capstone'));
+  if (isPreviousCapstone && action === 'followup') {
+    console.log(`[SessionManager Override] Converting action "followup" to "why_probe" for Capstone review.`);
+    action = 'why_probe';
+  }
+
   const wasWhyProbing = (session.whyChainDepth || 0) > 0;
 
   if (isMCQTurn) {
     console.log(`[SessionManager Override] Overwriting action to "advance" because MCQ turns always transition to the next topic.`);
+    action = 'advance';
+  } else if (nextQuestionTypeGenerated === 'capstone') {
+    console.log(`[SessionManager Override] Overwriting action to "advance" because Capstone is triggered.`);
     action = 'advance';
   } else if (action === 'followup' && session.followupCountForCurrentTopic >= 1) {
     console.log(`[SessionManager Override] Overwriting action "followup" to "advance" because followupCount is already ${session.followupCountForCurrentTopic}.`);
