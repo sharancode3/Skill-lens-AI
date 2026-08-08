@@ -76,6 +76,7 @@ This document is maintained to help AI models understand the current state of th
 - [x] Phase I7: Judge Mode (committed hiring decision, descriptive reasoning, and ordered evidence trail tracking strengths, gaps, recovery, and Capstones).
 - [x] Phase I8: Frontend: Surfacing All of This (inline warning banners inside chat bubble, confidence/why-probe/hallucination sidebar tags, and vertical timeline verdict summary cards).
 - [x] Phase I9: Full Regression Test Checklist (successful Turn 1-10 end-to-end simulated regression testing covering all features).
+- [x] PS2 Settings Panel Improvements (Font/Element Size Scaling, Theme Mode, Calculator, Keyboard) & Header Redesign.
 
 
 

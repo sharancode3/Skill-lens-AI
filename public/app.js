@@ -1376,9 +1376,9 @@ function applyFontSize(size) {
 
   fontButtons.forEach(btn => {
     if (btn.dataset.size === size) {
-      btn.className = 'btn-font-size px-2 py-1.5 text-xs font-extrabold rounded-md transition-all bg-slate-900 dark:bg-blue-600 text-white shadow-sm';
+      btn.classList.add('active');
     } else {
-      btn.className = 'btn-font-size px-2 py-1.5 text-xs font-extrabold rounded-md transition-all text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700';
+      btn.classList.remove('active');
     }
   });
 

@@ -654,8 +654,8 @@ html, body {
 .chat-workspace-container {
   display: flex !important;
   flex: 1 1 0% !important;
-  height: calc(100vh - 64px) !important;
-  max-height: calc(100vh - 64px) !important;
+  height: calc(100vh - var(--header-height)) !important;
+  max-height: calc(100vh - var(--header-height)) !important;
   overflow: hidden !important;
   width: 100% !important;
   position: relative !important;
@@ -901,20 +901,426 @@ html, body {
   }
 }
 
-/* Phase 9: Dynamic Font Size Scaling for Chat Stream */
-#chat-messages.font-size-sm .chat-bubble {
-  font-size: 0.875rem !important; /* 14px */
-  line-height: 1.4 !important;
+/* ==================== GLOBAL SCALING & TYPOGRAPHY SYSTEM ==================== */
+:root {
+  --header-height: 80px !important;
+  --global-scale: 1.0;
 }
 
-#chat-messages.font-size-md .chat-bubble {
-  font-size: 1.025rem !important; /* 16.4px */
-  line-height: 1.6 !important;
+body.font-size-sm {
+  --global-scale: 0.85 !important;
 }
 
-#chat-messages.font-size-lg .chat-bubble {
-  font-size: 1.225rem !important; /* 19.6px */
-  line-height: 1.8 !important;
+body.font-size-md {
+  --global-scale: 1.0 !important;
+}
+
+body.font-size-lg {
+  --global-scale: 1.25 !important;
+}
+
+/* Scaling Rules: Font size scaling for body and all core text elements */
+body.font-size-sm, body.font-size-md, body.font-size-lg {
+  font-size: calc(1rem * var(--global-scale)) !important;
+}
+
+body.font-size-sm .chat-bubble, body.font-size-md .chat-bubble, body.font-size-lg .chat-bubble {
+  font-size: calc(0.95rem * var(--global-scale)) !important;
+  padding: calc(1rem * var(--global-scale)) calc(1.25rem * var(--global-scale)) !important;
+}
+
+body.font-size-sm header, body.font-size-md header, body.font-size-lg header {
+  height: calc(80px * var(--global-scale)) !important;
+}
+
+body.font-size-sm #chat-cand-name, body.font-size-md #chat-cand-name, body.font-size-lg #chat-cand-name {
+  font-size: calc(0.95rem * var(--global-scale)) !important;
+}
+
+body.font-size-sm #chat-cand-role, body.font-size-md #chat-cand-role, body.font-size-lg #chat-cand-role {
+  font-size: calc(0.725rem * var(--global-scale)) !important;
+}
+
+body.font-size-sm .header-badge, body.font-size-md .header-badge, body.font-size-lg .header-badge {
+  font-size: calc(0.75rem * var(--global-scale)) !important;
+  padding: calc(0.375rem * var(--global-scale)) calc(0.75rem * var(--global-scale)) !important;
+}
+
+body.font-size-sm #chat-input, body.font-size-md #chat-input, body.font-size-lg #chat-input {
+  font-size: calc(0.875rem * var(--global-scale)) !important;
+  height: calc(3.25rem * var(--global-scale)) !important;
+}
+
+body.font-size-sm #btn-send, body.font-size-md #btn-send, body.font-size-lg #btn-send {
+  font-size: calc(0.875rem * var(--global-scale)) !important;
+  height: calc(3.25rem * var(--global-scale)) !important;
+}
+
+body.font-size-sm .sidebar-row, body.font-size-md .sidebar-row, body.font-size-lg .sidebar-row {
+  padding: calc(0.85rem * var(--global-scale)) !important;
+  gap: calc(0.5rem * var(--global-scale)) !important;
+}
+
+body.font-size-sm .sidebar-row-header span, body.font-size-md .sidebar-row-header span, body.font-size-lg .sidebar-row-header span {
+  font-size: calc(0.85rem * var(--global-scale)) !important;
+}
+
+body.font-size-sm .sidebar-badge, body.font-size-md .sidebar-badge, body.font-size-lg .sidebar-badge {
+  font-size: calc(0.6rem * var(--global-scale)) !important;
+  padding: calc(0.1rem * var(--global-scale)) calc(0.35rem * var(--global-scale)) !important;
+}
+
+body.font-size-sm #settings-popover, body.font-size-md #settings-popover, body.font-size-lg #settings-popover {
+  font-size: calc(0.875rem * var(--global-scale)) !important;
+  width: calc(20rem * var(--global-scale)) !important;
+}
+
+body.font-size-sm button, body.font-size-md button, body.font-size-lg button {
+  font-size: calc(0.75rem * var(--global-scale)) !important;
+}
+
+/* ==================== BUTTON WORKAROUNDS & CONSISTENCY ==================== */
+.btn-font-size {
+  border: 2px solid #0F172A !important;
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+.btn-font-size:hover {
+  background-color: #F1F5F9 !important;
+}
+
+.btn-font-size.active {
+  background-color: #0F172A !important;
+  color: #FFFFFF !important;
+}
+
+.dark .btn-font-size {
+  border-color: #F8FAFC !important;
+  background-color: #1E293B !important;
+  color: #F8FAFC !important;
+}
+
+.dark .btn-font-size:hover {
+  background-color: #334155 !important;
+}
+
+.dark .btn-font-size.active {
+  background-color: #3B82F6 !important;
+  color: #FFFFFF !important;
+}
+
+/* ==================== DARK MODE OVERRIDES ==================== */
+.dark #screen-chat {
+  background-color: #0F172A !important;
+}
+
+.dark header {
+  background-color: #1E293B !important;
+  border-bottom-color: #334155 !important;
+  color: #F8FAFC !important;
+}
+
+.dark header #chat-cand-name {
+  color: #F8FAFC !important;
+}
+
+.dark header .header-badge {
+  background-color: #334155 !important;
+  color: #F8FAFC !important;
+  border-color: #F8FAFC !important;
+  box-shadow: 2px 2px 0px 0px #F8FAFC !important;
+}
+
+.dark header .header-badge i {
+  color: #3B82F6 !important;
+}
+
+.dark header .header-badge #chat-progress-questions {
+  color: #60A5FA !important;
+}
+
+.dark header .header-badge #chat-progress-topics {
+  color: #C084FC !important;
+}
+
+.dark header .header-badge #chat-progress-difficulty {
+  color: #FBBF24 !important;
+}
+
+.dark header button {
+  background-color: #334155 !important;
+  color: #F8FAFC !important;
+  border-color: #F8FAFC !important;
+  box-shadow: 2px 2px 0px 0px #F8FAFC !important;
+}
+
+.dark .chat-stream-column {
+  background-color: #0F172A !important;
+}
+
+.dark #chat-messages {
+  background-color: #0F172A !important;
+}
+
+.dark .chat-bubble.interviewer {
+  background-color: #1E293B !important;
+  color: #F8FAFC !important;
+  border-color: #F8FAFC !important;
+  box-shadow: 3px 3px 0px 0px #F8FAFC !important;
+}
+
+.dark .chat-bubble.candidate {
+  background-color: #3B82F6 !important;
+  color: #FFFFFF !important;
+  border-color: #F8FAFC !important;
+  box-shadow: 3px 3px 0px 0px #F8FAFC !important;
+}
+
+.dark .chat-input-footer {
+  background-color: #1E293B !important;
+  border-top-color: #334155 !important;
+  box-shadow: none !important;
+}
+
+.dark #chat-input {
+  background-color: #0F172A !important;
+  color: #F8FAFC !important;
+  border-color: #334155 !important;
+}
+
+.dark #chat-input:focus {
+  border-color: #3B82F6 !important;
+  box-shadow: 3px 3px 0px 0px #3B82F6 !important;
+}
+
+.dark #btn-send {
+  background-color: #3B82F6 !important;
+  border-color: #F8FAFC !important;
+  box-shadow: 3px 3px 0px 0px #F8FAFC !important;
+}
+
+.dark #btn-send:hover {
+  background-color: #2563EB !important;
+  box-shadow: 4px 4px 0px 0px #F8FAFC !important;
+}
+
+.dark #btn-send:active {
+  box-shadow: 2px 2px 0px 0px #F8FAFC !important;
+}
+
+.dark #chat-sidebar {
+  background-color: #1E293B !important;
+  border-left-color: #334155 !important;
+}
+
+.dark #sidebar-list {
+  background-color: #1E293B !important;
+}
+
+.dark .sidebar-row {
+  background-color: #0F172A !important;
+  border-color: #334155 !important;
+}
+
+.dark .sidebar-row:hover {
+  border-color: #475569 !important;
+}
+
+.dark .sidebar-row-header span {
+  color: #F8FAFC !important;
+}
+
+.dark .sidebar-badge {
+  background-color: #334155 !important;
+  border-color: #475569 !important;
+  color: #CBD5E1 !important;
+}
+
+.dark #settings-popover {
+  background-color: #1E293B !important;
+  border-color: #F8FAFC !important;
+  box-shadow: 4px 4px 0px 0px #F8FAFC !important;
+}
+
+.dark #settings-popover button {
+  border-color: #F8FAFC !important;
+}
+
+.dark #settings-popover .text-slate-800,
+.dark #settings-popover label,
+.dark #settings-popover span {
+  color: #F8FAFC !important;
+}
+
+/* ==================== SCIENTIFIC / STANDARD CALCULATOR MODAL ==================== */
+#modal-calculator {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background-color: rgba(15, 23, 42, 0.6) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 9999 !important;
+  padding: 1rem !important;
+}
+
+#modal-calculator.hidden {
+  display: none !important;
+}
+
+#modal-calculator > div {
+  background-color: #FFFFFF !important;
+  width: 100% !important;
+  max-width: 320px !important;
+  padding: 1.5rem !important;
+  border-radius: 6px !important;
+  border: 3px solid #0F172A !important;
+  box-shadow: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1rem !important;
+}
+
+.dark #modal-calculator > div {
+  background-color: #1E293B !important;
+  border-color: #F8FAFC !important;
+}
+
+#modal-calculator .grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, 1fr) !important;
+  gap: 0.5rem !important;
+}
+
+#modal-calculator button {
+  height: 40px !important;
+  border-radius: 6px !important;
+  border: 2px solid #0F172A !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  transition: all 0.1s ease !important;
+}
+
+.dark #modal-calculator button {
+  border-color: #F8FAFC !important;
+}
+
+#modal-calculator button:hover {
+  background-color: #E2E8F0 !important;
+}
+
+.dark #modal-calculator button:hover {
+  background-color: #334155 !important;
+}
+
+#modal-calculator .btn-calc-num {
+  background-color: #F8FAFC !important;
+  color: #0F172A !important;
+}
+
+.dark #modal-calculator .btn-calc-num {
+  background-color: #1E293B !important;
+  color: #F8FAFC !important;
+}
+
+#modal-calculator .btn-calc-op {
+  background-color: #F59E0B !important;
+  color: #0F172A !important;
+}
+
+#modal-calculator button#btn-calc-insert {
+  background-color: #10B981 !important;
+  color: #FFFFFF !important;
+  height: 44px !important;
+  width: 100% !important;
+}
+
+/* ==================== VIRTUAL KEYBOARD DRAWER ==================== */
+#modal-keyboard {
+  position: fixed !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  background-color: #FFFFFF !important;
+  border-top: 3px solid #0F172A !important;
+  z-index: 9999 !important;
+  padding: 1rem !important;
+  box-shadow: none !important;
+}
+
+#modal-keyboard.hidden {
+  display: none !important;
+}
+
+.dark #modal-keyboard {
+  background-color: #1E293B !important;
+  border-top-color: #F8FAFC !important;
+}
+
+#modal-keyboard > div {
+  max-width: 800px !important;
+  margin: 0 auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.5rem !important;
+}
+
+.vkey-row {
+  display: flex !important;
+  justify-content: center !important;
+  gap: 0.25rem !important;
+}
+
+.vkey-btn {
+  height: 38px !important;
+  min-width: 38px !important;
+  padding: 0 0.5rem !important;
+  border-radius: 6px !important;
+  border: 2px solid #0F172A !important;
+  background-color: #F8FAFC !important;
+  color: #0F172A !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.1s ease !important;
+}
+
+.dark .vkey-btn {
+  border-color: #F8FAFC !important;
+  background-color: #0F172A !important;
+  color: #F8FAFC !important;
+}
+
+.vkey-btn:hover {
+  background-color: #E2E8F0 !important;
+}
+
+.dark .vkey-btn:hover {
+  background-color: #334155 !important;
+}
+
+.vkey-btn.vkey-special {
+  min-width: 60px !important;
+  background-color: #E2E8F0 !important;
+}
+
+.dark .vkey-btn.vkey-special {
+  background-color: #334155 !important;
+}
+
+.vkey-btn#vkey-shift.bg-blue-600 {
+  background-color: #2563EB !important;
+  color: #FFFFFF !important;
 }
 
 /* ==================== SCREEN OVERLAYS & PROCTORING WARNINGS ==================== */

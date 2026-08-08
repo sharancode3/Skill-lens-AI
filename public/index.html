@@ -218,12 +218,12 @@
   <!-- ==================== SCREEN 2: CHAT INTERVIEW SCREEN ==================== -->
   <main id="screen-chat" class="view h-screen max-h-screen overflow-hidden flex flex-col bg-slate-100 hidden">
     <!-- Sleek Top Navbar -->
-    <header class="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0 z-30 shadow-sm">
+    <header class="h-20 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0 z-30 shadow-sm">
       <!-- Left: Logo & Candidate Identity -->
       <div class="flex items-center gap-4">
         <div class="flex items-center gap-2 pr-4 border-r border-slate-200">
           <div class="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center font-black text-sm shadow-sm">SL</div>
-          <span class="font-extrabold text-slate-800 text-sm tracking-tight hidden sm:inline">SKILL LABS AI</span>
+          <span class="font-extrabold text-slate-800 text-sm tracking-tight hidden lg:inline">SKILL LABS AI</span>
         </div>
         <div class="flex items-center gap-3">
           <div class="w-9 h-9 bg-slate-900 text-white rounded-full flex items-center justify-center font-bold text-xs">
@@ -236,8 +236,8 @@
         </div>
       </div>
 
-      <!-- Right: Live Progress & Status Indicators -->
-      <div class="flex items-center gap-2.5 sm:gap-3">
+      <!-- Center: Live Progress & Status Indicators -->
+      <div class="hidden md:flex items-center gap-3">
         <!-- Live Proctoring Badge -->
         <div class="header-badge hidden lg:flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-800 border-2 border-slate-900 rounded-full text-xs font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
           <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse border border-slate-900"></span>
@@ -264,7 +264,10 @@
           <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-600"></i>
           <span id="chat-progress-difficulty" class="capitalize">Standard</span>
         </div>
+      </div>
 
+      <!-- Right: Controls, Timer & Popover Panel -->
+      <div class="flex items-center gap-3">
         <!-- Session Timer Pill -->
         <div id="header-timer" class="header-badge flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white border-2 border-slate-900 rounded-full text-xs font-mono font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] shrink-0">
           <i data-lucide="clock" class="w-3.5 h-3.5 text-emerald-400"></i>
@@ -277,7 +280,6 @@
           <span>History</span>
         </button>
 
-        <!-- Phase 9 & 10: Settings Control Button & Popover Panel -->
         <div class="relative">
           <button id="btn-toggle-settings" title="Display & Layout Settings" class="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-xl border-2 border-slate-900 flex items-center gap-1.5 text-xs font-black transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0">
             <i data-lucide="settings" class="w-4 h-4 text-slate-700"></i>
