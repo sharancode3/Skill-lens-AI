@@ -235,7 +235,30 @@ async function startInterviewSession() {
   }
 }
 
-btnStart.addEventListener('click', () => {
+// Rules Screen validation logic
+function checkRulesValidation() {
+  const chkConsent = document.getElementById('chk-proctor-consent');
+  const acceptButton = document.getElementById('btn-accept-rules');
+  if (!acceptButton) return;
+
+  const isConsentChecked = chkConsent && chkConsent.checked;
+  const isCameraActive = window.CameraManager && window.CameraManager.getCurrentState() === 'PREVIEW';
+
+  if (isConsentChecked && isCameraActive) {
+    acceptButton.disabled = false;
+    acceptButton.classList.remove('opacity-50', 'cursor-not-allowed');
+  } else {
+    acceptButton.disabled = true;
+    acceptButton.classList.add('opacity-50', 'cursor-not-allowed');
+  }
+}
+
+const chkProctorConsent = document.getElementById('chk-proctor-consent');
+if (chkProctorConsent) {
+  chkProctorConsent.addEventListener('change', checkRulesValidation);
+}
+
+btnStart.addEventListener('click', async () => {
   if (!selectedCandidate) {
     alert('Please select a candidate first.');
     return;
@@ -245,6 +268,11 @@ btnStart.addEventListener('click', () => {
   if (rulesCandName) {
     rulesCandName.textContent = selectedCandidate.member.name;
   }
+  
+  // Reset checkbox
+  const chkConsent = document.getElementById('chk-proctor-consent');
+  if (chkConsent) chkConsent.checked = false;
+
   screenStart.classList.add('hidden');
   screenRules.classList.remove('hidden');
   window.scrollTo(0, 0);
@@ -262,8 +290,8 @@ btnStart.addEventListener('click', () => {
   
   const enableButton = document.getElementById('btn-enable-camera');
   if (enableButton) {
-    enableButton.disabled = false;
-    enableButton.querySelector('span').textContent = 'Enable Camera for Proctoring';
+    enableButton.disabled = true;
+    enableButton.querySelector('span').textContent = 'Requesting camera...';
     enableButton.classList.remove('bg-emerald-600', 'hover:bg-emerald-700', 'opacity-50');
     enableButton.classList.add('bg-blue-600', 'hover:bg-blue-700');
   }
@@ -274,6 +302,27 @@ btnStart.addEventListener('click', () => {
   const videoPreview = document.getElementById('video-preview');
   if (videoPreview) {
     videoPreview.srcObject = null;
+  }
+
+  // Auto-trigger camera preview permission request
+  if (videoPreview && window.CameraManager) {
+    const success = await window.CameraManager.startPreview(videoPreview);
+    if (success) {
+      if (enableButton) {
+        enableButton.disabled = true;
+        enableButton.querySelector('span').textContent = 'Camera Enabled';
+        enableButton.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+        enableButton.classList.add('bg-emerald-600', 'hover:bg-emerald-700', 'opacity-50');
+      }
+      if (errorBanner) errorBanner.classList.add('hidden');
+    } else {
+      if (enableButton) {
+        enableButton.disabled = false;
+        enableButton.querySelector('span').textContent = 'Enable Camera for Proctoring';
+      }
+      if (errorBanner) errorBanner.classList.remove('hidden');
+    }
+    checkRulesValidation();
   }
 });
 
@@ -311,22 +360,13 @@ if (btnEnableCamera) {
       btnEnableCamera.classList.remove('bg-blue-600', 'hover:bg-blue-700');
       btnEnableCamera.classList.add('bg-emerald-600', 'hover:bg-emerald-700', 'opacity-50');
       if (errorBanner) errorBanner.classList.add('hidden');
-      
-      if (acceptButton) {
-        acceptButton.disabled = false;
-        acceptButton.classList.remove('opacity-50', 'cursor-not-allowed');
-      }
     } else {
       // Permission denied or error
       btnEnableCamera.disabled = false;
       btnEnableCamera.querySelector('span').textContent = 'Retry Enable Camera';
       if (errorBanner) errorBanner.classList.remove('hidden');
-      
-      if (acceptButton) {
-        acceptButton.disabled = true;
-        acceptButton.classList.add('opacity-50', 'cursor-not-allowed');
-      }
     }
+    checkRulesValidation();
   });
 }
 

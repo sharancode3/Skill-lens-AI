@@ -326,6 +326,7 @@ const CameraManager = {
       });
       currentStream = stream;
       videoElement.srcObject = stream;
+      await videoElement.play().catch(e => console.warn('[CameraManager] play() error during preview:', e));
       
       const statusText = document.getElementById('camera-status-text');
       if (statusText) statusText.textContent = 'Camera Live';
@@ -351,6 +352,7 @@ const CameraManager = {
     // If we have a stream active from PREVIEW, reuse it to avoid re-triggering prompt
     if (currentStream && videoElement) {
       videoElement.srcObject = currentStream;
+      videoElement.play().catch(e => console.warn('[CameraManager] play() error during startActive reuse:', e));
       currentState = 'ACTIVE';
 
       // Monitor stream tracks for track ended events
@@ -370,6 +372,7 @@ const CameraManager = {
       currentStream = stream;
       if (videoElement) {
         videoElement.srcObject = stream;
+        videoElement.play().catch(e => console.warn('[CameraManager] play() error during startActive init:', e));
       }
       currentState = 'ACTIVE';
 
