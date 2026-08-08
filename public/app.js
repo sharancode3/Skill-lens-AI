@@ -9,6 +9,7 @@ let activeTimerInterval = null;
 
 // DOM Elements
 const screenStart = document.getElementById('screen-start');
+const screenRules = document.getElementById('screen-rules');
 const screenChat = document.getElementById('screen-chat');
 const screenFeedback = document.getElementById('screen-feedback');
 
@@ -20,6 +21,10 @@ const candExp = document.getElementById('cand-exp');
 const statCompleted = document.getElementById('stat-completed');
 const statRate = document.getElementById('stat-rate');
 const btnStart = document.getElementById('btn-start');
+
+const rulesCandName = document.getElementById('rules-cand-name');
+const btnBackToSelect = document.getElementById('btn-back-to-select');
+const btnAcceptRules = document.getElementById('btn-accept-rules');
 
 const chatCandName = document.getElementById('chat-cand-name');
 const chatCandRole = document.getElementById('chat-cand-role');
@@ -179,27 +184,49 @@ async function startInterviewSession() {
   }
 }
 
-btnStart.addEventListener('click', async () => {
+btnStart.addEventListener('click', () => {
   if (!selectedCandidate) {
     alert('Please select a candidate first.');
     return;
   }
 
-  // Request fullscreen
-  const hasFullscreen = await enterFullscreen();
-  if (!hasFullscreen) {
-    // Show Fullscreen Required overlay modal
-    document.getElementById('fullscreen-overlay').classList.remove('hidden');
-  } else {
-    await startInterviewSession();
+  // Populate candidate name on rules screen and transition
+  if (rulesCandName) {
+    rulesCandName.textContent = selectedCandidate.member.name;
   }
+  screenStart.classList.add('hidden');
+  screenRules.classList.remove('hidden');
+  window.scrollTo(0, 0);
+  if (window.lucide) lucide.createIcons();
 });
+
+if (btnBackToSelect) {
+  btnBackToSelect.addEventListener('click', () => {
+    screenRules.classList.add('hidden');
+    screenStart.classList.remove('hidden');
+  });
+}
+
+if (btnAcceptRules) {
+  btnAcceptRules.addEventListener('click', async () => {
+    // Request fullscreen
+    const hasFullscreen = await enterFullscreen();
+    if (!hasFullscreen) {
+      // Show Fullscreen Required overlay modal
+      document.getElementById('fullscreen-overlay').classList.remove('hidden');
+    } else {
+      screenRules.classList.add('hidden');
+      await startInterviewSession();
+    }
+  });
+}
 
 // Fullscreen grant retry button click listener
 document.getElementById('btn-fullscreen-grant').addEventListener('click', async () => {
   const hasFullscreen = await enterFullscreen();
   if (hasFullscreen) {
     document.getElementById('fullscreen-overlay').classList.add('hidden');
+    screenRules.classList.add('hidden');
     await startInterviewSession();
   }
 });
